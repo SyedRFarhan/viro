@@ -58,9 +58,6 @@ Following years of support, in 2025, [Morrow acquired ReactVision](https://www.t
 We, as a community, owe a great debt to Viro Media and the people who developed this library originally. We hope to make them proud as it continues to develop and grow within ReactVision.
 
 # Supporters
+- [lentesta](https://github.com/lentesta)
+- [Looking Glass](http://looking-glass.space)
 
-<p align="center">
-  <a href="https://themorrow.digital/">
-    <img src="readmes/morrow-supporter.png" alt="Morrow">
-  </a>
-</p>
