@@ -58,6 +58,8 @@ Following years of support, in 2025, [Morrow acquired ReactVision](https://www.t
 We, as a community, owe a great debt to Viro Media and the people who developed this library originally. We hope to make them proud as it continues to develop and grow within ReactVision.
 
 # Supporters
+A huge thank you to everyone who supports the ongoing development of ReactVision and Viro by [sponsoring us on GitHub](https://github.com/sponsors/ReactVision).
+- [devicecloud-dev](https://github.com/devicecloud-dev) - [Device Cloud](https://devicecloud.dev/)
 - [lentesta](https://github.com/lentesta)
 - [Looking Glass](http://looking-glass.space)
 
