@@ -41,7 +41,7 @@ type Props = ViewProps & {
     /**
      * The React Class to render for this scene.
      */
-    scene: () => JSX.Element;
+    scene: () => React.JSX.Element;
   };
   initialSceneKey?: string;
 
