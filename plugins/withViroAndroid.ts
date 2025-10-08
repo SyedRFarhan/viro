@@ -52,16 +52,24 @@ const withBranchAndroid: ConfigPlugin<ViroConfigurationOptions> = (config) => {
       }
 
       fs.readFile(mainApplicationPath, "utf-8", (err, data) => {
+        const packageName = config?.android?.package;
         if (isJava) {
           data = insertLinesHelper(
             "import com.viromedia.bridge.ReactViroPackage;",
-            `package ${config?.android?.package};`,
+            `package ${packageName};`,
             data
           );
         } else {
+          // Handle Backticks in package names for Kotlin
+          const packageMatch = data.match(/package\s+[\w.`]+/);
+          if (!packageMatch) {
+            throw new Error(
+              "Package declaration not found in MainApplication.kt"
+            );
+          }
           data = insertLinesHelper(
             "import com.viromedia.bridge.ReactViroPackage",
-            `package ${config?.android?.package}`,
+            packageMatch[0],
             data
           );
         }
