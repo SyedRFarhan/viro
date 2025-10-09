@@ -31,11 +31,17 @@ const withBranchAndroid = (config) => {
                 throw new Error("MainApplication.kt or MainApplication.java file not found.");
             }
             fs_1.default.readFile(mainApplicationPath, "utf-8", (err, data) => {
+                const packageName = config?.android?.package;
                 if (isJava) {
-                    data = (0, insertLinesHelper_1.insertLinesHelper)("import com.viromedia.bridge.ReactViroPackage;", `package ${config?.android?.package};`, data);
+                    data = (0, insertLinesHelper_1.insertLinesHelper)("import com.viromedia.bridge.ReactViroPackage;", `package ${packageName};`, data);
                 }
                 else {
-                    data = (0, insertLinesHelper_1.insertLinesHelper)("import com.viromedia.bridge.ReactViroPackage", `package ${config?.android?.package}`, data);
+                    // Handle Backticks in package names for Kotlin
+                    const packageMatch = data.match(/package\s+[\w.`]+/);
+                    if (!packageMatch) {
+                        throw new Error("Package declaration not found in MainApplication.kt");
+                    }
+                    data = (0, insertLinesHelper_1.insertLinesHelper)("import com.viromedia.bridge.ReactViroPackage", packageMatch[0], data);
                 }
                 const viroPlugin = config?.plugins?.find((plugin) => Array.isArray(plugin) && plugin[0] === "@reactvision/react-viro");
                 if (Array.isArray(viroPlugin)) {
