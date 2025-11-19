@@ -101,7 +101,7 @@ public:
             delegate->onARAnchorAttached(getAnchor());
         }
     }
-    
+
     virtual void onARAnchorUpdated() {
         std::shared_ptr<VROARDeclarativeNodeDelegate> delegate = getARNodeDelegate();
         if (delegate) {

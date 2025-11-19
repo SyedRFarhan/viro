@@ -48,6 +48,7 @@ public class ARUtils {
             returnMap.putDouble("width", plane.getExtent().x);
             returnMap.putDouble("height", plane.getExtent().z);
             returnMap.putString("alignment", plane.getAlignment().getStringValue());
+            returnMap.putString("classification", plane.getClassification().getStringValue());
 
             WritableArray polygonPointsArray = Arguments.createArray();
             for (Vector point : plane.getVertices()){
