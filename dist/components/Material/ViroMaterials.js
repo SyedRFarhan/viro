@@ -17,7 +17,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ViroMaterials = void 0;
 const react_native_1 = require("react-native");
 // @ts-ignore
-const AssetRegistry_1 = __importDefault(require("react-native/Libraries/Image/AssetRegistry"));
+const AssetRegistry_1 = require("react-native/Libraries/Image/AssetRegistry");
 // @ts-ignore
 const resolveAssetSource_1 = __importDefault(require("react-native/Libraries/Image/resolveAssetSource"));
 var MaterialManager = react_native_1.NativeModules.VRTMaterialManager;
@@ -47,7 +47,7 @@ class ViroMaterials {
                     else {
                         var assetType = "unknown";
                         if (typeof material[prop] !== "object") {
-                            var asset = AssetRegistry_1.default.getAssetByID(material[prop]);
+                            var asset = (0, AssetRegistry_1.getAssetByID)(material[prop]);
                             if (asset) {
                                 assetType = asset.type;
                             }
