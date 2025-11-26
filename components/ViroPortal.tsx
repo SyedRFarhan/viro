@@ -67,6 +67,7 @@ export class ViroPortal extends ViroBase<Props> {
         canFuse={this.props.onFuse != undefined}
         onHoverViro={this._onHover}
         onClickViro={this._onClickState}
+        onClick={undefined}
         onTouchViro={this._onTouch}
         onScrollViro={this._onScroll}
         onSwipeViro={this._onSwipe}

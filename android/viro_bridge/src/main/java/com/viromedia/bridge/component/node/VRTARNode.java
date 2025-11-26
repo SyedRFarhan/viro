@@ -52,10 +52,12 @@ public class VRTARNode extends VRTNode implements ARDeclarativeNode.Delegate {
 
     @Override
     public void onAnchorFound(ARAnchor arAnchor) {
+        android.util.Log.d("ViroARNode", "🎯 onAnchorFound called! anchor type: " + (arAnchor != null ? arAnchor.getType() : "null"));
         mIsAnchored = true;
         handleAppearanceChange();
         WritableMap returnMap = Arguments.createMap();
         returnMap.putMap("anchorFoundMap", ARUtils.mapFromARAnchor(arAnchor));
+        android.util.Log.d("ViroARNode", "Sending ON_ANCHOR_FOUND event to JS, view id: " + getId());
         mReactContext.getJSModule(RCTEventEmitter.class).receiveEvent(
                 getId(),
                 ViroEvents.ON_ANCHOR_FOUND,
