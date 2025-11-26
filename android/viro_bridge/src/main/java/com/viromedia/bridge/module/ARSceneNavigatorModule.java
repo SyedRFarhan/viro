@@ -24,9 +24,15 @@ package com.viromedia.bridge.module;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
 import androidx.core.content.ContextCompat;
 import android.util.Log;
+import android.view.PixelCopy;
 import android.view.View;
 
 import com.facebook.react.ReactActivity;
@@ -51,6 +57,11 @@ import com.viro.core.ViroMediaRecorder;
 import com.viro.core.ViroMediaRecorder.Error;
 import com.viro.core.ViroViewARCore;
 import com.viromedia.bridge.component.VRTARSceneNavigator;
+
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 @ReactModule(name = "VRTARSceneNavigatorModule")
 public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
@@ -188,7 +199,7 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void takeScreenshot(final int sceneNavTag, final String fileName,
-                               final boolean saveToCameraRool, final Promise promise) {
+                               final boolean saveToCameraRoll, final Promise promise) {
         UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
         if (uiManager == null) {
             WritableMap returnMap = Arguments.createMap();
@@ -203,13 +214,12 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
             public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
                 View sceneView = viewResolver.resolveView(sceneNavTag);
                 if (!(sceneView instanceof VRTARSceneNavigator)) {
-                    throw new IllegalViewOperationException("Viro: Attempted to call startVideoRecording on a non-ARSceneNav view!");
+                    throw new IllegalViewOperationException("Viro: Attempted to call takeScreenshot on a non-ARSceneNav view!");
                 }
                 VRTARSceneNavigator scene = (VRTARSceneNavigator) sceneView;
+                final ViroViewARCore arView = scene.getARView();
 
-                // Grab the recorder from the ar scene view
-                final ViroMediaRecorder recorder = scene.getARView().getRecorder();
-                if (recorder == null){
+                if (arView == null) {
                     WritableMap returnMap = Arguments.createMap();
                     returnMap.putBoolean(RECORDING_SUCCESS_KEY, false);
                     returnMap.putInt(RECORDING_ERROR_KEY, UNSUPPORTED_PLATFORM_ERROR);
@@ -218,37 +228,113 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                     return;
                 }
 
-                // Construct a completion delegate callback to be notified of sceenshot results.
-                final ViroMediaRecorder.ScreenshotFinishListener callback = new ViroMediaRecorder.ScreenshotFinishListener() {
+                // Use PixelCopy-based screenshot which properly captures the camera background
+                arView.takeScreenshotWithPixelCopy(new ViroViewARCore.PixelCopyScreenshotListener() {
                     @Override
-                    public void onError(Error error) {
+                    public void onSuccess(Bitmap bitmap) {
+                        // Save the bitmap to file
+                        String filePath = saveScreenshotToFile(bitmap, fileName, saveToCameraRoll);
+
                         WritableMap returnMap = Arguments.createMap();
-                        returnMap.putBoolean(RECORDING_SUCCESS_KEY, false);
-                        returnMap.putInt(RECORDING_ERROR_KEY, error.toInt());
-                        returnMap.putString(RECORDING_URL_KEY, null);
+                        if (filePath != null) {
+                            returnMap.putBoolean(RECORDING_SUCCESS_KEY, true);
+                            returnMap.putInt(RECORDING_ERROR_KEY, Error.NONE.toInt());
+                            returnMap.putString(RECORDING_URL_KEY, filePath);
+                        } else {
+                            returnMap.putBoolean(RECORDING_SUCCESS_KEY, false);
+                            returnMap.putInt(RECORDING_ERROR_KEY, Error.WRITE_TO_FILE.toInt());
+                            returnMap.putString(RECORDING_URL_KEY, null);
+                        }
+                        bitmap.recycle();
                         promise.resolve(returnMap);
                     }
 
                     @Override
-                    public void onSuccess(Bitmap bitmap, String url) {
+                    public void onError(int errorCode) {
                         WritableMap returnMap = Arguments.createMap();
-                        returnMap.putBoolean(RECORDING_SUCCESS_KEY, true);
-                        returnMap.putInt(RECORDING_ERROR_KEY, Error.NONE.toInt());
-                        returnMap.putString(RECORDING_URL_KEY, url);
+                        returnMap.putBoolean(RECORDING_SUCCESS_KEY, false);
+                        returnMap.putInt(RECORDING_ERROR_KEY, Error.UNKNOWN.toInt());
+                        returnMap.putString(RECORDING_URL_KEY, null);
                         promise.resolve(returnMap);
                     }
-                };
-                
-                // Schedule taking a screen shot if we have the right permission
-                checkPermissionsAndRun(new PermissionListener() {
-                    @Override
-                    public boolean onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-                        recorder.takeScreenShotAsync(fileName, saveToCameraRool, callback);
-                        return true;
-                    }
-                }, false);
+                });
             }
         });
+    }
+
+    /**
+     * Saves a bitmap to a file and returns the file path.
+     */
+    private String saveScreenshotToFile(Bitmap bitmap, String fileName, boolean saveToCameraRoll) {
+        if (fileName == null || fileName.trim().isEmpty()) {
+            return null;
+        }
+
+        String dirPath = getMediaStorageDirectory(mContext, saveToCameraRoll);
+        if (dirPath == null) {
+            return null;
+        }
+
+        File dir = new File(dirPath);
+        if (!dir.exists() && !dir.mkdirs()) {
+            Log.e("Viro", "Failed to create directory: " + dirPath);
+            return null;
+        }
+
+        File outputFile = new File(dir, fileName + ".jpg");
+        BufferedOutputStream bos = null;
+        try {
+            bos = new BufferedOutputStream(new FileOutputStream(outputFile));
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, bos);
+            bos.flush();
+        } catch (IOException e) {
+            Log.e("Viro", "Failed to save screenshot: " + e.getMessage());
+            return null;
+        } finally {
+            if (bos != null) {
+                try {
+                    bos.close();
+                } catch (IOException e) {
+                    Log.e("Viro", "Failed to close output stream: " + e.getMessage());
+                }
+            }
+        }
+
+        // Notify media scanner if saving to camera roll
+        if (saveToCameraRoll) {
+            Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+            Uri contentUri = Uri.fromFile(outputFile);
+            mediaScanIntent.setData(contentUri);
+            mContext.sendBroadcast(mediaScanIntent);
+        }
+
+        return outputFile.getAbsolutePath();
+    }
+
+    /**
+     * Gets the directory path for saving media files.
+     */
+    private static String getMediaStorageDirectory(Context context, boolean saveToCameraRoll) {
+        ApplicationInfo appInfo = context.getApplicationInfo();
+        CharSequence appLabel = context.getPackageManager().getApplicationLabel(appInfo);
+        String appName = (appLabel != null && appLabel.length() > 0)
+                ? appLabel.toString()
+                : context.getPackageName();
+
+        if (saveToCameraRoll) {
+            File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+            if (picturesDir != null) {
+                return picturesDir.getAbsolutePath() + "/" + appName;
+            }
+            File externalDir = Environment.getExternalStorageDirectory();
+            if (externalDir != null) {
+                return externalDir.getAbsolutePath() + "/" + appName;
+            }
+            Log.e("Viro", "Unable to access camera roll directory");
+            return null;
+        } else {
+            return context.getFilesDir().getAbsolutePath();
+        }
     }
 
     @ReactMethod
