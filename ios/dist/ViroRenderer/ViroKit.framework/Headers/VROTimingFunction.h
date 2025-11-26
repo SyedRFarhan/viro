@@ -35,7 +35,8 @@ enum class VROTimingFunctionType {
     EaseOut,
     EaseInEaseOut,
     Bounce,
-    PowerDecel
+    PowerDecel,
+    Step  // Hold value until next keyframe (no interpolation)
 };
 
 class VROTimingFunction {
