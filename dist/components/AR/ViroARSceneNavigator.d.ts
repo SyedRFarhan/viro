@@ -13,6 +13,10 @@ import * as React from "react";
 import { ViewProps } from "react-native";
 import { ViroWorldOrigin } from "../Types/ViroEvents";
 import { Viro3DPoint, ViroNativeRef, ViroScene, ViroSceneDictionary } from "../Types/ViroUtils";
+/**
+ * Occlusion mode determines how virtual content is occluded by real-world objects.
+ */
+export type ViroOcclusionMode = "disabled" | "depthBased" | "peopleOnly";
 type Props = ViewProps & {
     /**
      * ViroARSceneNavigator uses "scene" objects like the following to
@@ -42,6 +46,13 @@ type Props = ViewProps & {
     bloomEnabled?: boolean;
     shadowsEnabled?: boolean;
     multisamplingEnabled?: boolean;
+    /**
+     * Enable AR occlusion so real-world objects properly hide virtual content.
+     * Requires a device with depth sensing capability.
+     *
+     * @default "disabled"
+     */
+    occlusionMode?: ViroOcclusionMode;
 };
 type State = {
     sceneDictionary: ViroSceneDictionary;

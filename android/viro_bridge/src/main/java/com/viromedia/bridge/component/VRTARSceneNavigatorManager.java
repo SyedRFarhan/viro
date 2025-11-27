@@ -87,4 +87,9 @@ public class VRTARSceneNavigatorManager extends VRTViroViewGroupManager<VRTARSce
     public void setMultisamplingEnabled(VRTARSceneNavigator navigator, boolean enabled) {
         navigator.setMultisamplingEnabled(enabled);
     }
+
+    @ReactProp(name = "occlusionMode")
+    public void setOcclusionMode(VRTARSceneNavigator navigator, String mode) {
+        navigator.setOcclusionMode(mode);
+    }
 }

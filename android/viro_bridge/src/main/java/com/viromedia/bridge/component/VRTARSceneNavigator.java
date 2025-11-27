@@ -27,6 +27,7 @@ import android.util.Log;
 import android.view.View;
 
 import com.facebook.react.bridge.ReactContext;
+import com.viro.core.ARScene;
 import com.viro.core.ViroViewARCore;
 import com.viro.core.ViroView;
 import com.viromedia.bridge.ReactViroPackage;
@@ -43,6 +44,7 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
     private DisplayRotationListener mRotationListener;
     private boolean mAutoFocusEnabled = false;
     private boolean mNeedsAutoFocusToggle = false;
+    private ARScene.OcclusionMode mOcclusionMode = ARScene.OcclusionMode.DISABLED;
 
     private static class StartupListenerARCore implements ViroViewARCore.StartupListener {
 
@@ -122,6 +124,11 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
                     + child.getClass().getSimpleName() + "] to ARSceneNavigator!");
         }
         super.addView(child, index);
+
+        // Apply current occlusion mode to newly added ARScenes
+        if (child instanceof VRTARScene) {
+            ((VRTARScene) child).setOcclusionMode(mOcclusionMode);
+        }
     }
 
     public ViroViewARCore getARView() {
@@ -148,5 +155,32 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         } else {
             mNeedsAutoFocusToggle = true;
         }
+    }
+
+    public void setOcclusionMode(String mode) {
+        mOcclusionMode = ARScene.OcclusionMode.DISABLED;
+        if (mode != null) {
+            switch (mode.toLowerCase()) {
+                case "depthbased":
+                    mOcclusionMode = ARScene.OcclusionMode.DEPTH_BASED;
+                    break;
+                case "peopleonly":
+                    mOcclusionMode = ARScene.OcclusionMode.PEOPLE_ONLY;
+                    break;
+                case "disabled":
+                default:
+                    mOcclusionMode = ARScene.OcclusionMode.DISABLED;
+                    break;
+            }
+        }
+        // Note: Occlusion mode will be applied to scenes when they are added via addView()
+    }
+
+    /**
+     * Get the current occlusion mode. Used when adding new scenes so they
+     * inherit the navigator's occlusion setting.
+     */
+    public ARScene.OcclusionMode getOcclusionMode() {
+        return mOcclusionMode;
     }
 }

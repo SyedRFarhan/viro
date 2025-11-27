@@ -32,6 +32,11 @@ const ViroARSceneNavigatorModule = NativeModules.VRTARSceneNavigatorModule;
 
 let mathRandomOffset = 0;
 
+/**
+ * Occlusion mode determines how virtual content is occluded by real-world objects.
+ */
+export type ViroOcclusionMode = "disabled" | "depthBased" | "peopleOnly";
+
 type Props = ViewProps & {
   /**
    * ViroARSceneNavigator uses "scene" objects like the following to
@@ -63,6 +68,14 @@ type Props = ViewProps & {
   bloomEnabled?: boolean;
   shadowsEnabled?: boolean;
   multisamplingEnabled?: boolean;
+
+  /**
+   * Enable AR occlusion so real-world objects properly hide virtual content.
+   * Requires a device with depth sensing capability.
+   *
+   * @default "disabled"
+   */
+  occlusionMode?: ViroOcclusionMode;
 };
 
 type State = {

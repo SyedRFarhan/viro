@@ -366,6 +366,23 @@
     _multisamplingEnabled = multisamplingEnabled;
 }
 
+- (void)setOcclusionMode:(NSString *)occlusionMode {
+    _occlusionMode = occlusionMode;
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+        if (arSession) {
+            VROOcclusionMode mode = VROOcclusionMode::Disabled;
+            if ([occlusionMode caseInsensitiveCompare:@"depthBased"] == NSOrderedSame) {
+                mode = VROOcclusionMode::DepthBased;
+            } else if ([occlusionMode caseInsensitiveCompare:@"peopleOnly"] == NSOrderedSame) {
+                mode = VROOcclusionMode::PeopleOnly;
+            }
+            arSession->setOcclusionMode(mode);
+        }
+    }
+}
+
 /*
  Unproject the given screen coordinates into world coordinates. The given screen coordinate vector must
  contain a Z element in the range [0,1], where 0 is the near clipping plane and 1 the far clipping plane.

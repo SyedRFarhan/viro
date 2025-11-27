@@ -47,6 +47,7 @@
 @property (nonatomic, readwrite) BOOL bloomEnabled;
 @property (nonatomic, readwrite) BOOL shadowsEnabled;
 @property (nonatomic, readwrite) BOOL multisamplingEnabled;
+@property (nonatomic, copy) NSString *occlusionMode;
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge;
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex;
