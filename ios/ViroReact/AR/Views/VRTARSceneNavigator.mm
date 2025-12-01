@@ -146,6 +146,22 @@
         arSession->setAutofocus(_autofocus);
         arSession->setVideoQuality(_vroVideoQuality);
         arSession->setNumberOfTrackedImages(_numberOfTrackedImages);
+
+        // Apply initial occlusion mode if set
+        if (_occlusionMode) {
+            VROOcclusionMode mode = VROOcclusionMode::Disabled;
+            if ([_occlusionMode caseInsensitiveCompare:@"depthBased"] == NSOrderedSame) {
+                mode = VROOcclusionMode::DepthBased;
+            } else if ([_occlusionMode caseInsensitiveCompare:@"peopleOnly"] == NSOrderedSame) {
+                mode = VROOcclusionMode::PeopleOnly;
+            }
+            arSession->setOcclusionMode(mode);
+        }
+
+        // Apply initial depth debug setting if set
+        if (_depthDebugEnabled) {
+            [viewAR setDepthDebugEnabled:_depthDebugEnabled opacity:0.7f];
+        }
     }
 }
 
@@ -380,6 +396,14 @@
             }
             arSession->setOcclusionMode(mode);
         }
+    }
+}
+
+- (void)setDepthDebugEnabled:(BOOL)depthDebugEnabled {
+    _depthDebugEnabled = depthDebugEnabled;
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        [viewAR setDepthDebugEnabled:depthDebugEnabled opacity:0.7f];
     }
 }
 

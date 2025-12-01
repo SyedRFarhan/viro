@@ -76,6 +76,20 @@ type Props = ViewProps & {
    * @default "disabled"
    */
   occlusionMode?: ViroOcclusionMode;
+
+  /**
+   * [Debug] Enable depth debug visualization to see how the depth texture is being sampled.
+   * When enabled, the camera background will show a color overlay representing depth values:
+   * - Magenta = No depth data
+   * - Red = Very close (0-1m)
+   * - Yellow = Medium (1-3m)
+   * - Green = Medium-far (3-5m)
+   * - Cyan = Far (5-10m)
+   * - Blue = Very far (10m+)
+   *
+   * @default false
+   */
+  depthDebugEnabled?: boolean;
 };
 
 type State = {
