@@ -42,6 +42,7 @@
     RCTBridge *_bridge;
     VROVideoQuality _vroVideoQuality;
     BOOL _hasCleanedUp;
+    EAGLContext *_eaglContext;
 }
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge {
@@ -109,8 +110,8 @@
             }
         }
         
-        EAGLContext *context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
-        
+        _eaglContext = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
+
         VRORendererConfiguration config;
         config.enableHDR = _hdrEnabled;
         config.enablePBR = _pbrEnabled;
@@ -122,7 +123,7 @@
                                                                [[UIScreen mainScreen] bounds].size.width,
                                                                [[UIScreen mainScreen] bounds].size.height)
                                              config:config
-                                            context:context
+                                            context:_eaglContext
                                      worldAlignment:worldAlignment];
 
         if (_currentScene != nil) {
@@ -277,21 +278,21 @@
         return;
     }
     _hasCleanedUp = YES;
-    
+
     [self parentDidDisappear];
-    
+
     if (_vroView) {
         VROViewAR *viewAR = (VROViewAR *)_vroView;
-        
+
         // First pause the AR session
         [viewAR setPaused:YES];
-        
+
         // Terminate AR session explicitly - synchronous cleanup for Fabric
         @try {
             std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
             if (arSession) {
                 arSession->pause();
-                
+
                 // Synchronous cleanup to prevent race conditions in Fabric
                 @try {
                     [viewAR deleteGL];
@@ -310,9 +311,22 @@
                 NSLog(@"Error during AR view cleanup: %@", innerException.reason);
             }
         }
-        
+
+        // Remove the view from hierarchy before clearing reference
+        [(UIView *)_vroView removeFromSuperview];
+
         // Clear the view reference to prevent dangling pointer
         _vroView = nil;
+    }
+
+    // Destroy the EAGLContext to release GPU resources
+    // This must happen after deleteGL since GL operations require a valid context
+    if (_eaglContext) {
+        // Clear the current context if it's ours
+        if ([EAGLContext currentContext] == _eaglContext) {
+            [EAGLContext setCurrentContext:nil];
+        }
+        _eaglContext = nil;
     }
 }
 
@@ -437,23 +451,28 @@
         // pause the view before removing it.
         VROViewAR *viewAR = (VROViewAR *)_vroView;
         [viewAR setPaused:YES];
-        
-        // Properly terminate the AR session
+
+        // Properly terminate the AR session and clean up GL resources
         @try {
             std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
             if (arSession) {
                 arSession->pause();
-                
-                // Give the AR session time to clean up resources
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    // Additional cleanup if needed
-                });
             }
+            // Always call deleteGL to ensure proper resource cleanup
+            [viewAR deleteGL];
         } @catch (NSException *exception) {
             NSLog(@"Error terminating AR session during invalidate: %@", exception.reason);
         }
     }
-    
+
+    // Destroy the EAGLContext to release GPU resources
+    if (_eaglContext) {
+        if ([EAGLContext currentContext] == _eaglContext) {
+            [EAGLContext setCurrentContext:nil];
+        }
+        _eaglContext = nil;
+    }
+
     //NOTE: DO NOT NULL OUT _currentViews here, that will cause a memory leak and prevent child views from being released.
     _currentScene = nil;
     _vroView = nil;
