@@ -448,16 +448,33 @@
 
 - (void)setCloudAnchorProvider:(NSString *)cloudAnchorProvider {
     _cloudAnchorProvider = cloudAnchorProvider;
+
+    RCTLogInfo(@"[ViroAR] Setting cloud anchor provider: %@", cloudAnchorProvider ?: @"none");
+
     if (_vroView) {
         VROViewAR *viewAR = (VROViewAR *) _vroView;
         std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
         if (arSession) {
             if ([cloudAnchorProvider caseInsensitiveCompare:@"arcore"] == NSOrderedSame) {
                 arSession->setCloudAnchorProvider(VROCloudAnchorProvider::ARCore);
+                RCTLogInfo(@"[ViroAR] ARCore Cloud Anchors provider enabled");
+
+                // Check if API key is configured
+                NSString *apiKey = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"GARAPIKey"];
+                if (apiKey && apiKey.length > 0) {
+                    RCTLogInfo(@"[ViroAR] GARAPIKey found in Info.plist (length: %lu)", (unsigned long)apiKey.length);
+                } else {
+                    RCTLogWarn(@"[ViroAR] WARNING: GARAPIKey not found in Info.plist. Cloud anchors will not work!");
+                }
             } else {
                 arSession->setCloudAnchorProvider(VROCloudAnchorProvider::None);
+                RCTLogInfo(@"[ViroAR] Cloud Anchors disabled");
             }
+        } else {
+            RCTLogWarn(@"[ViroAR] AR session not available, cannot set cloud anchor provider");
         }
+    } else {
+        RCTLogInfo(@"[ViroAR] VROView not ready yet, cloud anchor provider will be set later");
     }
 }
 

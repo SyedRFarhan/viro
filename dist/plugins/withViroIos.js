@@ -38,8 +38,14 @@ const withViroPods = (config) => {
                 if (cloudAnchorProvider === "arcore") {
                     viroPods +=
                         `\n\n  # ARCore Cloud Anchors - Cross-platform anchor sharing\n` +
-                            `  # Requires GARAPIKey in Info.plist\n` +
+                            `  # Requires GARAPIKey in Info.plist and use_frameworks! with dynamic linkage\n` +
                             `  pod 'ARCore/CloudAnchors', '~> 1.51.0'`;
+                }
+                // Add use_frameworks! for ARCore Cloud Anchors (must be before pods)
+                if (cloudAnchorProvider === "arcore") {
+                    // Insert use_frameworks! before the target block
+                    // This is unconditional (not behind an if statement) so it will always apply
+                    data = (0, insertLinesHelper_1.insertLinesHelper)(`# ARCore SDK requires dynamic frameworks\nuse_frameworks! :linkage => :dynamic\n`, "target '", data, -1);
                 }
                 // Add New Architecture enforcement
                 viroPods +=

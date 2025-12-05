@@ -194,11 +194,36 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
     // Cloud Anchor Support
 
     private String mCloudAnchorProvider = "none";
+    private static final String TAG = "ViroAR";
 
     public void setCloudAnchorProvider(String provider) {
         mCloudAnchorProvider = provider != null ? provider.toLowerCase() : "none";
-        // Note: ARCore cloud anchors are automatically available on Android
-        // No special initialization needed - just use the ARSession APIs
+
+        Log.i(TAG, "Setting cloud anchor provider: " + mCloudAnchorProvider);
+
+        if ("arcore".equals(mCloudAnchorProvider)) {
+            Log.i(TAG, "ARCore Cloud Anchors provider enabled");
+
+            // Check if API key is configured in AndroidManifest
+            try {
+                android.content.pm.ApplicationInfo ai = getContext().getPackageManager()
+                    .getApplicationInfo(getContext().getPackageName(), android.content.pm.PackageManager.GET_META_DATA);
+                if (ai.metaData != null) {
+                    String apiKey = ai.metaData.getString("com.google.android.ar.API_KEY");
+                    if (apiKey != null && !apiKey.isEmpty()) {
+                        Log.i(TAG, "ARCore API key found in AndroidManifest.xml (length: " + apiKey.length() + ")");
+                    } else {
+                        Log.w(TAG, "WARNING: com.google.android.ar.API_KEY not found in AndroidManifest.xml. Cloud anchors will not work!");
+                    }
+                } else {
+                    Log.w(TAG, "WARNING: No meta-data found in AndroidManifest.xml. Cloud anchors may not work!");
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Could not check for ARCore API key: " + e.getMessage());
+            }
+        } else {
+            Log.i(TAG, "Cloud Anchors disabled");
+        }
     }
 
     /**
