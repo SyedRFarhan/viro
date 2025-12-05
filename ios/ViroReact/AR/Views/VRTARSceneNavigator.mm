@@ -163,6 +163,11 @@
         if (_depthDebugEnabled) {
             [viewAR setDepthDebugEnabled:_depthDebugEnabled opacity:0.7f];
         }
+
+        // Apply cloud anchor provider if it was set before view was ready
+        if (_cloudAnchorProvider) {
+            [self setCloudAnchorProvider:_cloudAnchorProvider];
+        }
     }
 }
 
