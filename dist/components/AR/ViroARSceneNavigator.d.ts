@@ -11,7 +11,7 @@
  */
 import * as React from "react";
 import { ViewProps } from "react-native";
-import { ViroWorldOrigin } from "../Types/ViroEvents";
+import { ViroWorldOrigin, ViroCloudAnchorProvider, ViroCloudAnchorStateChangeEvent, ViroHostCloudAnchorResult, ViroResolveCloudAnchorResult } from "../Types/ViroEvents";
 import { Viro3DPoint, ViroNativeRef, ViroScene, ViroSceneDictionary } from "../Types/ViroUtils";
 /**
  * Occlusion mode determines how virtual content is occluded by real-world objects.
@@ -66,6 +66,20 @@ type Props = ViewProps & {
      * @default false
      */
     depthDebugEnabled?: boolean;
+    /**
+     * Enable cloud anchors for cross-platform anchor sharing.
+     * When set to 'arcore', the ARCore Cloud Anchors SDK will be used.
+     * Requires a valid Google Cloud API key configured in the native project.
+     *
+     * @default "none"
+     * @platform ios,android
+     */
+    cloudAnchorProvider?: ViroCloudAnchorProvider;
+    /**
+     * Callback fired when a cloud anchor state changes.
+     * This includes progress updates during hosting/resolving operations.
+     */
+    onCloudAnchorStateChange?: (event: ViroCloudAnchorStateChangeEvent) => void;
 };
 type State = {
     sceneDictionary: ViroSceneDictionary;
@@ -243,6 +257,35 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
      */
     _setWorldOrigin: (worldOrigin: ViroWorldOrigin) => void;
     /**
+     * Host a local anchor to the cloud for cross-platform sharing.
+     *
+     * The anchor must already exist in the AR session (e.g., created from a hit test
+     * or plane detection). Once hosted, the returned cloudAnchorId can be shared
+     * with other devices to resolve the same anchor.
+     *
+     * @param anchorId - The local anchor ID to host (from ViroAnchor.anchorId)
+     * @param ttlDays - Time-to-live in days (1-365). Default: 1 day.
+     *                  Note: TTL > 1 requires keyless authorization on Google Cloud.
+     * @returns Promise resolving to the hosting result with cloudAnchorId
+     */
+    _hostCloudAnchor: (anchorId: string, ttlDays?: number) => Promise<ViroHostCloudAnchorResult>;
+    /**
+     * Resolve a cloud anchor by its ID.
+     *
+     * Once resolved, the anchor will be added to the AR session and can be used
+     * to place virtual content at the same real-world location as the original
+     * hosted anchor (even on a different device).
+     *
+     * @param cloudAnchorId - The cloud anchor ID to resolve (from hostCloudAnchor result)
+     * @returns Promise resolving to the anchor data
+     */
+    _resolveCloudAnchor: (cloudAnchorId: string) => Promise<ViroResolveCloudAnchorResult>;
+    /**
+     * Cancel all pending cloud anchor operations.
+     * Use this when exiting a scene or when cloud operations are no longer needed.
+     */
+    _cancelCloudAnchorOperations: () => void;
+    /**
      * Renders the Scene Views in the stack.
      *
      * @returns Array of rendered Scene views.
@@ -261,6 +304,9 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         setWorldOrigin: (worldOrigin: ViroWorldOrigin) => void;
         project: (point: Viro3DPoint) => Promise<any>;
         unproject: (point: Viro3DPoint) => Promise<any>;
+        hostCloudAnchor: (anchorId: string, ttlDays?: number) => Promise<ViroHostCloudAnchorResult>;
+        resolveCloudAnchor: (cloudAnchorId: string) => Promise<ViroResolveCloudAnchorResult>;
+        cancelCloudAnchorOperations: () => void;
         viroAppProps: any;
     };
     sceneNavigator: {
@@ -276,6 +322,9 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         setWorldOrigin: (worldOrigin: ViroWorldOrigin) => void;
         project: (point: Viro3DPoint) => Promise<any>;
         unproject: (point: Viro3DPoint) => Promise<any>;
+        hostCloudAnchor: (anchorId: string, ttlDays?: number) => Promise<ViroHostCloudAnchorResult>;
+        resolveCloudAnchor: (cloudAnchorId: string) => Promise<ViroResolveCloudAnchorResult>;
+        cancelCloudAnchorOperations: () => void;
         viroAppProps: any;
     };
     render(): React.JSX.Element;

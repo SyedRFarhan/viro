@@ -150,12 +150,29 @@ project(':react_viro').projectDir = new File('../node_modules/@reactvision/react
 const withViroManifest = (config) => (0, config_plugins_1.withAndroidManifest)(config, async (newConfig) => {
     const contents = newConfig.modResults;
     contents.manifest.$["xmlns:tools"] = "http://schemas.android.com/tools";
+    // Initialize meta-data array if it doesn't exist
+    if (!contents?.manifest?.application?.[0]["meta-data"]) {
+        contents.manifest.application[0]["meta-data"] = [];
+    }
     contents?.manifest?.application?.[0]["meta-data"]?.push({
         $: {
             "android:name": "com.google.ar.core",
             "android:value": "optional",
         },
     });
+    // Add Google Cloud API key for ARCore Cloud Anchors if configured
+    const viroPlugin = config?.plugins?.find((plugin) => Array.isArray(plugin) && plugin[0] === "@reactvision/react-viro");
+    if (Array.isArray(viroPlugin) && viroPlugin.length > 1) {
+        const pluginOptions = viroPlugin[1];
+        if (pluginOptions.googleCloudApiKey && pluginOptions.cloudAnchorProvider === "arcore") {
+            contents?.manifest?.application?.[0]["meta-data"]?.push({
+                $: {
+                    "android:name": "com.google.android.ar.API_KEY",
+                    "android:value": pluginOptions.googleCloudApiKey,
+                },
+            });
+        }
+    }
     if (viroPluginConfig.includes("GVR") ||
         viroPluginConfig.includes("OVR_MOBILE")) {
         //   <!-- Add the following line for cardboard -->

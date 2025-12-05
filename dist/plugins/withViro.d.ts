@@ -1,9 +1,32 @@
 import { ConfigPlugin } from "@expo/config-plugins";
 export type XrMode = "GVR" | "AR" | "OVR_MOBILE";
 /**
+ * Cloud Anchors provider type.
+ * - "none": Cloud Anchors disabled
+ * - "arcore": Use ARCore Cloud Anchors (works on both iOS and Android)
+ */
+export type CloudAnchorProvider = "none" | "arcore";
+/**
  * Options interface for configuring expo plugin
  */
 export interface ViroConfigurationOptions {
+    /**
+     * Google Cloud API key for ARCore Cloud Anchors.
+     * Required if using cloudAnchorProvider: "arcore"
+     *
+     * Get your API key from Google Cloud Console:
+     * https://console.cloud.google.com/apis/credentials
+     *
+     * Make sure to enable the ARCore API for your project.
+     */
+    googleCloudApiKey?: string;
+    /**
+     * Cloud Anchors provider for cross-platform anchor sharing.
+     * When set to "arcore", enables ARCore Cloud Anchors on both iOS and Android.
+     *
+     * DEFAULTS TO: "none"
+     */
+    cloudAnchorProvider?: CloudAnchorProvider;
     ios?: {
         /**
          * String for app to use for camera usage.

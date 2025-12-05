@@ -268,3 +268,59 @@ export type ViroPortalExitEvent = any;
  * Viro Sound Events
  * ============================================================================ */
 export type ViroSoundFinishEvent = any;
+/** ===========================================================================
+ * Viro Cloud Anchor Events
+ * ============================================================================ */
+/**
+ * State of a cloud anchor operation.
+ * Maps to GARCloudAnchorState (iOS) and Anchor.CloudAnchorState (Android)
+ */
+export type ViroCloudAnchorState = "None" | "Success" | "ErrorInternal" | "TaskInProgress" | "ErrorNotAuthorized" | "ErrorResourceExhausted" | "ErrorHostingDatasetProcessingFailed" | "ErrorCloudIdNotFound" | "ErrorResolvingSdkVersionTooOld" | "ErrorResolvingSdkVersionTooNew" | "ErrorHostingServiceUnavailable";
+/**
+ * Cloud anchor provider type.
+ */
+export type ViroCloudAnchorProvider = "none" | "arcore";
+/**
+ * Represents a cloud-hosted AR anchor.
+ */
+export type ViroCloudAnchor = {
+    /** The local anchor ID */
+    anchorId: string;
+    /** The cloud anchor ID (assigned after successful hosting) */
+    cloudAnchorId?: string;
+    /** Current state of the cloud anchor */
+    state: ViroCloudAnchorState;
+    /** Position in world coordinates */
+    position: [number, number, number];
+    /** Rotation in degrees */
+    rotation: [number, number, number];
+    /** Scale */
+    scale: [number, number, number];
+};
+/**
+ * Result of a host cloud anchor operation.
+ */
+export type ViroHostCloudAnchorResult = {
+    success: boolean;
+    cloudAnchorId?: string;
+    error?: string;
+    state: ViroCloudAnchorState;
+};
+/**
+ * Result of a resolve cloud anchor operation.
+ */
+export type ViroResolveCloudAnchorResult = {
+    success: boolean;
+    anchor?: ViroCloudAnchor;
+    error?: string;
+    state: ViroCloudAnchorState;
+};
+/**
+ * Event fired when a cloud anchor state changes.
+ */
+export type ViroCloudAnchorStateChangeEvent = {
+    anchorId: string;
+    cloudAnchorId?: string;
+    state: ViroCloudAnchorState;
+    error?: string;
+};

@@ -18,6 +18,19 @@ const withViroPods = (config: ExpoConfig) => {
     async (newConfig) => {
       const root = newConfig.modRequest.platformProjectRoot;
 
+      // Check if cloud anchors are enabled
+      let cloudAnchorProvider: string | undefined;
+      if (Array.isArray(config.plugins)) {
+        const pluginConfig = config?.plugins?.find(
+          (plugin) =>
+            Array.isArray(plugin) && plugin[0] === "@reactvision/react-viro"
+        );
+        if (Array.isArray(pluginConfig) && pluginConfig.length > 1) {
+          const options = pluginConfig[1] as ViroConfigurationOptions;
+          cloudAnchorProvider = options.cloudAnchorProvider;
+        }
+      }
+
       fs.readFile(`${root}/Podfile`, "utf-8", (err, data) => {
         // Check for New Architecture environment variable
         if (
@@ -37,6 +50,14 @@ const withViroPods = (config: ExpoConfig) => {
           `  # Automatically includes Fabric components when RCT_NEW_ARCH_ENABLED=1\n` +
           `  pod 'ViroReact', :path => '../node_modules/@reactvision/react-viro/ios'\n` +
           `  pod 'ViroKit', :path => '../node_modules/@reactvision/react-viro/ios/dist/ViroRenderer/'`;
+
+        // Add ARCore Cloud Anchors pod if enabled
+        if (cloudAnchorProvider === "arcore") {
+          viroPods +=
+            `\n\n  # ARCore Cloud Anchors - Cross-platform anchor sharing\n` +
+            `  # Requires GARAPIKey in Info.plist\n` +
+            `  pod 'ARCore/CloudAnchors', '~> 1.51.0'`;
+        }
 
         // Add New Architecture enforcement
         viroPods +=

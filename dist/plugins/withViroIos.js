@@ -13,6 +13,15 @@ const withViroPods = (config) => {
         "ios",
         async (newConfig) => {
             const root = newConfig.modRequest.platformProjectRoot;
+            // Check if cloud anchors are enabled
+            let cloudAnchorProvider;
+            if (Array.isArray(config.plugins)) {
+                const pluginConfig = config?.plugins?.find((plugin) => Array.isArray(plugin) && plugin[0] === "@reactvision/react-viro");
+                if (Array.isArray(pluginConfig) && pluginConfig.length > 1) {
+                    const options = pluginConfig[1];
+                    cloudAnchorProvider = options.cloudAnchorProvider;
+                }
+            }
             fs_1.default.readFile(`${root}/Podfile`, "utf-8", (err, data) => {
                 // Check for New Architecture environment variable
                 if (!data.includes('ENV["RCT_NEW_ARCH_ENABLED"]') &&
@@ -25,6 +34,13 @@ const withViroPods = (config) => {
                     `  # Automatically includes Fabric components when RCT_NEW_ARCH_ENABLED=1\n` +
                     `  pod 'ViroReact', :path => '../node_modules/@reactvision/react-viro/ios'\n` +
                     `  pod 'ViroKit', :path => '../node_modules/@reactvision/react-viro/ios/dist/ViroRenderer/'`;
+                // Add ARCore Cloud Anchors pod if enabled
+                if (cloudAnchorProvider === "arcore") {
+                    viroPods +=
+                        `\n\n  # ARCore Cloud Anchors - Cross-platform anchor sharing\n` +
+                            `  # Requires GARAPIKey in Info.plist\n` +
+                            `  pod 'ARCore/CloudAnchors', '~> 1.51.0'`;
+                }
                 // Add New Architecture enforcement
                 viroPods +=
                     `\n\n  # Enforce New Architecture requirement\n` +
@@ -71,17 +87,21 @@ const withDefaultInfoPlist = (config, props) => {
     let photosPermission = withViro_1.DEFAULTS.ios.photosPermission;
     let cameraUsagePermission = withViro_1.DEFAULTS.ios.cameraUsagePermission;
     let microphoneUsagePermission = withViro_1.DEFAULTS.ios.microphoneUsagePermission;
+    let googleCloudApiKey;
+    let cloudAnchorProvider;
     if (Array.isArray(config.plugins)) {
         const pluginConfig = config?.plugins?.find((plugin) => Array.isArray(plugin) && plugin[0] === "@reactvision/react-viro");
         if (Array.isArray(pluginConfig) && pluginConfig.length > 1) {
-            const config = pluginConfig[1];
+            const pluginOptions = pluginConfig[1];
             savePhotosPermission =
-                config.ios?.savePhotosPermission || savePhotosPermission;
-            photosPermission = config.ios?.photosPermission || photosPermission;
+                pluginOptions.ios?.savePhotosPermission || savePhotosPermission;
+            photosPermission = pluginOptions.ios?.photosPermission || photosPermission;
             microphoneUsagePermission =
-                config.ios?.microphoneUsagePermission || microphoneUsagePermission;
+                pluginOptions.ios?.microphoneUsagePermission || microphoneUsagePermission;
             cameraUsagePermission =
-                config.ios?.cameraUsagePermission || cameraUsagePermission;
+                pluginOptions.ios?.cameraUsagePermission || cameraUsagePermission;
+            googleCloudApiKey = pluginOptions.googleCloudApiKey;
+            cloudAnchorProvider = pluginOptions.cloudAnchorProvider;
         }
     }
     if (!config.ios)
@@ -98,6 +118,10 @@ const withDefaultInfoPlist = (config, props) => {
     config.ios.infoPlist.NSMicrophoneUsageDescription =
         config.ios.infoPlist.NSMicrophoneUsageDescription ||
             microphoneUsagePermission;
+    // Add Google Cloud API key for ARCore Cloud Anchors (iOS)
+    if (googleCloudApiKey && cloudAnchorProvider === "arcore") {
+        config.ios.infoPlist.GARAPIKey = googleCloudApiKey;
+    }
     return config;
 };
 exports.withDefaultInfoPlist = withDefaultInfoPlist;

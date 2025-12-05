@@ -550,15 +550,15 @@
             if (completionHandler) {
                 VROMatrix4f transform = resolvedAnchor->getTransform();
                 VROVector3f position = transform.extractTranslation();
-                VROVector3f rotation = transform.extractRotation(VRORotationOrder::ZYX).toDegrees();
                 VROVector3f scale = transform.extractScale();
+                VROVector3f rotation = transform.extractRotation(scale).toEuler();
 
                 NSDictionary *anchorData = @{
                     @"anchorId": [NSString stringWithUTF8String:resolvedAnchor->getId().c_str()],
                     @"cloudAnchorId": [NSString stringWithUTF8String:resolvedAnchor->getCloudAnchorId().c_str()],
                     @"state": @"Success",
                     @"position": @[@(position.x), @(position.y), @(position.z)],
-                    @"rotation": @[@(rotation.x), @(rotation.y), @(rotation.z)],
+                    @"rotation": @[@(toDegrees(rotation.x)), @(toDegrees(rotation.y)), @(toDegrees(rotation.z))],
                     @"scale": @[@(scale.x), @(scale.y), @(scale.z)]
                 };
                 completionHandler(YES, anchorData, nil, @"Success");

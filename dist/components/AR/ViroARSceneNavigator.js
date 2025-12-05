@@ -438,6 +438,42 @@ class ViroARSceneNavigator extends React.Component {
         ViroARSceneNavigatorModule.setWorldOrigin((0, react_native_1.findNodeHandle)(this), worldOrigin);
     };
     /**
+     * Host a local anchor to the cloud for cross-platform sharing.
+     *
+     * The anchor must already exist in the AR session (e.g., created from a hit test
+     * or plane detection). Once hosted, the returned cloudAnchorId can be shared
+     * with other devices to resolve the same anchor.
+     *
+     * @param anchorId - The local anchor ID to host (from ViroAnchor.anchorId)
+     * @param ttlDays - Time-to-live in days (1-365). Default: 1 day.
+     *                  Note: TTL > 1 requires keyless authorization on Google Cloud.
+     * @returns Promise resolving to the hosting result with cloudAnchorId
+     */
+    _hostCloudAnchor = async (anchorId, ttlDays = 1) => {
+        return await ViroARSceneNavigatorModule.hostCloudAnchor((0, react_native_1.findNodeHandle)(this), anchorId, Math.max(1, Math.min(365, ttlDays)) // Clamp to valid range
+        );
+    };
+    /**
+     * Resolve a cloud anchor by its ID.
+     *
+     * Once resolved, the anchor will be added to the AR session and can be used
+     * to place virtual content at the same real-world location as the original
+     * hosted anchor (even on a different device).
+     *
+     * @param cloudAnchorId - The cloud anchor ID to resolve (from hostCloudAnchor result)
+     * @returns Promise resolving to the anchor data
+     */
+    _resolveCloudAnchor = async (cloudAnchorId) => {
+        return await ViroARSceneNavigatorModule.resolveCloudAnchor((0, react_native_1.findNodeHandle)(this), cloudAnchorId);
+    };
+    /**
+     * Cancel all pending cloud anchor operations.
+     * Use this when exiting a scene or when cloud operations are no longer needed.
+     */
+    _cancelCloudAnchorOperations = () => {
+        ViroARSceneNavigatorModule.cancelCloudAnchorOperations((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
      * Renders the Scene Views in the stack.
      *
      * @returns Array of rendered Scene views.
@@ -467,6 +503,9 @@ class ViroARSceneNavigator extends React.Component {
         setWorldOrigin: this._setWorldOrigin,
         project: this._project,
         unproject: this._unproject,
+        hostCloudAnchor: this._hostCloudAnchor,
+        resolveCloudAnchor: this._resolveCloudAnchor,
+        cancelCloudAnchorOperations: this._cancelCloudAnchorOperations,
         viroAppProps: {},
     };
     sceneNavigator = {
@@ -482,6 +521,9 @@ class ViroARSceneNavigator extends React.Component {
         setWorldOrigin: this._setWorldOrigin,
         project: this._project,
         unproject: this._unproject,
+        hostCloudAnchor: this._hostCloudAnchor,
+        resolveCloudAnchor: this._resolveCloudAnchor,
+        cancelCloudAnchorOperations: this._cancelCloudAnchorOperations,
         viroAppProps: {},
     };
     render() {
