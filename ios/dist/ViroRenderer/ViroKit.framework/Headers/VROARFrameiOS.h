@@ -64,9 +64,24 @@ public:
     VROVector3f getAmbientLightColor() const;
 
     std::shared_ptr<VROARPointCloud> getPointCloud();
-    
+
+    // Depth data support (iOS 14.0+ with LiDAR)
+    std::shared_ptr<VROTexture> getDepthTexture() override;
+    std::shared_ptr<VROTexture> getDepthConfidenceTexture() override;
+    bool hasDepthData() const override;
+    int getDepthImageWidth() const override;
+    int getDepthImageHeight() const override;
+
+    /*
+     Returns the transform matrix to convert from camera texture coordinates
+     to depth texture coordinates. The depth map from ARKit may have a different
+     orientation/resolution than the camera image, so this transform is needed
+     to correctly sample the depth texture.
+     */
+    VROMatrix4f getDepthTextureTransform() const;
+
 private:
-    
+
     ARFrame *_frame;
     VROViewport _viewport;
     VROCameraOrientation _orientation;
@@ -74,7 +89,11 @@ private:
     std::shared_ptr<VROARCamera> _camera;
     std::vector<std::shared_ptr<VROARAnchor>> _anchors;
     std::shared_ptr<VROARPointCloud> _pointCloud;
-    
+
+    // Cached depth textures (mutable to allow lazy initialization in const methods)
+    mutable std::shared_ptr<VROTexture> _depthTexture;
+    mutable std::shared_ptr<VROTexture> _depthConfidenceTexture;
+
 };
 
 #endif

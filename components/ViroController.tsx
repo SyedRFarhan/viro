@@ -165,6 +165,7 @@ export class ViroController extends React.Component<Props> {
         canRotate={this.props.onRotate != undefined}
         canFuse={this.props.onFuse != undefined}
         onClickViro={this._onClickState}
+        onClick={undefined}
         onTouchViro={this._onTouch}
         onScrollViro={this._onScroll}
         onSwipeViro={this._onSwipe}

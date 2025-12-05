@@ -92,7 +92,7 @@ public class ARTrackingTargetsModule extends ReactContextBaseJavaModule {
 
                 @Override
                 public void completed(Bitmap result) {
-                    mARImageTarget = new ARImageTarget(result, mOrientation, mPhysicalWidth);
+                    mARImageTarget = new ARImageTarget(result, mOrientation, mPhysicalWidth, mKey);
 
                     synchronized(this) {
                         mReady = true;

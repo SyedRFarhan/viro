@@ -163,6 +163,10 @@ public class VRTARScene extends VRTScene implements ARScene.Listener {
         mEventDelegateJni.setEventEnabled(EventDelegate.EventAction.ON_AR_POINT_CLOUD_UPDATE, canARPointCloudUpdate);
     }
 
+    public void setOcclusionMode(ARScene.OcclusionMode mode) {
+        ((ARScene) mNativeScene).setOcclusionMode(mode);
+    }
+
     // -- ARSceneDelegate Implementation --
 
     @Override

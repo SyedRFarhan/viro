@@ -45,6 +45,7 @@ public class VRTARImageMarker extends VRTARNode {
     }
 
     public void setTarget(String target) {
+        android.util.Log.d("ViroARImageMarker", "setTarget called with: " + target);
         mTargetName = target;
         mShouldUpdate = true;
     }
@@ -60,7 +61,9 @@ public class VRTARImageMarker extends VRTARNode {
 
     @Override
     public void onPropsSet() {
+        android.util.Log.d("ViroARImageMarker", "onPropsSet called - mShouldUpdate: " + mShouldUpdate + ", mScene: " + (mScene != null ? "set" : "null") + ", mTargetName: " + mTargetName);
         if (mShouldUpdate && mScene != null) {
+            android.util.Log.d("ViroARImageMarker", "Calling updateARDeclarativeImageNode, mNeedsAddToScene: " + mNeedsAddToScene);
             updateARDeclarativeImageNode(mNeedsAddToScene);
             mShouldUpdate = false;
             // we should only add to the scene on the first invocation of updateARDeclarativeImageNode,
@@ -77,20 +80,26 @@ public class VRTARImageMarker extends VRTARNode {
      *                         ARDeclarativeImageNode
      */
     private void updateARDeclarativeImageNode(final boolean shouldAddToScene) {
+        android.util.Log.d("ViroARImageMarker", "updateARDeclarativeImageNode called for target: " + mTargetName);
         ARTrackingTargetsModule trackingTargetsModule = getReactContext().getNativeModule(ARTrackingTargetsModule.class);
         ARTrackingTargetsModule.ARTargetPromise promise = trackingTargetsModule.getARTargetPromise(mTargetName);
+        android.util.Log.d("ViroARImageMarker", "Promise for target '" + mTargetName + "': " + (promise != null ? "found" : "NOT FOUND"));
         if (promise != null) {
             promise.wait(new ARTrackingTargetsModule.ARTargetPromiseListener() {
                 @Override
                 public void onComplete(String key, ARImageTarget newTarget) {
+                    android.util.Log.d("ViroARImageMarker", "Promise onComplete - key: " + key + ", newTarget: " + (newTarget != null ? "valid" : "NULL"));
                     ARDeclarativeImageNode imageNode = (ARDeclarativeImageNode) getNodeJni();
+                    android.util.Log.d("ViroARImageMarker", "imageNode: " + (imageNode != null ? "valid" : "NULL"));
                     if (imageNode != null) {
                         ARImageTarget oldTarget = imageNode.getARImageTarget();
                         imageNode.setARImageTarget(newTarget);
                         ARScene arScene = (ARScene) mScene.getNativeScene();
+                        android.util.Log.d("ViroARImageMarker", "arScene: " + (arScene != null ? "valid" : "NULL"));
                         if (arScene != null) {
                             if (shouldAddToScene) {
                                 // add the node
+                                android.util.Log.d("ViroARImageMarker", "Adding ARDeclarativeNode to scene");
                                 arScene.addARDeclarativeNode(imageNode);
                             } else {
                                 // remove old ARImageTarget and update the ARNode
@@ -100,6 +109,7 @@ public class VRTARImageMarker extends VRTARNode {
                                 arScene.updateARDeclarativeNode(imageNode);
                             }
                             // always add the ARImageTarget
+                            android.util.Log.d("ViroARImageMarker", "Adding ARImageTargetDeclarative to scene");
                             arScene.addARImageTargetDeclarative(newTarget);
                         }
                     }
@@ -107,10 +117,12 @@ public class VRTARImageMarker extends VRTARNode {
 
                 @Override
                 public void onError(Exception e) {
+                    android.util.Log.e("ViroARImageMarker", "Promise onError", e);
                     throw new IllegalStateException("ARImageMarker - unable to fetch target", e);
                 }
             });
         } else {
+            android.util.Log.e("ViroARImageMarker", "Unknown target: " + mTargetName);
             throw new IllegalArgumentException("ARImageMarker - unknown target [" + mTargetName + "]");
         }
     }
