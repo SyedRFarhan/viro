@@ -92,4 +92,9 @@ public class VRTARSceneNavigatorManager extends VRTViroViewGroupManager<VRTARSce
     public void setOcclusionMode(VRTARSceneNavigator navigator, String mode) {
         navigator.setOcclusionMode(mode);
     }
+
+    @ReactProp(name = "cloudAnchorProvider")
+    public void setCloudAnchorProvider(VRTARSceneNavigator navigator, String provider) {
+        navigator.setCloudAnchorProvider(provider);
+    }
 }

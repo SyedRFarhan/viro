@@ -427,6 +427,141 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
         successCallback.invoke(availability.toString());
     }
 
+    @ReactMethod
+    public void hostCloudAnchor(final int sceneNavTag, final String anchorId,
+                                final int ttlDays, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("error", "UIManager not available");
+            result.putString("state", "ErrorInternal");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                View view = viewResolver.resolveView(sceneNavTag);
+                if (!(view instanceof VRTARSceneNavigator)) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", false);
+                    result.putString("error", "Invalid view type");
+                    result.putString("state", "ErrorInternal");
+                    promise.resolve(result);
+                    return;
+                }
+
+                VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                sceneNavigator.hostCloudAnchor(anchorId, ttlDays, new CloudAnchorCallback() {
+                    @Override
+                    public void onSuccess(String cloudAnchorId) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", true);
+                        result.putString("cloudAnchorId", cloudAnchorId);
+                        result.putString("state", "Success");
+                        promise.resolve(result);
+                    }
+
+                    @Override
+                    public void onFailure(String error, String state) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", false);
+                        result.putString("error", error);
+                        result.putString("state", state);
+                        promise.resolve(result);
+                    }
+                });
+            }
+        });
+    }
+
+    @ReactMethod
+    public void resolveCloudAnchor(final int sceneNavTag, final String cloudAnchorId,
+                                   final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("error", "UIManager not available");
+            result.putString("state", "ErrorInternal");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                View view = viewResolver.resolveView(sceneNavTag);
+                if (!(view instanceof VRTARSceneNavigator)) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", false);
+                    result.putString("error", "Invalid view type");
+                    result.putString("state", "ErrorInternal");
+                    promise.resolve(result);
+                    return;
+                }
+
+                VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                sceneNavigator.resolveCloudAnchor(cloudAnchorId, new CloudAnchorResolveCallback() {
+                    @Override
+                    public void onSuccess(WritableMap anchorData) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", true);
+                        result.putMap("anchor", anchorData);
+                        result.putString("state", "Success");
+                        promise.resolve(result);
+                    }
+
+                    @Override
+                    public void onFailure(String error, String state) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", false);
+                        result.putString("error", error);
+                        result.putString("state", state);
+                        promise.resolve(result);
+                    }
+                });
+            }
+        });
+    }
+
+    @ReactMethod
+    public void cancelCloudAnchorOperations(final int sceneNavTag) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                View view = viewResolver.resolveView(sceneNavTag);
+                if (view instanceof VRTARSceneNavigator) {
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.cancelCloudAnchorOperations();
+                }
+            }
+        });
+    }
+
+    /**
+     * Callback interface for cloud anchor hosting operations.
+     */
+    public interface CloudAnchorCallback {
+        void onSuccess(String cloudAnchorId);
+        void onFailure(String error, String state);
+    }
+
+    /**
+     * Callback interface for cloud anchor resolve operations.
+     */
+    public interface CloudAnchorResolveCallback {
+        void onSuccess(WritableMap anchorData);
+        void onFailure(String error, String state);
+    }
+
     private void checkPermissionsAndRun(PermissionListener listener, boolean audioAndRecordingPerm){
         Activity activity = mContext.getCurrentActivity();
 

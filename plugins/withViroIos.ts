@@ -105,20 +105,25 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
   let photosPermission = DEFAULTS.ios.photosPermission;
   let cameraUsagePermission = DEFAULTS.ios.cameraUsagePermission;
   let microphoneUsagePermission = DEFAULTS.ios.microphoneUsagePermission;
+  let googleCloudApiKey: string | undefined;
+  let cloudAnchorProvider: string | undefined;
+
   if (Array.isArray(config.plugins)) {
     const pluginConfig = config?.plugins?.find(
       (plugin) =>
         Array.isArray(plugin) && plugin[0] === "@reactvision/react-viro"
     );
     if (Array.isArray(pluginConfig) && pluginConfig.length > 1) {
-      const config = pluginConfig[1] as ViroConfigurationOptions;
+      const pluginOptions = pluginConfig[1] as ViroConfigurationOptions;
       savePhotosPermission =
-        config.ios?.savePhotosPermission || savePhotosPermission;
-      photosPermission = config.ios?.photosPermission || photosPermission;
+        pluginOptions.ios?.savePhotosPermission || savePhotosPermission;
+      photosPermission = pluginOptions.ios?.photosPermission || photosPermission;
       microphoneUsagePermission =
-        config.ios?.microphoneUsagePermission || microphoneUsagePermission;
+        pluginOptions.ios?.microphoneUsagePermission || microphoneUsagePermission;
       cameraUsagePermission =
-        config.ios?.cameraUsagePermission || cameraUsagePermission;
+        pluginOptions.ios?.cameraUsagePermission || cameraUsagePermission;
+      googleCloudApiKey = pluginOptions.googleCloudApiKey;
+      cloudAnchorProvider = pluginOptions.cloudAnchorProvider;
     }
   }
 
@@ -134,6 +139,11 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
   config.ios.infoPlist.NSMicrophoneUsageDescription =
     config.ios.infoPlist.NSMicrophoneUsageDescription ||
     microphoneUsagePermission;
+
+  // Add Google Cloud API key for ARCore Cloud Anchors (iOS)
+  if (googleCloudApiKey && cloudAnchorProvider === "arcore") {
+    config.ios.infoPlist.GARAPIKey = googleCloudApiKey;
+  }
 
   return config;
 };

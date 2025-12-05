@@ -444,6 +444,141 @@
     return projectedPoint;
 }
 
+#pragma mark - Cloud Anchor Methods
+
+- (void)setCloudAnchorProvider:(NSString *)cloudAnchorProvider {
+    _cloudAnchorProvider = cloudAnchorProvider;
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+        if (arSession) {
+            if ([cloudAnchorProvider caseInsensitiveCompare:@"arcore"] == NSOrderedSame) {
+                arSession->setCloudAnchorProvider(VROCloudAnchorProvider::ARCore);
+            } else {
+                arSession->setCloudAnchorProvider(VROCloudAnchorProvider::None);
+            }
+        }
+    }
+}
+
+- (void)hostCloudAnchor:(NSString *)anchorId
+                ttlDays:(NSInteger)ttlDays
+      completionHandler:(CloudAnchorHostCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR view not initialized", @"ErrorInternal");
+        }
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR session not available", @"ErrorInternal");
+        }
+        return;
+    }
+
+    // Find the anchor by ID
+    std::string anchorIdStr = std::string([anchorId UTF8String]);
+    std::shared_ptr<VROARAnchor> anchor = nullptr;
+
+    // Search through frame anchors
+    std::unique_ptr<VROARFrame> &frame = arSession->getLastFrame();
+    if (frame) {
+        const std::vector<std::shared_ptr<VROARAnchor>> &anchors = frame->getAnchors();
+        for (const auto &a : anchors) {
+            if (a->getId() == anchorIdStr) {
+                anchor = a;
+                break;
+            }
+        }
+    }
+
+    if (!anchor) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"Anchor not found in session", @"ErrorCloudIdNotFound");
+        }
+        return;
+    }
+
+    // Host the anchor with TTL
+    arSession->hostCloudAnchor(anchor,
+        (int)ttlDays,
+        [completionHandler](std::shared_ptr<VROARAnchor> hostedAnchor) {
+            // Success callback
+            if (completionHandler) {
+                NSString *cloudId = [NSString stringWithUTF8String:hostedAnchor->getCloudAnchorId().c_str()];
+                completionHandler(YES, cloudId, nil, @"Success");
+            }
+        },
+        [completionHandler](std::string error) {
+            // Failure callback
+            if (completionHandler) {
+                NSString *errorStr = [NSString stringWithUTF8String:error.c_str()];
+                completionHandler(NO, nil, errorStr, @"ErrorInternal");
+            }
+        }
+    );
+}
+
+- (void)resolveCloudAnchor:(NSString *)cloudAnchorId
+         completionHandler:(CloudAnchorResolveCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR view not initialized", @"ErrorInternal");
+        }
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR session not available", @"ErrorInternal");
+        }
+        return;
+    }
+
+    std::string cloudIdStr = std::string([cloudAnchorId UTF8String]);
+
+    // Resolve the anchor
+    arSession->resolveCloudAnchor(cloudIdStr,
+        [completionHandler](std::shared_ptr<VROARAnchor> resolvedAnchor) {
+            // Success callback - convert anchor to dictionary
+            if (completionHandler) {
+                VROMatrix4f transform = resolvedAnchor->getTransform();
+                VROVector3f position = transform.extractTranslation();
+                VROVector3f rotation = transform.extractRotation(VRORotationOrder::ZYX).toDegrees();
+                VROVector3f scale = transform.extractScale();
+
+                NSDictionary *anchorData = @{
+                    @"anchorId": [NSString stringWithUTF8String:resolvedAnchor->getId().c_str()],
+                    @"cloudAnchorId": [NSString stringWithUTF8String:resolvedAnchor->getCloudAnchorId().c_str()],
+                    @"state": @"Success",
+                    @"position": @[@(position.x), @(position.y), @(position.z)],
+                    @"rotation": @[@(rotation.x), @(rotation.y), @(rotation.z)],
+                    @"scale": @[@(scale.x), @(scale.y), @(scale.z)]
+                };
+                completionHandler(YES, anchorData, nil, @"Success");
+            }
+        },
+        [completionHandler](std::string error) {
+            // Failure callback
+            if (completionHandler) {
+                NSString *errorStr = [NSString stringWithUTF8String:error.c_str()];
+                completionHandler(NO, nil, errorStr, @"ErrorInternal");
+            }
+        }
+    );
+}
+
+- (void)cancelCloudAnchorOperations {
+    // Currently a no-op - cloud operations are fire-and-forget
+    // Future implementation could track and cancel pending operations
+}
+
 #pragma mark RCTInvalidating methods
 
 - (void)invalidate {

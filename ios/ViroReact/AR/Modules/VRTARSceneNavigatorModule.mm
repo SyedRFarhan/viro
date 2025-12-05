@@ -292,31 +292,160 @@ RCT_EXPORT_METHOD(unproject:(nonnull NSNumber *)reactTag
                 reject(@"invalid_position", @"Position must be an array of 3 numbers", nil);
                 return;
             }
-            
+
             VROVector3f pos = VROVector3f([[position objectAtIndex:0] floatValue],
                                           [[position objectAtIndex:1] floatValue],
                                           [[position objectAtIndex:2] floatValue]);
-            
+
             VRTView *view = (VRTView *)viewRegistry[reactTag];
             if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
                 reject(@"invalid_view", @"Invalid view returned from registry, expecting VRTARSceneNavigator", nil);
                 return;
             }
-            
+
             VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
-            
+
             // Check if component is still valid
             if (!component.rootVROView) {
                 reject(@"invalid_state", @"AR view has been unmounted", nil);
                 return;
             }
-            
+
             VROVector3f unprojectedPoint = [component unprojectPoint:pos];
             resolve(@{
                 @"position" : @[@(unprojectedPoint.x), @(unprojectedPoint.y), @(unprojectedPoint.z)]
             });
         } @catch (NSException *exception) {
             reject(@"unprojection_error", [NSString stringWithFormat:@"Error unprojecting point: %@", exception.reason], nil);
+        }
+    }];
+}
+
+#pragma mark - Cloud Anchor Methods
+
+RCT_EXPORT_METHOD(hostCloudAnchor:(nonnull NSNumber *)reactTag
+                         anchorId:(NSString *)anchorId
+                          ttlDays:(NSInteger)ttlDays
+                          resolve:(RCTPromiseResolveBlock)resolve
+                           reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                NSDictionary *result = @{
+                    @"success": @NO,
+                    @"error": @"Invalid view type",
+                    @"state": @"ErrorInternal"
+                };
+                resolve(result);
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                NSDictionary *result = @{
+                    @"success": @NO,
+                    @"error": @"AR view has been unmounted",
+                    @"state": @"ErrorInternal"
+                };
+                resolve(result);
+                return;
+            }
+
+            [component hostCloudAnchor:anchorId
+                               ttlDays:ttlDays
+                     completionHandler:^(BOOL success,
+                                        NSString *cloudAnchorId,
+                                        NSString *error,
+                                        NSString *state) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                [result setObject:state forKey:@"state"];
+                if (cloudAnchorId) {
+                    [result setObject:cloudAnchorId forKey:@"cloudAnchorId"];
+                }
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            NSDictionary *result = @{
+                @"success": @NO,
+                @"error": [NSString stringWithFormat:@"Exception: %@", exception.reason],
+                @"state": @"ErrorInternal"
+            };
+            resolve(result);
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(resolveCloudAnchor:(nonnull NSNumber *)reactTag
+                       cloudAnchorId:(NSString *)cloudAnchorId
+                             resolve:(RCTPromiseResolveBlock)resolve
+                              reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                NSDictionary *result = @{
+                    @"success": @NO,
+                    @"error": @"Invalid view type",
+                    @"state": @"ErrorInternal"
+                };
+                resolve(result);
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                NSDictionary *result = @{
+                    @"success": @NO,
+                    @"error": @"AR view has been unmounted",
+                    @"state": @"ErrorInternal"
+                };
+                resolve(result);
+                return;
+            }
+
+            [component resolveCloudAnchor:cloudAnchorId
+                        completionHandler:^(BOOL success,
+                                           NSDictionary *anchorData,
+                                           NSString *error,
+                                           NSString *state) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                [result setObject:state forKey:@"state"];
+                if (anchorData) {
+                    [result setObject:anchorData forKey:@"anchor"];
+                }
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            NSDictionary *result = @{
+                @"success": @NO,
+                @"error": [NSString stringWithFormat:@"Exception: %@", exception.reason],
+                @"state": @"ErrorInternal"
+            };
+            resolve(result);
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(cancelCloudAnchorOperations:(nonnull NSNumber *)reactTag) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component cancelCloudAnchorOperations];
         }
     }];
 }

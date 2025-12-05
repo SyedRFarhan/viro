@@ -123,6 +123,13 @@ import {
   ViroPinchStateTypes,
   ViroClickStateTypes,
   ViroRotateStateTypes,
+  // Cloud Anchor Types
+  ViroCloudAnchorState,
+  ViroCloudAnchorProvider,
+  ViroCloudAnchor,
+  ViroHostCloudAnchorResult,
+  ViroResolveCloudAnchorResult,
+  ViroCloudAnchorStateChangeEvent,
 } from "./components/Types/ViroEvents";
 import { ViroSurface } from "./components/ViroSurface";
 import { ViroSceneNavigator } from "./components/ViroSceneNavigator";
@@ -249,4 +256,11 @@ export {
   ViroTextStyle,
   ViroStyle,
   VIRO_VERSION,
+  // Cloud Anchor Types
+  ViroCloudAnchorState,
+  ViroCloudAnchorProvider,
+  ViroCloudAnchor,
+  ViroHostCloudAnchorResult,
+  ViroResolveCloudAnchorResult,
+  ViroCloudAnchorStateChangeEvent,
 };

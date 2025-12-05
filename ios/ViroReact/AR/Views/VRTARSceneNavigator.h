@@ -49,6 +49,7 @@
 @property (nonatomic, readwrite) BOOL multisamplingEnabled;
 @property (nonatomic, copy) NSString *occlusionMode;
 @property (nonatomic, assign) BOOL depthDebugEnabled;
+@property (nonatomic, copy) NSString *cloudAnchorProvider;
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge;
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex;
@@ -69,6 +70,27 @@
 - (void)takeScreenshot:(NSString *)fileName
       saveToCameraRoll:(BOOL)saveToCameraRoll
      completionHandler:(VROViewWriteMediaFinishBlock)completionHandler;
-    
+
+#pragma mark - Cloud Anchor Methods
+
+// Cloud Anchor completion handler types
+typedef void (^CloudAnchorHostCompletionHandler)(BOOL success,
+                                                  NSString * _Nullable cloudAnchorId,
+                                                  NSString * _Nullable error,
+                                                  NSString * _Nonnull state);
+
+typedef void (^CloudAnchorResolveCompletionHandler)(BOOL success,
+                                                     NSDictionary * _Nullable anchorData,
+                                                     NSString * _Nullable error,
+                                                     NSString * _Nonnull state);
+
+- (void)hostCloudAnchor:(NSString *)anchorId
+                ttlDays:(NSInteger)ttlDays
+      completionHandler:(CloudAnchorHostCompletionHandler)completionHandler;
+
+- (void)resolveCloudAnchor:(NSString *)cloudAnchorId
+         completionHandler:(CloudAnchorResolveCompletionHandler)completionHandler;
+
+- (void)cancelCloudAnchorOperations;
 
 @end

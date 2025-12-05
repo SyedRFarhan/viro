@@ -27,11 +27,18 @@ import android.util.Log;
 import android.view.View;
 
 import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.WritableMap;
+import com.viro.core.ARAnchor;
+import com.viro.core.ARNode;
 import com.viro.core.ARScene;
 import com.viro.core.ViroViewARCore;
 import com.viro.core.ViroView;
 import com.viromedia.bridge.ReactViroPackage;
 import com.viromedia.bridge.component.node.VRTARScene;
+import com.viromedia.bridge.module.ARSceneNavigatorModule;
+import com.viromedia.bridge.utility.ARUtils;
 import com.viromedia.bridge.utility.DisplayRotationListener;
 
 import java.lang.ref.WeakReference;
@@ -182,5 +189,98 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
      */
     public ARScene.OcclusionMode getOcclusionMode() {
         return mOcclusionMode;
+    }
+
+    // Cloud Anchor Support
+
+    private String mCloudAnchorProvider = "none";
+
+    public void setCloudAnchorProvider(String provider) {
+        mCloudAnchorProvider = provider != null ? provider.toLowerCase() : "none";
+        // Note: ARCore cloud anchors are automatically available on Android
+        // No special initialization needed - just use the ARSession APIs
+    }
+
+    /**
+     * Get the current ARScene from the active VRTARScene child.
+     */
+    private ARScene getCurrentARScene() {
+        VRTARScene currentScene = null;
+        for (int i = 0; i < getChildCount(); i++) {
+            View child = getChildAt(i);
+            if (child instanceof VRTARScene) {
+                currentScene = (VRTARScene) child;
+                break;
+            }
+        }
+        if (currentScene != null) {
+            return (ARScene) currentScene.getNativeScene();
+        }
+        return null;
+    }
+
+    public void hostCloudAnchor(String anchorId, int ttlDays,
+                                ARSceneNavigatorModule.CloudAnchorCallback callback) {
+        if (!"arcore".equals(mCloudAnchorProvider)) {
+            callback.onFailure("Cloud anchor provider not configured. Set cloudAnchorProvider='arcore' to enable.",
+                               "ErrorInternal");
+            return;
+        }
+
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            callback.onFailure("AR scene not available", "ErrorInternal");
+            return;
+        }
+
+        // Host the anchor using ARCore's cloud anchor API
+        // The native layer handles anchor lookup by ID
+        arScene.hostCloudAnchorById(anchorId, ttlDays, new ARScene.CloudAnchorHostListener() {
+            @Override
+            public void onSuccess(ARAnchor cloudAnchor, ARNode arNode) {
+                // Get the cloud anchor ID from the returned anchor
+                callback.onSuccess(cloudAnchor.getCloudAnchorId());
+            }
+
+            @Override
+            public void onFailure(String error) {
+                callback.onFailure(error, "ErrorInternal");
+            }
+        });
+    }
+
+    public void resolveCloudAnchor(String cloudAnchorId,
+                                   ARSceneNavigatorModule.CloudAnchorResolveCallback callback) {
+        if (!"arcore".equals(mCloudAnchorProvider)) {
+            callback.onFailure("Cloud anchor provider not configured. Set cloudAnchorProvider='arcore' to enable.",
+                               "ErrorInternal");
+            return;
+        }
+
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            callback.onFailure("AR scene not available", "ErrorInternal");
+            return;
+        }
+
+        // Resolve the cloud anchor
+        arScene.resolveCloudAnchor(cloudAnchorId, new ARScene.CloudAnchorResolveListener() {
+            @Override
+            public void onSuccess(ARAnchor anchor, ARNode arNode) {
+                // Convert anchor to WritableMap using ARUtils
+                WritableMap anchorData = ARUtils.mapFromARAnchor(anchor);
+                callback.onSuccess(anchorData);
+            }
+
+            @Override
+            public void onFailure(String error) {
+                callback.onFailure(error, "ErrorInternal");
+            }
+        });
+    }
+
+    public void cancelCloudAnchorOperations() {
+        // ARCore doesn't have explicit cancel - operations will just time out
+        // This is a placeholder for future implementation if needed
     }
 }
