@@ -42,8 +42,10 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.Dynamic;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.ReadableType;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.PermissionListener;
@@ -806,7 +808,7 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void createGeospatialAnchor(final int sceneNavTag, final double latitude,
                                         final double longitude, final double altitude,
-                                        final ReadableArray quaternion, final Promise promise) {
+                                        final Dynamic quaternion, final Promise promise) {
         UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
         if (uiManager == null) {
             WritableMap result = Arguments.createMap();
@@ -815,6 +817,9 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
             promise.resolve(result);
             return;
         }
+
+        // Parse quaternion upfront (accepts both array [x,y,z,w] and object {x,y,z,w})
+        final float[] quat = parseQuaternion(quaternion);
 
         ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
             @Override
@@ -830,19 +835,6 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                     }
 
                     VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
-
-                    float[] quat = new float[4];
-                    if (quaternion != null && quaternion.size() >= 4) {
-                        quat[0] = (float) quaternion.getDouble(0);
-                        quat[1] = (float) quaternion.getDouble(1);
-                        quat[2] = (float) quaternion.getDouble(2);
-                        quat[3] = (float) quaternion.getDouble(3);
-                    } else {
-                        quat[0] = 0;
-                        quat[1] = 0;
-                        quat[2] = 0;
-                        quat[3] = 1;
-                    }
 
                     sceneNavigator.createGeospatialAnchor(latitude, longitude, altitude, quat,
                         new GeospatialAnchorCallback() {
@@ -875,7 +867,7 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void createTerrainAnchor(final int sceneNavTag, final double latitude,
                                      final double longitude, final double altitudeAboveTerrain,
-                                     final ReadableArray quaternion, final Promise promise) {
+                                     final Dynamic quaternion, final Promise promise) {
         UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
         if (uiManager == null) {
             WritableMap result = Arguments.createMap();
@@ -884,6 +876,9 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
             promise.resolve(result);
             return;
         }
+
+        // Parse quaternion upfront (accepts both array [x,y,z,w] and object {x,y,z,w})
+        final float[] quat = parseQuaternion(quaternion);
 
         ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
             @Override
@@ -899,19 +894,6 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                     }
 
                     VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
-
-                    float[] quat = new float[4];
-                    if (quaternion != null && quaternion.size() >= 4) {
-                        quat[0] = (float) quaternion.getDouble(0);
-                        quat[1] = (float) quaternion.getDouble(1);
-                        quat[2] = (float) quaternion.getDouble(2);
-                        quat[3] = (float) quaternion.getDouble(3);
-                    } else {
-                        quat[0] = 0;
-                        quat[1] = 0;
-                        quat[2] = 0;
-                        quat[3] = 1;
-                    }
 
                     sceneNavigator.createTerrainAnchor(latitude, longitude, altitudeAboveTerrain, quat,
                         new GeospatialAnchorCallback() {
@@ -944,7 +926,7 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void createRooftopAnchor(final int sceneNavTag, final double latitude,
                                      final double longitude, final double altitudeAboveRooftop,
-                                     final ReadableArray quaternion, final Promise promise) {
+                                     final Dynamic quaternion, final Promise promise) {
         UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
         if (uiManager == null) {
             WritableMap result = Arguments.createMap();
@@ -953,6 +935,9 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
             promise.resolve(result);
             return;
         }
+
+        // Parse quaternion upfront (accepts both array [x,y,z,w] and object {x,y,z,w})
+        final float[] quat = parseQuaternion(quaternion);
 
         ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
             @Override
@@ -968,19 +953,6 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                     }
 
                     VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
-
-                    float[] quat = new float[4];
-                    if (quaternion != null && quaternion.size() >= 4) {
-                        quat[0] = (float) quaternion.getDouble(0);
-                        quat[1] = (float) quaternion.getDouble(1);
-                        quat[2] = (float) quaternion.getDouble(2);
-                        quat[3] = (float) quaternion.getDouble(3);
-                    } else {
-                        quat[0] = 0;
-                        quat[1] = 0;
-                        quat[2] = 0;
-                        quat[3] = 1;
-                    }
 
                     sceneNavigator.createRooftopAnchor(latitude, longitude, altitudeAboveRooftop, quat,
                         new GeospatialAnchorCallback() {
@@ -1027,6 +999,40 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                 }
             }
         });
+    }
+
+    /**
+     * Helper method to parse a quaternion from either an array [x, y, z, w] or an object {x, y, z, w}.
+     * Returns identity quaternion [0, 0, 0, 1] if input is null or invalid.
+     */
+    private float[] parseQuaternion(Dynamic quaternion) {
+        float[] quat = new float[]{0, 0, 0, 1}; // Default identity quaternion
+
+        if (quaternion == null || quaternion.isNull()) {
+            return quat;
+        }
+
+        try {
+            if (quaternion.getType() == ReadableType.Array) {
+                ReadableArray arr = quaternion.asArray();
+                if (arr.size() >= 4) {
+                    quat[0] = (float) arr.getDouble(0);
+                    quat[1] = (float) arr.getDouble(1);
+                    quat[2] = (float) arr.getDouble(2);
+                    quat[3] = (float) arr.getDouble(3);
+                }
+            } else if (quaternion.getType() == ReadableType.Map) {
+                ReadableMap map = quaternion.asMap();
+                if (map.hasKey("x")) quat[0] = (float) map.getDouble("x");
+                if (map.hasKey("y")) quat[1] = (float) map.getDouble("y");
+                if (map.hasKey("z")) quat[2] = (float) map.getDouble("z");
+                if (map.hasKey("w")) quat[3] = (float) map.getDouble("w");
+            }
+        } catch (Exception e) {
+            Log.w("ARSceneNavigatorModule", "Failed to parse quaternion, using identity: " + e.getMessage());
+        }
+
+        return quat;
     }
 
     /**

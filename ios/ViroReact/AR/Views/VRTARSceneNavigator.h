@@ -123,22 +123,23 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
            completionHandler:(VPSAvailabilityCompletionHandler)completionHandler;
 
 // Geospatial anchors
+// Note: quaternion accepts both array [x, y, z, w] and dictionary {x, y, z, w}
 - (void)createGeospatialAnchor:(double)latitude
                      longitude:(double)longitude
                       altitude:(double)altitude
-                    quaternion:(NSArray *)quaternion
+                    quaternion:(id)quaternion
              completionHandler:(GeospatialAnchorCompletionHandler)completionHandler;
 
 - (void)createTerrainAnchor:(double)latitude
                   longitude:(double)longitude
         altitudeAboveTerrain:(double)altitudeAboveTerrain
-                  quaternion:(NSArray *)quaternion
+                  quaternion:(id)quaternion
            completionHandler:(GeospatialAnchorCompletionHandler)completionHandler;
 
 - (void)createRooftopAnchor:(double)latitude
                   longitude:(double)longitude
        altitudeAboveRooftop:(double)altitudeAboveRooftop
-                  quaternion:(NSArray *)quaternion
+                  quaternion:(id)quaternion
            completionHandler:(GeospatialAnchorCompletionHandler)completionHandler;
 
 - (void)removeGeospatialAnchor:(NSString *)anchorId;

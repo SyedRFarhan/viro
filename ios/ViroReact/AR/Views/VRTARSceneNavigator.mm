@@ -779,10 +779,42 @@
     });
 }
 
+// Helper method to parse quaternion from either array [x, y, z, w] or dictionary {x, y, z, w}
+- (VROQuaternion)parseQuaternion:(id)quaternion {
+    VROQuaternion quat(0, 0, 0, 1); // Default identity quaternion
+
+    if (!quaternion) {
+        return quat;
+    }
+
+    @try {
+        if ([quaternion isKindOfClass:[NSArray class]]) {
+            NSArray *arr = (NSArray *)quaternion;
+            if (arr.count >= 4) {
+                quat = VROQuaternion([[arr objectAtIndex:0] floatValue],
+                                     [[arr objectAtIndex:1] floatValue],
+                                     [[arr objectAtIndex:2] floatValue],
+                                     [[arr objectAtIndex:3] floatValue]);
+            }
+        } else if ([quaternion isKindOfClass:[NSDictionary class]]) {
+            NSDictionary *dict = (NSDictionary *)quaternion;
+            float x = dict[@"x"] ? [dict[@"x"] floatValue] : 0;
+            float y = dict[@"y"] ? [dict[@"y"] floatValue] : 0;
+            float z = dict[@"z"] ? [dict[@"z"] floatValue] : 0;
+            float w = dict[@"w"] ? [dict[@"w"] floatValue] : 1;
+            quat = VROQuaternion(x, y, z, w);
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[VRTARSceneNavigator] Failed to parse quaternion, using identity: %@", exception.reason);
+    }
+
+    return quat;
+}
+
 - (void)createGeospatialAnchor:(double)latitude
                      longitude:(double)longitude
                       altitude:(double)altitude
-                    quaternion:(NSArray *)quaternion
+                    quaternion:(id)quaternion
              completionHandler:(GeospatialAnchorCompletionHandler)completionHandler {
     if (!_vroView) {
         if (completionHandler) {
@@ -800,17 +832,8 @@
         return;
     }
 
-    // Parse quaternion from array [x, y, z, w]
-    VROQuaternion quat;
-    if (quaternion && quaternion.count >= 4) {
-        quat = VROQuaternion([[quaternion objectAtIndex:0] floatValue],
-                             [[quaternion objectAtIndex:1] floatValue],
-                             [[quaternion objectAtIndex:2] floatValue],
-                             [[quaternion objectAtIndex:3] floatValue]);
-    } else {
-        // Default to identity quaternion (facing north)
-        quat = VROQuaternion(0, 0, 0, 1);
-    }
+    // Parse quaternion (accepts both array [x, y, z, w] and dictionary {x, y, z, w})
+    VROQuaternion quat = [self parseQuaternion:quaternion];
 
     arSession->createGeospatialAnchor(latitude, longitude, altitude, quat,
         [completionHandler](std::shared_ptr<VROGeospatialAnchor> anchor) {
@@ -844,7 +867,7 @@
 - (void)createTerrainAnchor:(double)latitude
                   longitude:(double)longitude
         altitudeAboveTerrain:(double)altitudeAboveTerrain
-                  quaternion:(NSArray *)quaternion
+                  quaternion:(id)quaternion
            completionHandler:(GeospatialAnchorCompletionHandler)completionHandler {
     if (!_vroView) {
         if (completionHandler) {
@@ -862,16 +885,8 @@
         return;
     }
 
-    // Parse quaternion from array [x, y, z, w]
-    VROQuaternion quat;
-    if (quaternion && quaternion.count >= 4) {
-        quat = VROQuaternion([[quaternion objectAtIndex:0] floatValue],
-                             [[quaternion objectAtIndex:1] floatValue],
-                             [[quaternion objectAtIndex:2] floatValue],
-                             [[quaternion objectAtIndex:3] floatValue]);
-    } else {
-        quat = VROQuaternion(0, 0, 0, 1);
-    }
+    // Parse quaternion (accepts both array [x, y, z, w] and dictionary {x, y, z, w})
+    VROQuaternion quat = [self parseQuaternion:quaternion];
 
     arSession->createTerrainAnchor(latitude, longitude, altitudeAboveTerrain, quat,
         [completionHandler](std::shared_ptr<VROGeospatialAnchor> anchor) {
@@ -903,7 +918,7 @@
 - (void)createRooftopAnchor:(double)latitude
                   longitude:(double)longitude
        altitudeAboveRooftop:(double)altitudeAboveRooftop
-                  quaternion:(NSArray *)quaternion
+                  quaternion:(id)quaternion
            completionHandler:(GeospatialAnchorCompletionHandler)completionHandler {
     if (!_vroView) {
         if (completionHandler) {
@@ -921,16 +936,8 @@
         return;
     }
 
-    // Parse quaternion from array [x, y, z, w]
-    VROQuaternion quat;
-    if (quaternion && quaternion.count >= 4) {
-        quat = VROQuaternion([[quaternion objectAtIndex:0] floatValue],
-                             [[quaternion objectAtIndex:1] floatValue],
-                             [[quaternion objectAtIndex:2] floatValue],
-                             [[quaternion objectAtIndex:3] floatValue]);
-    } else {
-        quat = VROQuaternion(0, 0, 0, 1);
-    }
+    // Parse quaternion (accepts both array [x, y, z, w] and dictionary {x, y, z, w})
+    VROQuaternion quat = [self parseQuaternion:quaternion];
 
     arSession->createRooftopAnchor(latitude, longitude, altitudeAboveRooftop, quat,
         [completionHandler](std::shared_ptr<VROGeospatialAnchor> anchor) {
