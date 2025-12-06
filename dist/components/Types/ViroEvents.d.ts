@@ -427,3 +427,53 @@ export type ViroCreateGeospatialAnchorResult = {
     anchor?: ViroGeospatialAnchor;
     error?: string;
 };
+/** ===========================================================================
+ * Viro Scene Semantics API Types
+ * ============================================================================ */
+/**
+ * Semantic labels for scene classification.
+ * Each pixel in the camera feed can be classified into one of these categories.
+ */
+export type ViroSemanticLabel = "unlabeled" | "sky" | "building" | "tree" | "road" | "sidewalk" | "terrain" | "structure" | "object" | "vehicle" | "person" | "water";
+/**
+ * Semantic label fractions representing the percentage of pixels
+ * for each label in the current frame.
+ * Keys are semantic label names, values are fractions between 0.0 and 1.0.
+ */
+export type ViroSemanticLabelFractions = {
+    unlabeled: number;
+    sky: number;
+    building: number;
+    tree: number;
+    road: number;
+    sidewalk: number;
+    terrain: number;
+    structure: number;
+    object: number;
+    vehicle: number;
+    person: number;
+    water: number;
+};
+/**
+ * Result of checking semantic mode support.
+ */
+export type ViroSemanticSupportResult = {
+    supported: boolean;
+    error?: string;
+};
+/**
+ * Result of getting semantic label fractions.
+ */
+export type ViroSemanticLabelFractionsResult = {
+    success: boolean;
+    fractions?: ViroSemanticLabelFractions;
+    error?: string;
+};
+/**
+ * Result of getting a specific semantic label fraction.
+ */
+export type ViroSemanticLabelFractionResult = {
+    success: boolean;
+    fraction: number;
+    error?: string;
+};

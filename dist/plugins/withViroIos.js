@@ -40,7 +40,7 @@ const withViroPods = (config) => {
                 const needsARCore = cloudAnchorProvider === "arcore" || geospatialAnchorProvider === "arcore";
                 if (needsARCore) {
                     viroPods +=
-                        `\n\n  # ARCore SDK - Cloud Anchors and Geospatial API\n` +
+                        `\n\n  # ARCore SDK - Cloud Anchors, Geospatial, and Scene Semantics API\n` +
                             `  # Requires GARAPIKey in Info.plist and use_frameworks! with dynamic linkage\n` +
                             `  pod 'ARCore/CloudAnchors', '~> 1.51.0'`;
                     // Add Geospatial pod if geospatial is enabled
@@ -48,6 +48,9 @@ const withViroPods = (config) => {
                         viroPods +=
                             `\n  pod 'ARCore/Geospatial', '~> 1.51.0'`;
                     }
+                    // Add Semantics pod for Scene Semantics API (ML-based scene understanding)
+                    viroPods +=
+                        `\n  pod 'ARCore/Semantics', '~> 1.51.0'`;
                 }
                 // Add use_frameworks! for ARCore (must be before pods)
                 if (needsARCore) {

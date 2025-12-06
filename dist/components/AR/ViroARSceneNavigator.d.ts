@@ -11,7 +11,7 @@
  */
 import * as React from "react";
 import { ViewProps } from "react-native";
-import { ViroWorldOrigin, ViroCloudAnchorProvider, ViroCloudAnchorStateChangeEvent, ViroHostCloudAnchorResult, ViroResolveCloudAnchorResult, ViroGeospatialAnchorProvider, ViroGeospatialSupportResult, ViroEarthTrackingStateResult, ViroGeospatialPoseResult, ViroVPSAvailabilityResult, ViroCreateGeospatialAnchorResult, ViroQuaternion } from "../Types/ViroEvents";
+import { ViroWorldOrigin, ViroCloudAnchorProvider, ViroCloudAnchorStateChangeEvent, ViroHostCloudAnchorResult, ViroResolveCloudAnchorResult, ViroGeospatialAnchorProvider, ViroGeospatialSupportResult, ViroEarthTrackingStateResult, ViroGeospatialPoseResult, ViroVPSAvailabilityResult, ViroCreateGeospatialAnchorResult, ViroQuaternion, ViroSemanticSupportResult, ViroSemanticLabelFractionsResult, ViroSemanticLabelFractionResult, ViroSemanticLabel } from "../Types/ViroEvents";
 import { Viro3DPoint, ViroNativeRef, ViroScene, ViroSceneDictionary } from "../Types/ViroUtils";
 /**
  * Occlusion mode determines how virtual content is occluded by real-world objects.
@@ -368,6 +368,39 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
      */
     _removeGeospatialAnchor: (anchorId: string) => void;
     /**
+     * Check if Scene Semantics mode is supported on this device.
+     * Scene Semantics uses ML to classify each pixel in the camera feed
+     * into categories like sky, building, tree, road, etc.
+     *
+     * @returns Promise resolving to support status
+     */
+    _isSemanticModeSupported: () => Promise<ViroSemanticSupportResult>;
+    /**
+     * Enable or disable Scene Semantics mode.
+     * When enabled, the session will process each frame to generate
+     * semantic labels for each pixel.
+     *
+     * @param enabled - Whether to enable semantic mode
+     */
+    _setSemanticModeEnabled: (enabled: boolean) => void;
+    /**
+     * Get the fraction of pixels for each semantic label in the current frame.
+     * Returns a dictionary with label names as keys and fractions (0.0-1.0) as values.
+     *
+     * Available labels: unlabeled, sky, building, tree, road, sidewalk,
+     * terrain, structure, object, vehicle, person, water
+     *
+     * @returns Promise resolving to semantic label fractions
+     */
+    _getSemanticLabelFractions: () => Promise<ViroSemanticLabelFractionsResult>;
+    /**
+     * Get the fraction of pixels for a specific semantic label.
+     *
+     * @param label - The semantic label name (e.g., "sky", "building", "road")
+     * @returns Promise resolving to the fraction of pixels with that label
+     */
+    _getSemanticLabelFraction: (label: ViroSemanticLabel) => Promise<ViroSemanticLabelFractionResult>;
+    /**
      * Renders the Scene Views in the stack.
      *
      * @returns Array of rendered Scene views.
@@ -398,6 +431,10 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         createTerrainAnchor: (latitude: number, longitude: number, altitudeAboveTerrain: number, quaternion?: ViroQuaternion) => Promise<ViroCreateGeospatialAnchorResult>;
         createRooftopAnchor: (latitude: number, longitude: number, altitudeAboveRooftop: number, quaternion?: ViroQuaternion) => Promise<ViroCreateGeospatialAnchorResult>;
         removeGeospatialAnchor: (anchorId: string) => void;
+        isSemanticModeSupported: () => Promise<ViroSemanticSupportResult>;
+        setSemanticModeEnabled: (enabled: boolean) => void;
+        getSemanticLabelFractions: () => Promise<ViroSemanticLabelFractionsResult>;
+        getSemanticLabelFraction: (label: ViroSemanticLabel) => Promise<ViroSemanticLabelFractionResult>;
         viroAppProps: any;
     };
     sceneNavigator: {
@@ -425,6 +462,10 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         createTerrainAnchor: (latitude: number, longitude: number, altitudeAboveTerrain: number, quaternion?: ViroQuaternion) => Promise<ViroCreateGeospatialAnchorResult>;
         createRooftopAnchor: (latitude: number, longitude: number, altitudeAboveRooftop: number, quaternion?: ViroQuaternion) => Promise<ViroCreateGeospatialAnchorResult>;
         removeGeospatialAnchor: (anchorId: string) => void;
+        isSemanticModeSupported: () => Promise<ViroSemanticSupportResult>;
+        setSemanticModeEnabled: (enabled: boolean) => void;
+        getSemanticLabelFractions: () => Promise<ViroSemanticLabelFractionsResult>;
+        getSemanticLabelFraction: (label: ViroSemanticLabel) => Promise<ViroSemanticLabelFractionResult>;
         viroAppProps: any;
     };
     render(): React.JSX.Element;
