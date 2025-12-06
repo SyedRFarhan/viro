@@ -204,6 +204,8 @@ const withViroAppBuildGradle = (config: ExpoConfig) =>
     implementation 'androidx.media3:media3-exoplayer-hls:1.1.1'
     implementation 'androidx.media3:media3-exoplayer-smoothstreaming:1.1.1'
     implementation 'com.google.protobuf.nano:protobuf-javanano:3.1.0'
+    // Required for ARCore Geospatial API
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
     // ========================================================================`;
 
     // Add Viro dependencies for legacy architecture (fallback)
