@@ -62,23 +62,17 @@ const double kTransformDelegateDistanceFilter = 0.01;
             if (animManagerClass) {
                 self.animationManager = [self.bridge moduleForClass:animManagerClass];
             }
-            if (self.animationManager != nil) {
-                NSLog(@"VRTNodeAnimation: Lazily loaded animationManager from bridge");
-            }
+            // Animation manager loaded lazily from bridge
         }
 
         if (self.animationManager == nil) {
-            NSLog(@"VRTNodeAnimation: animationManager is nil! Cannot load animation '%@'", self.animationName);
             return nullptr;
         }
         std::shared_ptr<VROExecutableAnimation> animation = [self.animationManager animationForName:self.animationName];
         if (animation) {
             return animation->copy();
         }
-        else {
-            NSLog(@"VRTNodeAnimation: Animation '%@' not found in animation manager", self.animationName);
-            return nullptr;
-        }
+        return nullptr;
     }
     else {
         return nullptr;

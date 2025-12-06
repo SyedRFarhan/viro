@@ -53,13 +53,9 @@
             if (animManagerClass) {
                 self.animationManager = [self.bridge moduleForClass:animManagerClass];
             }
-            if (self.animationManager != nil) {
-                NSLog(@"VRTAnimatedComponentAnimation: Lazily loaded animationManager from bridge");
-            }
         }
 
         if (self.animationManager == nil) {
-            NSLog(@"VRTAnimatedComponentAnimation: animationManager is nil! Cannot load animation '%@'", self.animationName);
             return nullptr;
         }
         std::shared_ptr<VROExecutableAnimation> animation = [self.animationManager animationForName:self.animationName];

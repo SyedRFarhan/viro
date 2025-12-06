@@ -43,22 +43,25 @@
         return [super loadAnimation];
     }
     std::set<std::string> animationKeys = node->getAnimationKeys(true);
-    if (animationKeys.empty()) {
-        return [super loadAnimation];
-    }
-    
+
     if (self.animationName) {
         std::string key = std::string([self.animationName UTF8String]);
-        
-        auto it = animationKeys.find(key);
-        if (it != animationKeys.end()) {
-            return node->getAnimation(key, true);
+
+        // First check if it's a built-in animation from the 3D model
+        if (!animationKeys.empty()) {
+            auto it = animationKeys.find(key);
+            if (it != animationKeys.end()) {
+                return node->getAnimation(key, true);
+            }
         }
-        else {
-            return [super loadAnimation];
-        }
+        // Not a built-in animation, try to load from animation manager
+        return [super loadAnimation];
     }
     else {
+        // No animation name specified, use first built-in animation if available
+        if (!animationKeys.empty()) {
+            return node->getAnimation(*animationKeys.begin(), true);
+        }
         return [super loadAnimation];
     }
 }

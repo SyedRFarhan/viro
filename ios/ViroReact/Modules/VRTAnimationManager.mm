@@ -100,7 +100,6 @@ RCT_EXPORT_METHOD(setJSAnimations:(NSDictionary *)animationsDict)
         std::shared_ptr<VROExecutableAnimation> animation = [self parseAnimationObject:animationObj
                                                                              execution:VROAnimationChainExecution::Parallel];
         _parsedAnimations[name] = animation;
-        NSLog(@"Parsed animation %s", animation->toString().c_str());
     }
 }
 

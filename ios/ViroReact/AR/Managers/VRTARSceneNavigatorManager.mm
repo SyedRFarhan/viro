@@ -51,11 +51,8 @@ RCT_EXPORT_VIEW_PROPERTY(cloudAnchorProvider, NSString)
 
 - (VRTARSceneNavigator *)view
 {
-    // Force install the crash fix early - add aggressive logging
-    NSLog(@"VRT: AR Scene Navigator creating view - installing crash fix NOW");
+    // Install crash fix for Fabric architecture
     [VRTFabricCrashFix installFabricCrashFix];
-    NSLog(@"VRT: AR Scene Navigator crash fix installation completed");
-    
     return [[VRTARSceneNavigator alloc] initWithBridge:self.bridge];
 }
 
