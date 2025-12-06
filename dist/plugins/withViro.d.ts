@@ -7,12 +7,18 @@ export type XrMode = "GVR" | "AR" | "OVR_MOBILE";
  */
 export type CloudAnchorProvider = "none" | "arcore";
 /**
+ * Geospatial Anchor provider type.
+ * - "none": Geospatial API disabled
+ * - "arcore": Use ARCore Geospatial API (works on both iOS and Android)
+ */
+export type GeospatialAnchorProvider = "none" | "arcore";
+/**
  * Options interface for configuring expo plugin
  */
 export interface ViroConfigurationOptions {
     /**
-     * Google Cloud API key for ARCore Cloud Anchors.
-     * Required if using cloudAnchorProvider: "arcore"
+     * Google Cloud API key for ARCore Cloud Anchors and Geospatial API.
+     * Required if using cloudAnchorProvider: "arcore" or geospatialAnchorProvider: "arcore"
      *
      * Get your API key from Google Cloud Console:
      * https://console.cloud.google.com/apis/credentials
@@ -27,6 +33,14 @@ export interface ViroConfigurationOptions {
      * DEFAULTS TO: "none"
      */
     cloudAnchorProvider?: CloudAnchorProvider;
+    /**
+     * Geospatial Anchor provider for location-based AR.
+     * When set to "arcore", enables ARCore Geospatial API on both iOS and Android.
+     * Requires googleCloudApiKey to be set.
+     *
+     * DEFAULTS TO: "none"
+     */
+    geospatialAnchorProvider?: GeospatialAnchorProvider;
     ios?: {
         /**
          * String for app to use for camera usage.
@@ -52,6 +66,12 @@ export interface ViroConfigurationOptions {
          * DEFAULTS TO: 'Allow $(PRODUCT_NAME) to save photos'
          */
         savePhotosPermission?: string;
+        /**
+         * String for app to use location (required for Geospatial API)
+         *
+         * DEFAULTS TO: 'Allow $(PRODUCT_NAME) to use your location for AR experiences'
+         */
+        locationUsagePermission?: string;
     };
     android?: {
         xRMode?: XrMode[];
@@ -66,6 +86,7 @@ export declare const DEFAULTS: {
         microphoneUsagePermission: string;
         photosPermission: string;
         savePhotosPermission: string;
+        locationUsagePermission: string;
     };
     android: {
         xRMode: string[];

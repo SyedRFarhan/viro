@@ -37,7 +37,12 @@
 #define ARCORE_AVAILABLE 0
 #endif
 
-#if __has_include(<ARCoreGeospatial/ARCoreGeospatial.h>)
+// ARCore Geospatial is part of the main ARCore SDK when using CocoaPods
+// The geospatial classes (GAREarth, GARGeospatialTransform) are in ARCoreGARSession
+#if __has_include(<ARCoreGARSession/ARCoreGARSession.h>)
+#define ARCORE_GEOSPATIAL_AVAILABLE 1
+#import <ARCoreGARSession/ARCoreGARSession.h>
+#elif __has_include(<ARCoreGeospatial/ARCoreGeospatial.h>)
 #define ARCORE_GEOSPATIAL_AVAILABLE 1
 #import <ARCoreGeospatial/ARCoreGeospatial.h>
 #else

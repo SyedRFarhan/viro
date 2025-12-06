@@ -8,6 +8,7 @@ const CAMERA_USAGE = "Allow $(PRODUCT_NAME) to use your camera";
 const MICROPHONE_USAGE = "Allow $(PRODUCT_NAME) to use your microphone";
 const READ_PHOTOS_USAGE = "Allow $(PRODUCT_NAME) to access your photos";
 const WRITE_PHOTOS_USAGE = "Allow $(PRODUCT_NAME) to save photos";
+const LOCATION_USAGE = "Allow $(PRODUCT_NAME) to use your location for AR experiences";
 /**
  * Default options
  */
@@ -17,6 +18,7 @@ exports.DEFAULTS = {
         microphoneUsagePermission: MICROPHONE_USAGE,
         photosPermission: READ_PHOTOS_USAGE,
         savePhotosPermission: WRITE_PHOTOS_USAGE,
+        locationUsagePermission: LOCATION_USAGE,
     },
     android: {
         xRMode: ["GVR", "AR"],
