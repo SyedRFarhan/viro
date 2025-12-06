@@ -33,6 +33,10 @@ import {
   ViroVPSAvailabilityResult,
   ViroCreateGeospatialAnchorResult,
   ViroQuaternion,
+  ViroSemanticSupportResult,
+  ViroSemanticLabelFractionsResult,
+  ViroSemanticLabelFractionResult,
+  ViroSemanticLabel,
 } from "../Types/ViroEvents";
 import {
   Viro3DPoint,
@@ -824,6 +828,67 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     );
   };
 
+  // ===========================================================================
+  // Scene Semantics API Methods
+  // ===========================================================================
+
+  /**
+   * Check if Scene Semantics mode is supported on this device.
+   * Scene Semantics uses ML to classify each pixel in the camera feed
+   * into categories like sky, building, tree, road, etc.
+   *
+   * @returns Promise resolving to support status
+   */
+  _isSemanticModeSupported = async (): Promise<ViroSemanticSupportResult> => {
+    return await ViroARSceneNavigatorModule.isSemanticModeSupported(
+      findNodeHandle(this)
+    );
+  };
+
+  /**
+   * Enable or disable Scene Semantics mode.
+   * When enabled, the session will process each frame to generate
+   * semantic labels for each pixel.
+   *
+   * @param enabled - Whether to enable semantic mode
+   */
+  _setSemanticModeEnabled = (enabled: boolean) => {
+    ViroARSceneNavigatorModule.setSemanticModeEnabled(
+      findNodeHandle(this),
+      enabled
+    );
+  };
+
+  /**
+   * Get the fraction of pixels for each semantic label in the current frame.
+   * Returns a dictionary with label names as keys and fractions (0.0-1.0) as values.
+   *
+   * Available labels: unlabeled, sky, building, tree, road, sidewalk,
+   * terrain, structure, object, vehicle, person, water
+   *
+   * @returns Promise resolving to semantic label fractions
+   */
+  _getSemanticLabelFractions = async (): Promise<ViroSemanticLabelFractionsResult> => {
+    return await ViroARSceneNavigatorModule.getSemanticLabelFractions(
+      findNodeHandle(this)
+    );
+  };
+
+  /**
+   * Get the fraction of pixels for a specific semantic label.
+   *
+   * @param label - The semantic label name (e.g., "sky", "building", "road")
+   * @returns Promise resolving to the fraction of pixels with that label
+   */
+  _getSemanticLabelFraction = async (
+    label: ViroSemanticLabel
+  ): Promise<ViroSemanticLabelFractionResult> => {
+    return await ViroARSceneNavigatorModule.getSemanticLabelFraction(
+      findNodeHandle(this),
+      label
+    );
+  };
+
   /**
    * Renders the Scene Views in the stack.
    *
@@ -876,6 +941,11 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     createTerrainAnchor: this._createTerrainAnchor,
     createRooftopAnchor: this._createRooftopAnchor,
     removeGeospatialAnchor: this._removeGeospatialAnchor,
+    // Scene Semantics API
+    isSemanticModeSupported: this._isSemanticModeSupported,
+    setSemanticModeEnabled: this._setSemanticModeEnabled,
+    getSemanticLabelFractions: this._getSemanticLabelFractions,
+    getSemanticLabelFraction: this._getSemanticLabelFraction,
     viroAppProps: {} as any,
   };
   sceneNavigator = {
@@ -904,6 +974,11 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     createTerrainAnchor: this._createTerrainAnchor,
     createRooftopAnchor: this._createRooftopAnchor,
     removeGeospatialAnchor: this._removeGeospatialAnchor,
+    // Scene Semantics API
+    isSemanticModeSupported: this._isSemanticModeSupported,
+    setSemanticModeEnabled: this._setSemanticModeEnabled,
+    getSemanticLabelFractions: this._getSemanticLabelFractions,
+    getSemanticLabelFraction: this._getSemanticLabelFraction,
     viroAppProps: {} as any,
   };
 

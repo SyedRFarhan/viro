@@ -36,6 +36,7 @@
 #import "VRTPerfMonitor.h"
 #import "VRTMaterialManager.h"
 #import <ViroKit/VROGeospatialAnchor.h>
+#import <ViroKit/VROSemantics.h>
 
 @implementation VRTARSceneNavigator {
     id <VROView> _vroView;
@@ -44,6 +45,12 @@
     VROVideoQuality _vroVideoQuality;
     BOOL _hasCleanedUp;
     EAGLContext *_eaglContext;
+
+    // Pending configuration for features that may be set before session is ready
+    BOOL _pendingSemanticModeEnabled;
+    BOOL _needsSemanticModeApply;
+    BOOL _pendingGeospatialModeEnabled;
+    BOOL _needsGeospatialModeApply;
 }
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge {
@@ -173,6 +180,18 @@
         // Apply geospatial anchor provider if it was set before view was ready
         if (_geospatialAnchorProvider) {
             [self setGeospatialAnchorProvider:_geospatialAnchorProvider];
+        }
+
+        // Apply pending semantic mode if set before view was ready
+        if (_needsSemanticModeApply) {
+            [self applySemanticModeEnabled];
+            _needsSemanticModeApply = NO;
+        }
+
+        // Apply pending geospatial mode if set before view was ready
+        if (_needsGeospatialModeApply) {
+            [self applyGeospatialModeEnabled];
+            _needsGeospatialModeApply = NO;
         }
     }
 }
@@ -656,20 +675,39 @@
 }
 
 - (void)setGeospatialModeEnabled:(BOOL)enabled {
+    _pendingGeospatialModeEnabled = enabled;
+
     if (!_vroView) {
-        RCTLogWarn(@"[ViroAR] Cannot set geospatial mode: AR view not initialized");
+        _needsGeospatialModeApply = YES;
+        RCTLogInfo(@"[ViroAR] Geospatial mode queued for later: %@", enabled ? @"enabled" : @"disabled");
         return;
     }
 
     VROViewAR *viewAR = (VROViewAR *) _vroView;
     std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
     if (!arSession) {
-        RCTLogWarn(@"[ViroAR] Cannot set geospatial mode: AR session not available");
+        _needsGeospatialModeApply = YES;
+        RCTLogInfo(@"[ViroAR] Geospatial mode queued for later: %@", enabled ? @"enabled" : @"disabled");
         return;
     }
 
-    arSession->setGeospatialModeEnabled(enabled);
-    RCTLogInfo(@"[ViroAR] Geospatial mode %@", enabled ? @"enabled" : @"disabled");
+    [self applyGeospatialModeEnabled];
+}
+
+- (void)applyGeospatialModeEnabled {
+    if (!_vroView) {
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        return;
+    }
+
+    arSession->setGeospatialModeEnabled(_pendingGeospatialModeEnabled);
+    _needsGeospatialModeApply = NO;
+    RCTLogInfo(@"[ViroAR] Geospatial mode applied: %@", _pendingGeospatialModeEnabled ? @"enabled" : @"disabled");
 }
 
 - (NSString *)getEarthTrackingState {
@@ -993,6 +1031,141 @@
             }
         }
     }
+}
+
+#pragma mark - Scene Semantics API Methods
+
+- (BOOL)isSemanticModeSupported {
+    if (!_vroView) {
+        return NO;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        return NO;
+    }
+
+    return arSession->isSemanticModeSupported();
+}
+
+- (void)setSemanticModeEnabled:(BOOL)enabled {
+    _pendingSemanticModeEnabled = enabled;
+
+    if (!_vroView) {
+        _needsSemanticModeApply = YES;
+        RCTLogInfo(@"[ViroAR] Scene Semantics mode queued for later: %@", enabled ? @"enabled" : @"disabled");
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        _needsSemanticModeApply = YES;
+        RCTLogInfo(@"[ViroAR] Scene Semantics mode queued for later: %@", enabled ? @"enabled" : @"disabled");
+        return;
+    }
+
+    [self applySemanticModeEnabled];
+}
+
+- (void)applySemanticModeEnabled {
+    if (!_vroView) {
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        return;
+    }
+
+    arSession->setSemanticModeEnabled(_pendingSemanticModeEnabled);
+    _needsSemanticModeApply = NO;
+    RCTLogInfo(@"[ViroAR] Scene Semantics mode applied: %@", _pendingSemanticModeEnabled ? @"enabled" : @"disabled");
+}
+
+- (NSDictionary *)getSemanticLabelFractions {
+    NSMutableDictionary *fractions = [NSMutableDictionary new];
+
+    if (!_vroView) {
+        return fractions;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        return fractions;
+    }
+
+    // Get the current frame and extract semantic fractions
+    std::unique_ptr<VROARFrame> &frame = arSession->getLastFrame();
+    if (!frame) {
+        return fractions;
+    }
+
+    // Get fractions for all semantic labels
+    NSArray *labels = @[@"unlabeled", @"sky", @"building", @"tree", @"road",
+                        @"sidewalk", @"terrain", @"structure", @"object",
+                        @"vehicle", @"person", @"water"];
+
+    for (int i = 0; i < labels.count; i++) {
+        VROSemanticLabel label = static_cast<VROSemanticLabel>(i);
+        float fraction = frame->getSemanticLabelFraction(label);
+        [fractions setObject:@(fraction) forKey:labels[i]];
+    }
+
+    return fractions;
+}
+
+- (float)getSemanticLabelFraction:(NSString *)label {
+    if (!_vroView) {
+        return 0.0f;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        return 0.0f;
+    }
+
+    std::unique_ptr<VROARFrame> &frame = arSession->getLastFrame();
+    if (!frame) {
+        return 0.0f;
+    }
+
+    // Convert label string to VROSemanticLabel enum
+    VROSemanticLabel semanticLabel = VROSemanticLabel::Unlabeled;
+    if ([label caseInsensitiveCompare:@"unlabeled"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Unlabeled;
+    } else if ([label caseInsensitiveCompare:@"sky"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Sky;
+    } else if ([label caseInsensitiveCompare:@"building"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Building;
+    } else if ([label caseInsensitiveCompare:@"tree"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Tree;
+    } else if ([label caseInsensitiveCompare:@"road"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Road;
+    } else if ([label caseInsensitiveCompare:@"sidewalk"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Sidewalk;
+    } else if ([label caseInsensitiveCompare:@"terrain"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Terrain;
+    } else if ([label caseInsensitiveCompare:@"structure"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Structure;
+    } else if ([label caseInsensitiveCompare:@"object"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Object;
+    } else if ([label caseInsensitiveCompare:@"vehicle"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Vehicle;
+    } else if ([label caseInsensitiveCompare:@"person"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Person;
+    } else if ([label caseInsensitiveCompare:@"water"] == NSOrderedSame) {
+        semanticLabel = VROSemanticLabel::Water;
+    } else {
+        RCTLogWarn(@"[ViroAR] Unknown semantic label: %@", label);
+        return 0.0f;
+    }
+
+    return frame->getSemanticLabelFraction(semanticLabel);
 }
 
 #pragma mark RCTInvalidating methods

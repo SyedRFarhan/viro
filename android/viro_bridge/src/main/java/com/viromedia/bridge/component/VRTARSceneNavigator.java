@@ -53,6 +53,12 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
     private boolean mNeedsAutoFocusToggle = false;
     private ARScene.OcclusionMode mOcclusionMode = ARScene.OcclusionMode.DISABLED;
 
+    // Pending configuration for features that may be set before session is ready
+    private boolean mSemanticModeEnabled = false;
+    private boolean mNeedsSemanticModeToggle = false;
+    private boolean mGeospatialModeEnabled = false;
+    private boolean mNeedsGeospatialModeToggle = false;
+
     private static class StartupListenerARCore implements ViroViewARCore.StartupListener {
 
         private WeakReference<VRTARSceneNavigator> mNavigator;
@@ -86,6 +92,18 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
             if (navigator.mNeedsAutoFocusToggle) {
                 navigator.setAutoFocusEnabled(navigator.mAutoFocusEnabled);
                 navigator.mNeedsAutoFocusToggle = false;
+            }
+
+            // Apply pending semantic mode configuration
+            if (navigator.mNeedsSemanticModeToggle) {
+                navigator.applySemanticModeEnabled();
+                navigator.mNeedsSemanticModeToggle = false;
+            }
+
+            // Apply pending geospatial mode configuration
+            if (navigator.mNeedsGeospatialModeToggle) {
+                navigator.applyGeospatialModeEnabled();
+                navigator.mNeedsGeospatialModeToggle = false;
             }
         }
 
@@ -354,13 +372,25 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
     }
 
     public void setGeospatialModeEnabled(boolean enabled) {
+        mGeospatialModeEnabled = enabled;
         ARScene arScene = getCurrentARScene();
         if (arScene == null) {
-            Log.w(TAG, "Cannot set geospatial mode: AR scene not available");
+            // Queue for later when scene becomes available
+            mNeedsGeospatialModeToggle = true;
+            Log.i(TAG, "Geospatial mode queued for later: " + (enabled ? "enabled" : "disabled"));
             return;
         }
-        arScene.setGeospatialModeEnabled(enabled);
-        Log.i(TAG, "Geospatial mode " + (enabled ? "enabled" : "disabled"));
+        applyGeospatialModeEnabled();
+    }
+
+    private void applyGeospatialModeEnabled() {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            Log.w(TAG, "Cannot apply geospatial mode: AR scene not available");
+            return;
+        }
+        arScene.setGeospatialModeEnabled(mGeospatialModeEnabled);
+        Log.i(TAG, "Geospatial mode applied: " + (mGeospatialModeEnabled ? "enabled" : "disabled"));
     }
 
     public String getEarthTrackingState() {
@@ -526,5 +556,107 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
             return;
         }
         arScene.removeGeospatialAnchor(anchorId);
+    }
+
+    // ========================================================================
+    // Scene Semantics API Support
+    // ========================================================================
+
+    public boolean isSemanticModeSupported() {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            return false;
+        }
+        return arScene.isSemanticModeSupported();
+    }
+
+    public void setSemanticModeEnabled(boolean enabled) {
+        mSemanticModeEnabled = enabled;
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            // Queue for later when scene becomes available
+            mNeedsSemanticModeToggle = true;
+            Log.i(TAG, "Scene Semantics mode queued for later: " + (enabled ? "enabled" : "disabled"));
+            return;
+        }
+        applySemanticModeEnabled();
+    }
+
+    private void applySemanticModeEnabled() {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            Log.w(TAG, "Cannot apply semantic mode: AR scene not available");
+            return;
+        }
+        arScene.setSemanticModeEnabled(mSemanticModeEnabled);
+        Log.i(TAG, "Scene Semantics mode applied: " + (mSemanticModeEnabled ? "enabled" : "disabled"));
+    }
+
+    /**
+     * Get the fraction of pixels for each semantic label in the current frame.
+     * Returns a map with label names as keys and fractions (0.0-1.0) as values.
+     */
+    public WritableMap getSemanticLabelFractions() {
+        WritableMap fractions = Arguments.createMap();
+
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            return fractions;
+        }
+
+        // Get fractions for all semantic labels
+        String[] labels = {"unlabeled", "sky", "building", "tree", "road",
+                           "sidewalk", "terrain", "structure", "object",
+                           "vehicle", "person", "water"};
+
+        for (int i = 0; i < labels.length; i++) {
+            float fraction = arScene.getSemanticLabelFraction(i);
+            fractions.putDouble(labels[i], fraction);
+        }
+
+        return fractions;
+    }
+
+    /**
+     * Get the fraction of pixels for a specific semantic label.
+     * @param label The semantic label name (e.g., "sky", "building", "road")
+     * @return The fraction of pixels with that label (0.0-1.0)
+     */
+    public float getSemanticLabelFraction(String label) {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            return 0.0f;
+        }
+
+        int labelIndex = getLabelIndexFromName(label);
+        if (labelIndex < 0) {
+            Log.w(TAG, "Unknown semantic label: " + label);
+            return 0.0f;
+        }
+
+        return arScene.getSemanticLabelFraction(labelIndex);
+    }
+
+    /**
+     * Convert a semantic label name to its index.
+     */
+    private int getLabelIndexFromName(String label) {
+        if (label == null) return -1;
+
+        switch (label.toLowerCase()) {
+            case "unlabeled": return 0;
+            case "sky": return 1;
+            case "building": return 2;
+            case "tree": return 3;
+            case "road": return 4;
+            case "sidewalk": return 5;
+            case "terrain": return 6;
+            case "structure": return 7;
+            case "object": return 8;
+            case "vehicle": return 9;
+            case "person": return 10;
+            case "water": return 11;
+            default: return -1;
+        }
     }
 }

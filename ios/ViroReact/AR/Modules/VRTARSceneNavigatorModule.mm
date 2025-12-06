@@ -713,4 +713,90 @@ RCT_EXPORT_METHOD(removeGeospatialAnchor:(nonnull NSNumber *)reactTag
     }];
 }
 
+#pragma mark - Scene Semantics API Methods
+
+RCT_EXPORT_METHOD(isSemanticModeSupported:(nonnull NSNumber *)reactTag
+                                  resolve:(RCTPromiseResolveBlock)resolve
+                                   reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"supported": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            BOOL supported = [component isSemanticModeSupported];
+            resolve(@{@"supported": @(supported)});
+        } @catch (NSException *exception) {
+            resolve(@{@"supported": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(setSemanticModeEnabled:(nonnull NSNumber *)reactTag
+                                 enabled:(BOOL)enabled) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component setSemanticModeEnabled:enabled];
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(getSemanticLabelFractions:(nonnull NSNumber *)reactTag
+                                    resolve:(RCTPromiseResolveBlock)resolve
+                                     reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            NSDictionary *fractions = [component getSemanticLabelFractions];
+
+            NSMutableDictionary *result = [NSMutableDictionary new];
+            [result setObject:@YES forKey:@"success"];
+            [result setObject:fractions forKey:@"fractions"];
+            resolve(result);
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(getSemanticLabelFraction:(nonnull NSNumber *)reactTag
+                                     label:(NSString *)label
+                                   resolve:(RCTPromiseResolveBlock)resolve
+                                    reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"fraction": @0.0, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            float fraction = [component getSemanticLabelFraction:label];
+
+            NSMutableDictionary *result = [NSMutableDictionary new];
+            [result setObject:@YES forKey:@"success"];
+            [result setObject:@(fraction) forKey:@"fraction"];
+            resolve(result);
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"fraction": @0.0, @"error": exception.reason});
+        }
+    }];
+}
+
 @end

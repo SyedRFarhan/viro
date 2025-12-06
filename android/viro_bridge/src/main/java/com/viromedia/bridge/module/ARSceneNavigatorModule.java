@@ -1001,6 +1001,154 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
         });
     }
 
+    // ========================================================================
+    // Scene Semantics API Methods
+    // ========================================================================
+
+    @ReactMethod
+    public void isSemanticModeSupported(final int sceneNavTag, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("supported", false);
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("supported", false);
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    boolean supported = sceneNavigator.isSemanticModeSupported();
+
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("supported", supported);
+                    promise.resolve(result);
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("supported", false);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void setSemanticModeEnabled(final int sceneNavTag, final boolean enabled) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                View view = viewResolver.resolveView(sceneNavTag);
+                if (view instanceof VRTARSceneNavigator) {
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.setSemanticModeEnabled(enabled);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void getSemanticLabelFractions(final int sceneNavTag, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", false);
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    WritableMap fractions = sceneNavigator.getSemanticLabelFractions();
+
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", true);
+                    result.putMap("fractions", fractions);
+                    promise.resolve(result);
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", false);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void getSemanticLabelFraction(final int sceneNavTag, final String label, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putDouble("fraction", 0.0);
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", false);
+                        result.putDouble("fraction", 0.0);
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    float fraction = sceneNavigator.getSemanticLabelFraction(label);
+
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", true);
+                    result.putDouble("fraction", fraction);
+                    promise.resolve(result);
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", false);
+                    result.putDouble("fraction", 0.0);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
     /**
      * Helper method to parse a quaternion from either an array [x, y, z, w] or an object {x, y, z, w}.
      * Returns identity quaternion [0, 0, 0, 1] if input is null or invalid.

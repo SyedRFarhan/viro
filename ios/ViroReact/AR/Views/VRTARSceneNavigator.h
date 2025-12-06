@@ -144,4 +144,21 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
 
 - (void)removeGeospatialAnchor:(NSString *)anchorId;
 
+#pragma mark - Scene Semantics API Methods
+
+// Check if Scene Semantics mode is supported on this device
+- (BOOL)isSemanticModeSupported;
+
+// Enable or disable Scene Semantics mode
+- (void)setSemanticModeEnabled:(BOOL)enabled;
+
+// Get the fraction of pixels for each semantic label
+// Returns a dictionary with label names (sky, building, etc.) as keys
+- (NSDictionary *)getSemanticLabelFractions;
+
+// Get the fraction of pixels for a specific semantic label
+// @param label The semantic label name (e.g., "sky", "building", "road")
+// @return The fraction of pixels (0.0-1.0)
+- (float)getSemanticLabelFraction:(NSString *)label;
+
 @end
