@@ -6,6 +6,7 @@ const CAMERA_USAGE = "Allow $(PRODUCT_NAME) to use your camera";
 const MICROPHONE_USAGE = "Allow $(PRODUCT_NAME) to use your microphone";
 const READ_PHOTOS_USAGE = "Allow $(PRODUCT_NAME) to access your photos";
 const WRITE_PHOTOS_USAGE = "Allow $(PRODUCT_NAME) to save photos";
+const LOCATION_USAGE = "Allow $(PRODUCT_NAME) to use your location for AR experiences";
 
 export type XrMode = "GVR" | "AR" | "OVR_MOBILE";
 
@@ -17,12 +18,19 @@ export type XrMode = "GVR" | "AR" | "OVR_MOBILE";
 export type CloudAnchorProvider = "none" | "arcore";
 
 /**
+ * Geospatial Anchor provider type.
+ * - "none": Geospatial API disabled
+ * - "arcore": Use ARCore Geospatial API (works on both iOS and Android)
+ */
+export type GeospatialAnchorProvider = "none" | "arcore";
+
+/**
  * Options interface for configuring expo plugin
  */
 export interface ViroConfigurationOptions {
   /**
-   * Google Cloud API key for ARCore Cloud Anchors.
-   * Required if using cloudAnchorProvider: "arcore"
+   * Google Cloud API key for ARCore Cloud Anchors and Geospatial API.
+   * Required if using cloudAnchorProvider: "arcore" or geospatialAnchorProvider: "arcore"
    *
    * Get your API key from Google Cloud Console:
    * https://console.cloud.google.com/apis/credentials
@@ -38,6 +46,15 @@ export interface ViroConfigurationOptions {
    * DEFAULTS TO: "none"
    */
   cloudAnchorProvider?: CloudAnchorProvider;
+
+  /**
+   * Geospatial Anchor provider for location-based AR.
+   * When set to "arcore", enables ARCore Geospatial API on both iOS and Android.
+   * Requires googleCloudApiKey to be set.
+   *
+   * DEFAULTS TO: "none"
+   */
+  geospatialAnchorProvider?: GeospatialAnchorProvider;
 
   ios?: {
     /**
@@ -64,6 +81,12 @@ export interface ViroConfigurationOptions {
      * DEFAULTS TO: 'Allow $(PRODUCT_NAME) to save photos'
      */
     savePhotosPermission?: string;
+    /**
+     * String for app to use location (required for Geospatial API)
+     *
+     * DEFAULTS TO: 'Allow $(PRODUCT_NAME) to use your location for AR experiences'
+     */
+    locationUsagePermission?: string;
   };
   android?: {
     xRMode?: XrMode[];
@@ -79,6 +102,7 @@ export const DEFAULTS = {
     microphoneUsagePermission: MICROPHONE_USAGE,
     photosPermission: READ_PHOTOS_USAGE,
     savePhotosPermission: WRITE_PHOTOS_USAGE,
+    locationUsagePermission: LOCATION_USAGE,
   },
   android: {
     xRMode: ["GVR", "AR"],

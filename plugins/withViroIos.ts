@@ -18,8 +18,9 @@ const withViroPods = (config: ExpoConfig) => {
     async (newConfig) => {
       const root = newConfig.modRequest.platformProjectRoot;
 
-      // Check if cloud anchors are enabled
+      // Check if cloud anchors or geospatial are enabled
       let cloudAnchorProvider: string | undefined;
+      let geospatialAnchorProvider: string | undefined;
       if (Array.isArray(config.plugins)) {
         const pluginConfig = config?.plugins?.find(
           (plugin) =>
@@ -28,6 +29,7 @@ const withViroPods = (config: ExpoConfig) => {
         if (Array.isArray(pluginConfig) && pluginConfig.length > 1) {
           const options = pluginConfig[1] as ViroConfigurationOptions;
           cloudAnchorProvider = options.cloudAnchorProvider;
+          geospatialAnchorProvider = options.geospatialAnchorProvider;
         }
       }
 
@@ -51,16 +53,23 @@ const withViroPods = (config: ExpoConfig) => {
           `  pod 'ViroReact', :path => '../node_modules/@reactvision/react-viro/ios'\n` +
           `  pod 'ViroKit', :path => '../node_modules/@reactvision/react-viro/ios/dist/ViroRenderer/'`;
 
-        // Add ARCore Cloud Anchors pod if enabled
-        if (cloudAnchorProvider === "arcore") {
+        // Add ARCore pods if enabled
+        const needsARCore = cloudAnchorProvider === "arcore" || geospatialAnchorProvider === "arcore";
+        if (needsARCore) {
           viroPods +=
-            `\n\n  # ARCore Cloud Anchors - Cross-platform anchor sharing\n` +
+            `\n\n  # ARCore SDK - Cloud Anchors and Geospatial API\n` +
             `  # Requires GARAPIKey in Info.plist and use_frameworks! with dynamic linkage\n` +
             `  pod 'ARCore/CloudAnchors', '~> 1.51.0'`;
+
+          // Add Geospatial pod if geospatial is enabled
+          if (geospatialAnchorProvider === "arcore") {
+            viroPods +=
+              `\n  pod 'ARCore/Geospatial', '~> 1.51.0'`;
+          }
         }
 
-        // Add use_frameworks! for ARCore Cloud Anchors (must be before pods)
-        if (cloudAnchorProvider === "arcore") {
+        // Add use_frameworks! for ARCore (must be before pods)
+        if (needsARCore) {
           // Insert use_frameworks! before the target block
           // This is unconditional (not behind an if statement) so it will always apply
           data = insertLinesHelper(
@@ -138,8 +147,10 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
   let photosPermission = DEFAULTS.ios.photosPermission;
   let cameraUsagePermission = DEFAULTS.ios.cameraUsagePermission;
   let microphoneUsagePermission = DEFAULTS.ios.microphoneUsagePermission;
+  let locationUsagePermission = DEFAULTS.ios.locationUsagePermission;
   let googleCloudApiKey: string | undefined;
   let cloudAnchorProvider: string | undefined;
+  let geospatialAnchorProvider: string | undefined;
 
   if (Array.isArray(config.plugins)) {
     const pluginConfig = config?.plugins?.find(
@@ -155,8 +166,11 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
         pluginOptions.ios?.microphoneUsagePermission || microphoneUsagePermission;
       cameraUsagePermission =
         pluginOptions.ios?.cameraUsagePermission || cameraUsagePermission;
+      locationUsagePermission =
+        pluginOptions.ios?.locationUsagePermission || locationUsagePermission;
       googleCloudApiKey = pluginOptions.googleCloudApiKey;
       cloudAnchorProvider = pluginOptions.cloudAnchorProvider;
+      geospatialAnchorProvider = pluginOptions.geospatialAnchorProvider;
     }
   }
 
@@ -173,9 +187,18 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
     config.ios.infoPlist.NSMicrophoneUsageDescription ||
     microphoneUsagePermission;
 
-  // Add Google Cloud API key for ARCore Cloud Anchors (iOS)
-  if (googleCloudApiKey && cloudAnchorProvider === "arcore") {
+  // Add Google Cloud API key for ARCore Cloud Anchors/Geospatial (iOS)
+  const needsARCore = cloudAnchorProvider === "arcore" || geospatialAnchorProvider === "arcore";
+  if (googleCloudApiKey && needsARCore) {
     config.ios.infoPlist.GARAPIKey = googleCloudApiKey;
+  }
+
+  // Add location permissions for Geospatial API
+  if (geospatialAnchorProvider === "arcore") {
+    config.ios.infoPlist.NSLocationWhenInUseUsageDescription =
+      config.ios.infoPlist.NSLocationWhenInUseUsageDescription || locationUsagePermission;
+    config.ios.infoPlist.NSLocationAlwaysAndWhenInUseUsageDescription =
+      config.ios.infoPlist.NSLocationAlwaysAndWhenInUseUsageDescription || locationUsagePermission;
   }
 
   return config;

@@ -130,6 +130,19 @@ import {
   ViroHostCloudAnchorResult,
   ViroResolveCloudAnchorResult,
   ViroCloudAnchorStateChangeEvent,
+  // Geospatial Types
+  ViroGeospatialAnchorProvider,
+  ViroEarthTrackingState,
+  ViroVPSAvailability,
+  ViroGeospatialAnchorType,
+  ViroQuaternion,
+  ViroGeospatialPose,
+  ViroGeospatialAnchor,
+  ViroGeospatialSupportResult,
+  ViroEarthTrackingStateResult,
+  ViroGeospatialPoseResult,
+  ViroVPSAvailabilityResult,
+  ViroCreateGeospatialAnchorResult,
 } from "./components/Types/ViroEvents";
 import { ViroSurface } from "./components/ViroSurface";
 import { ViroSceneNavigator } from "./components/ViroSceneNavigator";
@@ -263,4 +276,17 @@ export {
   ViroHostCloudAnchorResult,
   ViroResolveCloudAnchorResult,
   ViroCloudAnchorStateChangeEvent,
+  // Geospatial Types
+  ViroGeospatialAnchorProvider,
+  ViroEarthTrackingState,
+  ViroVPSAvailability,
+  ViroGeospatialAnchorType,
+  ViroQuaternion,
+  ViroGeospatialPose,
+  ViroGeospatialAnchor,
+  ViroGeospatialSupportResult,
+  ViroEarthTrackingStateResult,
+  ViroGeospatialPoseResult,
+  ViroVPSAvailabilityResult,
+  ViroCreateGeospatialAnchorResult,
 };

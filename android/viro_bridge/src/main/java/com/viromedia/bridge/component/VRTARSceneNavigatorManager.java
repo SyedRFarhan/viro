@@ -97,4 +97,9 @@ public class VRTARSceneNavigatorManager extends VRTViroViewGroupManager<VRTARSce
     public void setCloudAnchorProvider(VRTARSceneNavigator navigator, String provider) {
         navigator.setCloudAnchorProvider(provider);
     }
+
+    @ReactProp(name = "geospatialAnchorProvider")
+    public void setGeospatialAnchorProvider(VRTARSceneNavigator navigator, String provider) {
+        navigator.setGeospatialAnchorProvider(provider);
+    }
 }

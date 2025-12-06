@@ -562,6 +562,502 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
         void onFailure(String error, String state);
     }
 
+    /**
+     * Callback interface for geospatial pose retrieval.
+     */
+    public interface GeospatialPoseCallback {
+        void onSuccess(com.viro.core.ARScene.GeospatialPose pose);
+        void onFailure(String error);
+    }
+
+    /**
+     * Callback interface for VPS availability checks.
+     */
+    public interface VPSAvailabilityCallback {
+        void onResult(String availability);
+    }
+
+    /**
+     * Callback interface for geospatial anchor creation.
+     */
+    public interface GeospatialAnchorCallback {
+        void onSuccess(com.viro.core.ARScene.GeospatialAnchor anchor);
+        void onFailure(String error);
+    }
+
+    // ========================================================================
+    // Geospatial API Methods
+    // ========================================================================
+
+    @ReactMethod
+    public void isGeospatialModeSupported(final int sceneNavTag, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("supported", false);
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("supported", false);
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    boolean supported = sceneNavigator.isGeospatialModeSupported();
+
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("supported", supported);
+                    promise.resolve(result);
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("supported", false);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void setGeospatialModeEnabled(final int sceneNavTag, final boolean enabled) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                View view = viewResolver.resolveView(sceneNavTag);
+                if (view instanceof VRTARSceneNavigator) {
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.setGeospatialModeEnabled(enabled);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void getEarthTrackingState(final int sceneNavTag, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putString("state", "Stopped");
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putString("state", "Stopped");
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    String state = sceneNavigator.getEarthTrackingState();
+
+                    WritableMap result = Arguments.createMap();
+                    result.putString("state", state);
+                    promise.resolve(result);
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putString("state", "Stopped");
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void getCameraGeospatialPose(final int sceneNavTag, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", false);
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.getCameraGeospatialPose(new GeospatialPoseCallback() {
+                        @Override
+                        public void onSuccess(com.viro.core.ARScene.GeospatialPose pose) {
+                            WritableMap result = Arguments.createMap();
+                            result.putBoolean("success", true);
+
+                            WritableMap poseData = Arguments.createMap();
+                            poseData.putDouble("latitude", pose.latitude);
+                            poseData.putDouble("longitude", pose.longitude);
+                            poseData.putDouble("altitude", pose.altitude);
+                            poseData.putDouble("heading", pose.heading);
+
+                            WritableArray quaternion = Arguments.createArray();
+                            quaternion.pushDouble(pose.quaternion[0]);
+                            quaternion.pushDouble(pose.quaternion[1]);
+                            quaternion.pushDouble(pose.quaternion[2]);
+                            quaternion.pushDouble(pose.quaternion[3]);
+                            poseData.putArray("quaternion", quaternion);
+
+                            poseData.putDouble("horizontalAccuracy", pose.horizontalAccuracy);
+                            poseData.putDouble("verticalAccuracy", pose.verticalAccuracy);
+                            poseData.putDouble("headingAccuracy", pose.headingAccuracy);
+                            poseData.putDouble("orientationYawAccuracy", pose.orientationYawAccuracy);
+
+                            result.putMap("pose", poseData);
+                            promise.resolve(result);
+                        }
+
+                        @Override
+                        public void onFailure(String error) {
+                            WritableMap result = Arguments.createMap();
+                            result.putBoolean("success", false);
+                            result.putString("error", error);
+                            promise.resolve(result);
+                        }
+                    });
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", false);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void checkVPSAvailability(final int sceneNavTag, final double latitude,
+                                      final double longitude, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putString("availability", "Unknown");
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putString("availability", "Unknown");
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.checkVPSAvailability(latitude, longitude, new VPSAvailabilityCallback() {
+                        @Override
+                        public void onResult(String availability) {
+                            WritableMap result = Arguments.createMap();
+                            result.putString("availability", availability);
+                            promise.resolve(result);
+                        }
+                    });
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putString("availability", "Unknown");
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void createGeospatialAnchor(final int sceneNavTag, final double latitude,
+                                        final double longitude, final double altitude,
+                                        final ReadableArray quaternion, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", false);
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+
+                    float[] quat = new float[4];
+                    if (quaternion != null && quaternion.size() >= 4) {
+                        quat[0] = (float) quaternion.getDouble(0);
+                        quat[1] = (float) quaternion.getDouble(1);
+                        quat[2] = (float) quaternion.getDouble(2);
+                        quat[3] = (float) quaternion.getDouble(3);
+                    } else {
+                        quat[0] = 0;
+                        quat[1] = 0;
+                        quat[2] = 0;
+                        quat[3] = 1;
+                    }
+
+                    sceneNavigator.createGeospatialAnchor(latitude, longitude, altitude, quat,
+                        new GeospatialAnchorCallback() {
+                            @Override
+                            public void onSuccess(com.viro.core.ARScene.GeospatialAnchor anchor) {
+                                WritableMap result = Arguments.createMap();
+                                result.putBoolean("success", true);
+                                result.putMap("anchor", mapFromGeospatialAnchor(anchor));
+                                promise.resolve(result);
+                            }
+
+                            @Override
+                            public void onFailure(String error) {
+                                WritableMap result = Arguments.createMap();
+                                result.putBoolean("success", false);
+                                result.putString("error", error);
+                                promise.resolve(result);
+                            }
+                        });
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", false);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void createTerrainAnchor(final int sceneNavTag, final double latitude,
+                                     final double longitude, final double altitudeAboveTerrain,
+                                     final ReadableArray quaternion, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", false);
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+
+                    float[] quat = new float[4];
+                    if (quaternion != null && quaternion.size() >= 4) {
+                        quat[0] = (float) quaternion.getDouble(0);
+                        quat[1] = (float) quaternion.getDouble(1);
+                        quat[2] = (float) quaternion.getDouble(2);
+                        quat[3] = (float) quaternion.getDouble(3);
+                    } else {
+                        quat[0] = 0;
+                        quat[1] = 0;
+                        quat[2] = 0;
+                        quat[3] = 1;
+                    }
+
+                    sceneNavigator.createTerrainAnchor(latitude, longitude, altitudeAboveTerrain, quat,
+                        new GeospatialAnchorCallback() {
+                            @Override
+                            public void onSuccess(com.viro.core.ARScene.GeospatialAnchor anchor) {
+                                WritableMap result = Arguments.createMap();
+                                result.putBoolean("success", true);
+                                result.putMap("anchor", mapFromGeospatialAnchor(anchor));
+                                promise.resolve(result);
+                            }
+
+                            @Override
+                            public void onFailure(String error) {
+                                WritableMap result = Arguments.createMap();
+                                result.putBoolean("success", false);
+                                result.putString("error", error);
+                                promise.resolve(result);
+                            }
+                        });
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", false);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void createRooftopAnchor(final int sceneNavTag, final double latitude,
+                                     final double longitude, final double altitudeAboveRooftop,
+                                     final ReadableArray quaternion, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", false);
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+
+                    float[] quat = new float[4];
+                    if (quaternion != null && quaternion.size() >= 4) {
+                        quat[0] = (float) quaternion.getDouble(0);
+                        quat[1] = (float) quaternion.getDouble(1);
+                        quat[2] = (float) quaternion.getDouble(2);
+                        quat[3] = (float) quaternion.getDouble(3);
+                    } else {
+                        quat[0] = 0;
+                        quat[1] = 0;
+                        quat[2] = 0;
+                        quat[3] = 1;
+                    }
+
+                    sceneNavigator.createRooftopAnchor(latitude, longitude, altitudeAboveRooftop, quat,
+                        new GeospatialAnchorCallback() {
+                            @Override
+                            public void onSuccess(com.viro.core.ARScene.GeospatialAnchor anchor) {
+                                WritableMap result = Arguments.createMap();
+                                result.putBoolean("success", true);
+                                result.putMap("anchor", mapFromGeospatialAnchor(anchor));
+                                promise.resolve(result);
+                            }
+
+                            @Override
+                            public void onFailure(String error) {
+                                WritableMap result = Arguments.createMap();
+                                result.putBoolean("success", false);
+                                result.putString("error", error);
+                                promise.resolve(result);
+                            }
+                        });
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", false);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void removeGeospatialAnchor(final int sceneNavTag, final String anchorId) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                View view = viewResolver.resolveView(sceneNavTag);
+                if (view instanceof VRTARSceneNavigator) {
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.removeGeospatialAnchor(anchorId);
+                }
+            }
+        });
+    }
+
+    /**
+     * Helper method to convert a GeospatialAnchor to a WritableMap.
+     */
+    private WritableMap mapFromGeospatialAnchor(com.viro.core.ARScene.GeospatialAnchor anchor) {
+        WritableMap anchorData = Arguments.createMap();
+        anchorData.putString("anchorId", anchor.anchorId);
+
+        String typeStr = "WGS84";
+        if (anchor.type == com.viro.core.ARScene.GeospatialAnchorType.TERRAIN) {
+            typeStr = "Terrain";
+        } else if (anchor.type == com.viro.core.ARScene.GeospatialAnchorType.ROOFTOP) {
+            typeStr = "Rooftop";
+        }
+        anchorData.putString("type", typeStr);
+
+        anchorData.putDouble("latitude", anchor.latitude);
+        anchorData.putDouble("longitude", anchor.longitude);
+        anchorData.putDouble("altitude", anchor.altitude);
+        anchorData.putDouble("heading", anchor.heading);
+
+        WritableArray position = Arguments.createArray();
+        position.pushDouble(anchor.position[0]);
+        position.pushDouble(anchor.position[1]);
+        position.pushDouble(anchor.position[2]);
+        anchorData.putArray("position", position);
+
+        return anchorData;
+    }
+
     private void checkPermissionsAndRun(PermissionListener listener, boolean audioAndRecordingPerm){
         Activity activity = mContext.getCurrentActivity();
 

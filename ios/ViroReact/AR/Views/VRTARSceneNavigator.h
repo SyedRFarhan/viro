@@ -50,6 +50,7 @@
 @property (nonatomic, copy) NSString *occlusionMode;
 @property (nonatomic, assign) BOOL depthDebugEnabled;
 @property (nonatomic, copy) NSString *cloudAnchorProvider;
+@property (nonatomic, copy) NSString *geospatialAnchorProvider;
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge;
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex;
@@ -92,5 +93,54 @@ typedef void (^CloudAnchorResolveCompletionHandler)(BOOL success,
          completionHandler:(CloudAnchorResolveCompletionHandler)completionHandler;
 
 - (void)cancelCloudAnchorOperations;
+
+#pragma mark - Geospatial API Methods
+
+// Geospatial completion handler types
+typedef void (^GeospatialPoseCompletionHandler)(BOOL success,
+                                                  NSDictionary * _Nullable poseData,
+                                                  NSString * _Nullable error);
+
+typedef void (^VPSAvailabilityCompletionHandler)(NSString * _Nonnull availability);
+
+typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
+                                                    NSDictionary * _Nullable anchorData,
+                                                    NSString * _Nullable error);
+
+// Geospatial mode
+- (BOOL)isGeospatialModeSupported;
+- (void)setGeospatialModeEnabled:(BOOL)enabled;
+
+// Earth tracking state
+- (NSString *)getEarthTrackingState;
+
+// Camera geospatial pose
+- (void)getCameraGeospatialPose:(GeospatialPoseCompletionHandler)completionHandler;
+
+// VPS availability
+- (void)checkVPSAvailability:(double)latitude
+                   longitude:(double)longitude
+           completionHandler:(VPSAvailabilityCompletionHandler)completionHandler;
+
+// Geospatial anchors
+- (void)createGeospatialAnchor:(double)latitude
+                     longitude:(double)longitude
+                      altitude:(double)altitude
+                    quaternion:(NSArray *)quaternion
+             completionHandler:(GeospatialAnchorCompletionHandler)completionHandler;
+
+- (void)createTerrainAnchor:(double)latitude
+                  longitude:(double)longitude
+        altitudeAboveTerrain:(double)altitudeAboveTerrain
+                  quaternion:(NSArray *)quaternion
+           completionHandler:(GeospatialAnchorCompletionHandler)completionHandler;
+
+- (void)createRooftopAnchor:(double)latitude
+                  longitude:(double)longitude
+       altitudeAboveRooftop:(double)altitudeAboveRooftop
+                  quaternion:(NSArray *)quaternion
+           completionHandler:(GeospatialAnchorCompletionHandler)completionHandler;
+
+- (void)removeGeospatialAnchor:(NSString *)anchorId;
 
 @end

@@ -473,6 +473,100 @@ class ViroARSceneNavigator extends React.Component {
     _cancelCloudAnchorOperations = () => {
         ViroARSceneNavigatorModule.cancelCloudAnchorOperations((0, react_native_1.findNodeHandle)(this));
     };
+    // ===========================================================================
+    // Geospatial API Methods
+    // ===========================================================================
+    /**
+     * Check if geospatial mode is supported on this device.
+     *
+     * @returns Promise resolving to support status
+     */
+    _isGeospatialModeSupported = async () => {
+        return await ViroARSceneNavigatorModule.isGeospatialModeSupported((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * Enable or disable geospatial mode.
+     * When enabled, the session will track the device's position relative to the Earth.
+     *
+     * @param enabled - Whether to enable geospatial mode
+     */
+    _setGeospatialModeEnabled = (enabled) => {
+        ViroARSceneNavigatorModule.setGeospatialModeEnabled((0, react_native_1.findNodeHandle)(this), enabled);
+    };
+    /**
+     * Get the current Earth tracking state.
+     *
+     * @returns Promise resolving to the current tracking state
+     */
+    _getEarthTrackingState = async () => {
+        return await ViroARSceneNavigatorModule.getEarthTrackingState((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * Get the camera's current geospatial pose (latitude, longitude, altitude, etc.)
+     *
+     * @returns Promise resolving to the camera's geospatial pose
+     */
+    _getCameraGeospatialPose = async () => {
+        return await ViroARSceneNavigatorModule.getCameraGeospatialPose((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * Check VPS (Visual Positioning System) availability at a specific location.
+     * VPS provides enhanced accuracy in supported locations.
+     *
+     * @param latitude - Latitude in degrees
+     * @param longitude - Longitude in degrees
+     * @returns Promise resolving to VPS availability status
+     */
+    _checkVPSAvailability = async (latitude, longitude) => {
+        return await ViroARSceneNavigatorModule.checkVPSAvailability((0, react_native_1.findNodeHandle)(this), latitude, longitude);
+    };
+    /**
+     * Create a WGS84 geospatial anchor at the specified location.
+     * The anchor is positioned using absolute coordinates on the WGS84 ellipsoid.
+     *
+     * @param latitude - Latitude in degrees
+     * @param longitude - Longitude in degrees
+     * @param altitude - Altitude in meters above the WGS84 ellipsoid
+     * @param quaternion - Orientation quaternion [x, y, z, w] in EUS frame (optional, defaults to facing north)
+     * @returns Promise resolving to the created anchor
+     */
+    _createGeospatialAnchor = async (latitude, longitude, altitude, quaternion) => {
+        return await ViroARSceneNavigatorModule.createGeospatialAnchor((0, react_native_1.findNodeHandle)(this), latitude, longitude, altitude, quaternion || [0, 0, 0, 1]);
+    };
+    /**
+     * Create a terrain anchor at the specified location.
+     * The anchor is positioned relative to the terrain surface.
+     *
+     * @param latitude - Latitude in degrees
+     * @param longitude - Longitude in degrees
+     * @param altitudeAboveTerrain - Altitude in meters above terrain
+     * @param quaternion - Orientation quaternion [x, y, z, w] in EUS frame (optional)
+     * @returns Promise resolving to the created anchor
+     */
+    _createTerrainAnchor = async (latitude, longitude, altitudeAboveTerrain, quaternion) => {
+        return await ViroARSceneNavigatorModule.createTerrainAnchor((0, react_native_1.findNodeHandle)(this), latitude, longitude, altitudeAboveTerrain, quaternion || [0, 0, 0, 1]);
+    };
+    /**
+     * Create a rooftop anchor at the specified location.
+     * The anchor is positioned relative to a building rooftop.
+     *
+     * @param latitude - Latitude in degrees
+     * @param longitude - Longitude in degrees
+     * @param altitudeAboveRooftop - Altitude in meters above rooftop
+     * @param quaternion - Orientation quaternion [x, y, z, w] in EUS frame (optional)
+     * @returns Promise resolving to the created anchor
+     */
+    _createRooftopAnchor = async (latitude, longitude, altitudeAboveRooftop, quaternion) => {
+        return await ViroARSceneNavigatorModule.createRooftopAnchor((0, react_native_1.findNodeHandle)(this), latitude, longitude, altitudeAboveRooftop, quaternion || [0, 0, 0, 1]);
+    };
+    /**
+     * Remove a geospatial anchor from the session.
+     *
+     * @param anchorId - The ID of the anchor to remove
+     */
+    _removeGeospatialAnchor = (anchorId) => {
+        ViroARSceneNavigatorModule.removeGeospatialAnchor((0, react_native_1.findNodeHandle)(this), anchorId);
+    };
     /**
      * Renders the Scene Views in the stack.
      *
@@ -506,6 +600,16 @@ class ViroARSceneNavigator extends React.Component {
         hostCloudAnchor: this._hostCloudAnchor,
         resolveCloudAnchor: this._resolveCloudAnchor,
         cancelCloudAnchorOperations: this._cancelCloudAnchorOperations,
+        // Geospatial API
+        isGeospatialModeSupported: this._isGeospatialModeSupported,
+        setGeospatialModeEnabled: this._setGeospatialModeEnabled,
+        getEarthTrackingState: this._getEarthTrackingState,
+        getCameraGeospatialPose: this._getCameraGeospatialPose,
+        checkVPSAvailability: this._checkVPSAvailability,
+        createGeospatialAnchor: this._createGeospatialAnchor,
+        createTerrainAnchor: this._createTerrainAnchor,
+        createRooftopAnchor: this._createRooftopAnchor,
+        removeGeospatialAnchor: this._removeGeospatialAnchor,
         viroAppProps: {},
     };
     sceneNavigator = {
@@ -524,6 +628,16 @@ class ViroARSceneNavigator extends React.Component {
         hostCloudAnchor: this._hostCloudAnchor,
         resolveCloudAnchor: this._resolveCloudAnchor,
         cancelCloudAnchorOperations: this._cancelCloudAnchorOperations,
+        // Geospatial API
+        isGeospatialModeSupported: this._isGeospatialModeSupported,
+        setGeospatialModeEnabled: this._setGeospatialModeEnabled,
+        getEarthTrackingState: this._getEarthTrackingState,
+        getCameraGeospatialPose: this._getCameraGeospatialPose,
+        checkVPSAvailability: this._checkVPSAvailability,
+        createGeospatialAnchor: this._createGeospatialAnchor,
+        createTerrainAnchor: this._createTerrainAnchor,
+        createRooftopAnchor: this._createRooftopAnchor,
+        removeGeospatialAnchor: this._removeGeospatialAnchor,
         viroAppProps: {},
     };
     render() {

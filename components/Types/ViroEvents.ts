@@ -429,3 +429,119 @@ export type ViroCloudAnchorStateChangeEvent = {
   state: ViroCloudAnchorState;
   error?: string;
 };
+
+/** ===========================================================================
+ * Viro Geospatial API Events and Types
+ * ============================================================================ */
+
+/**
+ * Geospatial anchor provider type.
+ */
+export type ViroGeospatialAnchorProvider = "none" | "arcore";
+
+/**
+ * Earth tracking state.
+ * Maps to GARSessionEarthState (iOS) and Earth.EarthState (Android)
+ */
+export type ViroEarthTrackingState = "Enabled" | "Paused" | "Stopped";
+
+/**
+ * VPS (Visual Positioning System) availability at a location.
+ */
+export type ViroVPSAvailability = "Available" | "Unavailable" | "Unknown";
+
+/**
+ * Type of geospatial anchor.
+ */
+export type ViroGeospatialAnchorType = "WGS84" | "Terrain" | "Rooftop";
+
+/**
+ * Quaternion representation [x, y, z, w] in East-Up-South (EUS) coordinate frame.
+ */
+export type ViroQuaternion = [number, number, number, number];
+
+/**
+ * The camera's geospatial pose including location, orientation, and accuracy.
+ */
+export type ViroGeospatialPose = {
+  /** Latitude in degrees */
+  latitude: number;
+  /** Longitude in degrees */
+  longitude: number;
+  /** Altitude in meters above the WGS84 ellipsoid */
+  altitude: number;
+  /** Heading in degrees (0 = North, 90 = East) */
+  heading: number;
+  /** Orientation quaternion [x, y, z, w] in EUS frame */
+  quaternion: ViroQuaternion;
+  /** Horizontal accuracy in meters (95% confidence) */
+  horizontalAccuracy: number;
+  /** Vertical accuracy in meters (95% confidence) */
+  verticalAccuracy: number;
+  /** Heading accuracy in degrees (95% confidence) */
+  headingAccuracy: number;
+  /** Orientation yaw accuracy in degrees (95% confidence) */
+  orientationYawAccuracy: number;
+};
+
+/**
+ * Represents a geospatial anchor in the AR session.
+ */
+export type ViroGeospatialAnchor = {
+  /** Unique identifier for this anchor */
+  anchorId: string;
+  /** Type of geospatial anchor */
+  type: ViroGeospatialAnchorType;
+  /** Latitude in degrees */
+  latitude: number;
+  /** Longitude in degrees */
+  longitude: number;
+  /** Altitude in meters */
+  altitude: number;
+  /** Heading in degrees */
+  heading: number;
+  /** Position in world coordinates [x, y, z] */
+  position: [number, number, number];
+};
+
+/**
+ * Result of checking geospatial mode support.
+ */
+export type ViroGeospatialSupportResult = {
+  supported: boolean;
+  error?: string;
+};
+
+/**
+ * Result of getting Earth tracking state.
+ */
+export type ViroEarthTrackingStateResult = {
+  state: ViroEarthTrackingState;
+  error?: string;
+};
+
+/**
+ * Result of getting the camera geospatial pose.
+ */
+export type ViroGeospatialPoseResult = {
+  success: boolean;
+  pose?: ViroGeospatialPose;
+  error?: string;
+};
+
+/**
+ * Result of checking VPS availability.
+ */
+export type ViroVPSAvailabilityResult = {
+  availability: ViroVPSAvailability;
+  error?: string;
+};
+
+/**
+ * Result of creating a geospatial anchor.
+ */
+export type ViroCreateGeospatialAnchorResult = {
+  success: boolean;
+  anchor?: ViroGeospatialAnchor;
+  error?: string;
+};

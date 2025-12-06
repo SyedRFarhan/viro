@@ -450,4 +450,267 @@ RCT_EXPORT_METHOD(cancelCloudAnchorOperations:(nonnull NSNumber *)reactTag) {
     }];
 }
 
+#pragma mark - Geospatial API Methods
+
+RCT_EXPORT_METHOD(isGeospatialModeSupported:(nonnull NSNumber *)reactTag
+                                    resolve:(RCTPromiseResolveBlock)resolve
+                                     reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"supported": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            BOOL supported = [component isGeospatialModeSupported];
+            resolve(@{@"supported": @(supported)});
+        } @catch (NSException *exception) {
+            resolve(@{@"supported": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(setGeospatialModeEnabled:(nonnull NSNumber *)reactTag
+                                   enabled:(BOOL)enabled) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component setGeospatialModeEnabled:enabled];
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(getEarthTrackingState:(nonnull NSNumber *)reactTag
+                                resolve:(RCTPromiseResolveBlock)resolve
+                                 reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"state": @"Stopped", @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            NSString *state = [component getEarthTrackingState];
+            resolve(@{@"state": state});
+        } @catch (NSException *exception) {
+            resolve(@{@"state": @"Stopped", @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(getCameraGeospatialPose:(nonnull NSNumber *)reactTag
+                                  resolve:(RCTPromiseResolveBlock)resolve
+                                   reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted"});
+                return;
+            }
+
+            [component getCameraGeospatialPose:^(BOOL success, NSDictionary *poseData, NSString *error) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (poseData) {
+                    [result setObject:poseData forKey:@"pose"];
+                }
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(checkVPSAvailability:(nonnull NSNumber *)reactTag
+                              latitude:(double)latitude
+                             longitude:(double)longitude
+                               resolve:(RCTPromiseResolveBlock)resolve
+                                reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"availability": @"Unknown", @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            [component checkVPSAvailability:latitude
+                                  longitude:longitude
+                          completionHandler:^(NSString *availability) {
+                resolve(@{@"availability": availability});
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"availability": @"Unknown", @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(createGeospatialAnchor:(nonnull NSNumber *)reactTag
+                                latitude:(double)latitude
+                               longitude:(double)longitude
+                                altitude:(double)altitude
+                              quaternion:(NSArray *)quaternion
+                                 resolve:(RCTPromiseResolveBlock)resolve
+                                  reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted"});
+                return;
+            }
+
+            [component createGeospatialAnchor:latitude
+                                    longitude:longitude
+                                     altitude:altitude
+                                   quaternion:quaternion
+                            completionHandler:^(BOOL success, NSDictionary *anchorData, NSString *error) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (anchorData) {
+                    [result setObject:anchorData forKey:@"anchor"];
+                }
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(createTerrainAnchor:(nonnull NSNumber *)reactTag
+                             latitude:(double)latitude
+                            longitude:(double)longitude
+                  altitudeAboveTerrain:(double)altitudeAboveTerrain
+                           quaternion:(NSArray *)quaternion
+                              resolve:(RCTPromiseResolveBlock)resolve
+                               reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted"});
+                return;
+            }
+
+            [component createTerrainAnchor:latitude
+                                 longitude:longitude
+                       altitudeAboveTerrain:altitudeAboveTerrain
+                                 quaternion:quaternion
+                          completionHandler:^(BOOL success, NSDictionary *anchorData, NSString *error) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (anchorData) {
+                    [result setObject:anchorData forKey:@"anchor"];
+                }
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(createRooftopAnchor:(nonnull NSNumber *)reactTag
+                             latitude:(double)latitude
+                            longitude:(double)longitude
+                 altitudeAboveRooftop:(double)altitudeAboveRooftop
+                           quaternion:(NSArray *)quaternion
+                              resolve:(RCTPromiseResolveBlock)resolve
+                               reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted"});
+                return;
+            }
+
+            [component createRooftopAnchor:latitude
+                                 longitude:longitude
+                      altitudeAboveRooftop:altitudeAboveRooftop
+                                 quaternion:quaternion
+                          completionHandler:^(BOOL success, NSDictionary *anchorData, NSString *error) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (anchorData) {
+                    [result setObject:anchorData forKey:@"anchor"];
+                }
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(removeGeospatialAnchor:(nonnull NSNumber *)reactTag
+                                anchorId:(NSString *)anchorId) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component removeGeospatialAnchor:anchorId];
+        }
+    }];
+}
+
 @end

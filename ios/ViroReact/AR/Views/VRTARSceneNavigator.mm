@@ -35,6 +35,7 @@
 #import <React/RCTUtils.h>
 #import "VRTPerfMonitor.h"
 #import "VRTMaterialManager.h"
+#import <ViroKit/VROGeospatialAnchor.h>
 
 @implementation VRTARSceneNavigator {
     id <VROView> _vroView;
@@ -167,6 +168,11 @@
         // Apply cloud anchor provider if it was set before view was ready
         if (_cloudAnchorProvider) {
             [self setCloudAnchorProvider:_cloudAnchorProvider];
+        }
+
+        // Apply geospatial anchor provider if it was set before view was ready
+        if (_geospatialAnchorProvider) {
+            [self setGeospatialAnchorProvider:_geospatialAnchorProvider];
         }
     }
 }
@@ -599,6 +605,387 @@
 - (void)cancelCloudAnchorOperations {
     // Currently a no-op - cloud operations are fire-and-forget
     // Future implementation could track and cancel pending operations
+}
+
+#pragma mark - Geospatial API Methods
+
+- (void)setGeospatialAnchorProvider:(NSString *)geospatialAnchorProvider {
+    _geospatialAnchorProvider = geospatialAnchorProvider;
+
+    RCTLogInfo(@"[ViroAR] Setting geospatial anchor provider: %@", geospatialAnchorProvider ?: @"none");
+
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+        if (arSession) {
+            if ([geospatialAnchorProvider caseInsensitiveCompare:@"arcore"] == NSOrderedSame) {
+                arSession->setGeospatialAnchorProvider(VROGeospatialAnchorProvider::ARCoreGeospatial);
+                RCTLogInfo(@"[ViroAR] ARCore Geospatial provider enabled");
+
+                // Check if API key is configured
+                NSString *apiKey = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"GARAPIKey"];
+                if (apiKey && apiKey.length > 0) {
+                    RCTLogInfo(@"[ViroAR] GARAPIKey found in Info.plist (length: %lu)", (unsigned long)apiKey.length);
+                } else {
+                    RCTLogWarn(@"[ViroAR] WARNING: GARAPIKey not found in Info.plist. Geospatial features will not work!");
+                }
+            } else {
+                arSession->setGeospatialAnchorProvider(VROGeospatialAnchorProvider::None);
+                RCTLogInfo(@"[ViroAR] Geospatial provider disabled");
+            }
+        } else {
+            RCTLogWarn(@"[ViroAR] AR session not available, cannot set geospatial provider");
+        }
+    } else {
+        RCTLogInfo(@"[ViroAR] VROView not ready yet, geospatial provider will be set later");
+    }
+}
+
+- (BOOL)isGeospatialModeSupported {
+    if (!_vroView) {
+        return NO;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        return NO;
+    }
+
+    return arSession->isGeospatialModeSupported();
+}
+
+- (void)setGeospatialModeEnabled:(BOOL)enabled {
+    if (!_vroView) {
+        RCTLogWarn(@"[ViroAR] Cannot set geospatial mode: AR view not initialized");
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        RCTLogWarn(@"[ViroAR] Cannot set geospatial mode: AR session not available");
+        return;
+    }
+
+    arSession->setGeospatialModeEnabled(enabled);
+    RCTLogInfo(@"[ViroAR] Geospatial mode %@", enabled ? @"enabled" : @"disabled");
+}
+
+- (NSString *)getEarthTrackingState {
+    if (!_vroView) {
+        return @"Stopped";
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        return @"Stopped";
+    }
+
+    VROEarthTrackingState state = arSession->getEarthTrackingState();
+    switch (state) {
+        case VROEarthTrackingState::Enabled:
+            return @"Enabled";
+        case VROEarthTrackingState::Paused:
+            return @"Paused";
+        case VROEarthTrackingState::Stopped:
+        default:
+            return @"Stopped";
+    }
+}
+
+- (void)getCameraGeospatialPose:(GeospatialPoseCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR view not initialized");
+        }
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR session not available");
+        }
+        return;
+    }
+
+    VROGeospatialPose pose = arSession->getCameraGeospatialPose();
+
+    // Check if pose is valid (latitude and longitude are non-zero)
+    if (pose.latitude == 0 && pose.longitude == 0) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"Geospatial pose not available");
+        }
+        return;
+    }
+
+    NSDictionary *poseData = @{
+        @"latitude": @(pose.latitude),
+        @"longitude": @(pose.longitude),
+        @"altitude": @(pose.altitude),
+        @"heading": @(pose.heading),
+        @"quaternion": @[@(pose.quaternion.X), @(pose.quaternion.Y),
+                         @(pose.quaternion.Z), @(pose.quaternion.W)],
+        @"horizontalAccuracy": @(pose.horizontalAccuracy),
+        @"verticalAccuracy": @(pose.verticalAccuracy),
+        @"headingAccuracy": @(pose.headingAccuracy),
+        @"orientationYawAccuracy": @(pose.orientationYawAccuracy)
+    };
+
+    if (completionHandler) {
+        completionHandler(YES, poseData, nil);
+    }
+}
+
+- (void)checkVPSAvailability:(double)latitude
+                   longitude:(double)longitude
+           completionHandler:(VPSAvailabilityCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(@"Unknown");
+        }
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        if (completionHandler) {
+            completionHandler(@"Unknown");
+        }
+        return;
+    }
+
+    arSession->checkVPSAvailability(latitude, longitude, [completionHandler](VROVPSAvailability availability) {
+        NSString *availabilityString;
+        switch (availability) {
+            case VROVPSAvailability::Available:
+                availabilityString = @"Available";
+                break;
+            case VROVPSAvailability::Unavailable:
+                availabilityString = @"Unavailable";
+                break;
+            case VROVPSAvailability::Unknown:
+            default:
+                availabilityString = @"Unknown";
+                break;
+        }
+        if (completionHandler) {
+            completionHandler(availabilityString);
+        }
+    });
+}
+
+- (void)createGeospatialAnchor:(double)latitude
+                     longitude:(double)longitude
+                      altitude:(double)altitude
+                    quaternion:(NSArray *)quaternion
+             completionHandler:(GeospatialAnchorCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR view not initialized");
+        }
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR session not available");
+        }
+        return;
+    }
+
+    // Parse quaternion from array [x, y, z, w]
+    VROQuaternion quat;
+    if (quaternion && quaternion.count >= 4) {
+        quat = VROQuaternion([[quaternion objectAtIndex:0] floatValue],
+                             [[quaternion objectAtIndex:1] floatValue],
+                             [[quaternion objectAtIndex:2] floatValue],
+                             [[quaternion objectAtIndex:3] floatValue]);
+    } else {
+        // Default to identity quaternion (facing north)
+        quat = VROQuaternion(0, 0, 0, 1);
+    }
+
+    arSession->createGeospatialAnchor(latitude, longitude, altitude, quat,
+        [completionHandler](std::shared_ptr<VROGeospatialAnchor> anchor) {
+            // Success callback
+            if (completionHandler) {
+                VROMatrix4f transform = anchor->getTransform();
+                VROVector3f position = transform.extractTranslation();
+
+                NSDictionary *anchorData = @{
+                    @"anchorId": [NSString stringWithUTF8String:anchor->getId().c_str()],
+                    @"type": @"WGS84",
+                    @"latitude": @(anchor->getLatitude()),
+                    @"longitude": @(anchor->getLongitude()),
+                    @"altitude": @(anchor->getAltitude()),
+                    @"heading": @(anchor->getHeading()),
+                    @"position": @[@(position.x), @(position.y), @(position.z)]
+                };
+                completionHandler(YES, anchorData, nil);
+            }
+        },
+        [completionHandler](std::string error) {
+            // Failure callback
+            if (completionHandler) {
+                NSString *errorStr = [NSString stringWithUTF8String:error.c_str()];
+                completionHandler(NO, nil, errorStr);
+            }
+        }
+    );
+}
+
+- (void)createTerrainAnchor:(double)latitude
+                  longitude:(double)longitude
+        altitudeAboveTerrain:(double)altitudeAboveTerrain
+                  quaternion:(NSArray *)quaternion
+           completionHandler:(GeospatialAnchorCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR view not initialized");
+        }
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR session not available");
+        }
+        return;
+    }
+
+    // Parse quaternion from array [x, y, z, w]
+    VROQuaternion quat;
+    if (quaternion && quaternion.count >= 4) {
+        quat = VROQuaternion([[quaternion objectAtIndex:0] floatValue],
+                             [[quaternion objectAtIndex:1] floatValue],
+                             [[quaternion objectAtIndex:2] floatValue],
+                             [[quaternion objectAtIndex:3] floatValue]);
+    } else {
+        quat = VROQuaternion(0, 0, 0, 1);
+    }
+
+    arSession->createTerrainAnchor(latitude, longitude, altitudeAboveTerrain, quat,
+        [completionHandler](std::shared_ptr<VROGeospatialAnchor> anchor) {
+            if (completionHandler) {
+                VROMatrix4f transform = anchor->getTransform();
+                VROVector3f position = transform.extractTranslation();
+
+                NSDictionary *anchorData = @{
+                    @"anchorId": [NSString stringWithUTF8String:anchor->getId().c_str()],
+                    @"type": @"Terrain",
+                    @"latitude": @(anchor->getLatitude()),
+                    @"longitude": @(anchor->getLongitude()),
+                    @"altitude": @(anchor->getAltitude()),
+                    @"heading": @(anchor->getHeading()),
+                    @"position": @[@(position.x), @(position.y), @(position.z)]
+                };
+                completionHandler(YES, anchorData, nil);
+            }
+        },
+        [completionHandler](std::string error) {
+            if (completionHandler) {
+                NSString *errorStr = [NSString stringWithUTF8String:error.c_str()];
+                completionHandler(NO, nil, errorStr);
+            }
+        }
+    );
+}
+
+- (void)createRooftopAnchor:(double)latitude
+                  longitude:(double)longitude
+       altitudeAboveRooftop:(double)altitudeAboveRooftop
+                  quaternion:(NSArray *)quaternion
+           completionHandler:(GeospatialAnchorCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR view not initialized");
+        }
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, @"AR session not available");
+        }
+        return;
+    }
+
+    // Parse quaternion from array [x, y, z, w]
+    VROQuaternion quat;
+    if (quaternion && quaternion.count >= 4) {
+        quat = VROQuaternion([[quaternion objectAtIndex:0] floatValue],
+                             [[quaternion objectAtIndex:1] floatValue],
+                             [[quaternion objectAtIndex:2] floatValue],
+                             [[quaternion objectAtIndex:3] floatValue]);
+    } else {
+        quat = VROQuaternion(0, 0, 0, 1);
+    }
+
+    arSession->createRooftopAnchor(latitude, longitude, altitudeAboveRooftop, quat,
+        [completionHandler](std::shared_ptr<VROGeospatialAnchor> anchor) {
+            if (completionHandler) {
+                VROMatrix4f transform = anchor->getTransform();
+                VROVector3f position = transform.extractTranslation();
+
+                NSDictionary *anchorData = @{
+                    @"anchorId": [NSString stringWithUTF8String:anchor->getId().c_str()],
+                    @"type": @"Rooftop",
+                    @"latitude": @(anchor->getLatitude()),
+                    @"longitude": @(anchor->getLongitude()),
+                    @"altitude": @(anchor->getAltitude()),
+                    @"heading": @(anchor->getHeading()),
+                    @"position": @[@(position.x), @(position.y), @(position.z)]
+                };
+                completionHandler(YES, anchorData, nil);
+            }
+        },
+        [completionHandler](std::string error) {
+            if (completionHandler) {
+                NSString *errorStr = [NSString stringWithUTF8String:error.c_str()];
+                completionHandler(NO, nil, errorStr);
+            }
+        }
+    );
+}
+
+- (void)removeGeospatialAnchor:(NSString *)anchorId {
+    if (!_vroView) {
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        return;
+    }
+
+    // Find the geospatial anchor by ID and remove it
+    std::string anchorIdStr = std::string([anchorId UTF8String]);
+    std::unique_ptr<VROARFrame> &frame = arSession->getLastFrame();
+    if (frame) {
+        const std::vector<std::shared_ptr<VROARAnchor>> &anchors = frame->getAnchors();
+        for (const auto &anchor : anchors) {
+            if (anchor->getId() == anchorIdStr) {
+                std::shared_ptr<VROGeospatialAnchor> geoAnchor =
+                    std::dynamic_pointer_cast<VROGeospatialAnchor>(anchor);
+                if (geoAnchor) {
+                    arSession->removeGeospatialAnchor(geoAnchor);
+                    break;
+                }
+            }
+        }
+    }
 }
 
 #pragma mark RCTInvalidating methods

@@ -308,4 +308,223 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         // ARCore doesn't have explicit cancel - operations will just time out
         // This is a placeholder for future implementation if needed
     }
+
+    // ========================================================================
+    // Geospatial API Support
+    // ========================================================================
+
+    private String mGeospatialAnchorProvider = "none";
+
+    public void setGeospatialAnchorProvider(String provider) {
+        mGeospatialAnchorProvider = provider != null ? provider.toLowerCase() : "none";
+
+        Log.i(TAG, "Setting geospatial anchor provider: " + mGeospatialAnchorProvider);
+
+        if ("arcore".equals(mGeospatialAnchorProvider)) {
+            Log.i(TAG, "ARCore Geospatial provider enabled");
+
+            // Check if API key is configured in AndroidManifest
+            try {
+                android.content.pm.ApplicationInfo ai = getContext().getPackageManager()
+                    .getApplicationInfo(getContext().getPackageName(), android.content.pm.PackageManager.GET_META_DATA);
+                if (ai.metaData != null) {
+                    String apiKey = ai.metaData.getString("com.google.android.ar.API_KEY");
+                    if (apiKey != null && !apiKey.isEmpty()) {
+                        Log.i(TAG, "ARCore API key found in AndroidManifest.xml (length: " + apiKey.length() + ")");
+                    } else {
+                        Log.w(TAG, "WARNING: com.google.android.ar.API_KEY not found in AndroidManifest.xml. Geospatial features will not work!");
+                    }
+                } else {
+                    Log.w(TAG, "WARNING: No meta-data found in AndroidManifest.xml. Geospatial features may not work!");
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Could not check for ARCore API key: " + e.getMessage());
+            }
+        } else {
+            Log.i(TAG, "Geospatial provider disabled");
+        }
+    }
+
+    public boolean isGeospatialModeSupported() {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            return false;
+        }
+        return arScene.isGeospatialModeSupported();
+    }
+
+    public void setGeospatialModeEnabled(boolean enabled) {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            Log.w(TAG, "Cannot set geospatial mode: AR scene not available");
+            return;
+        }
+        arScene.setGeospatialModeEnabled(enabled);
+        Log.i(TAG, "Geospatial mode " + (enabled ? "enabled" : "disabled"));
+    }
+
+    public String getEarthTrackingState() {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            return "Stopped";
+        }
+        ARScene.EarthTrackingState state = arScene.getEarthTrackingState();
+        switch (state) {
+            case ENABLED:
+                return "Enabled";
+            case PAUSED:
+                return "Paused";
+            case STOPPED:
+            default:
+                return "Stopped";
+        }
+    }
+
+    public void getCameraGeospatialPose(ARSceneNavigatorModule.GeospatialPoseCallback callback) {
+        if (!"arcore".equals(mGeospatialAnchorProvider)) {
+            callback.onFailure("Geospatial provider not configured. Set geospatialAnchorProvider='arcore' to enable.");
+            return;
+        }
+
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            callback.onFailure("AR scene not available");
+            return;
+        }
+
+        arScene.getCameraGeospatialPose(new ARScene.GeospatialPoseListener() {
+            @Override
+            public void onSuccess(ARScene.GeospatialPose pose) {
+                callback.onSuccess(pose);
+            }
+
+            @Override
+            public void onFailure(String error) {
+                callback.onFailure(error);
+            }
+        });
+    }
+
+    public void checkVPSAvailability(double latitude, double longitude,
+                                      ARSceneNavigatorModule.VPSAvailabilityCallback callback) {
+        if (!"arcore".equals(mGeospatialAnchorProvider)) {
+            callback.onResult("Unknown");
+            return;
+        }
+
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            callback.onResult("Unknown");
+            return;
+        }
+
+        arScene.checkVPSAvailability(latitude, longitude, new ARScene.VPSAvailabilityListener() {
+            @Override
+            public void onResult(ARScene.VPSAvailability availability) {
+                switch (availability) {
+                    case AVAILABLE:
+                        callback.onResult("Available");
+                        break;
+                    case UNAVAILABLE:
+                        callback.onResult("Unavailable");
+                        break;
+                    default:
+                        callback.onResult("Unknown");
+                        break;
+                }
+            }
+        });
+    }
+
+    public void createGeospatialAnchor(double latitude, double longitude, double altitude,
+                                        float[] quaternion,
+                                        ARSceneNavigatorModule.GeospatialAnchorCallback callback) {
+        if (!"arcore".equals(mGeospatialAnchorProvider)) {
+            callback.onFailure("Geospatial provider not configured. Set geospatialAnchorProvider='arcore' to enable.");
+            return;
+        }
+
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            callback.onFailure("AR scene not available");
+            return;
+        }
+
+        arScene.createGeospatialAnchor(latitude, longitude, altitude, quaternion,
+            new ARScene.GeospatialAnchorListener() {
+                @Override
+                public void onSuccess(ARScene.GeospatialAnchor anchor) {
+                    callback.onSuccess(anchor);
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    callback.onFailure(error);
+                }
+            });
+    }
+
+    public void createTerrainAnchor(double latitude, double longitude, double altitudeAboveTerrain,
+                                     float[] quaternion,
+                                     ARSceneNavigatorModule.GeospatialAnchorCallback callback) {
+        if (!"arcore".equals(mGeospatialAnchorProvider)) {
+            callback.onFailure("Geospatial provider not configured. Set geospatialAnchorProvider='arcore' to enable.");
+            return;
+        }
+
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            callback.onFailure("AR scene not available");
+            return;
+        }
+
+        arScene.createTerrainAnchor(latitude, longitude, altitudeAboveTerrain, quaternion,
+            new ARScene.GeospatialAnchorListener() {
+                @Override
+                public void onSuccess(ARScene.GeospatialAnchor anchor) {
+                    callback.onSuccess(anchor);
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    callback.onFailure(error);
+                }
+            });
+    }
+
+    public void createRooftopAnchor(double latitude, double longitude, double altitudeAboveRooftop,
+                                     float[] quaternion,
+                                     ARSceneNavigatorModule.GeospatialAnchorCallback callback) {
+        if (!"arcore".equals(mGeospatialAnchorProvider)) {
+            callback.onFailure("Geospatial provider not configured. Set geospatialAnchorProvider='arcore' to enable.");
+            return;
+        }
+
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            callback.onFailure("AR scene not available");
+            return;
+        }
+
+        arScene.createRooftopAnchor(latitude, longitude, altitudeAboveRooftop, quaternion,
+            new ARScene.GeospatialAnchorListener() {
+                @Override
+                public void onSuccess(ARScene.GeospatialAnchor anchor) {
+                    callback.onSuccess(anchor);
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    callback.onFailure(error);
+                }
+            });
+    }
+
+    public void removeGeospatialAnchor(String anchorId) {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            return;
+        }
+        arScene.removeGeospatialAnchor(anchorId);
+    }
 }
