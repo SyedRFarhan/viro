@@ -83,9 +83,14 @@
     _sourceChanged = NO;
     _modelLoaded = NO;
     self.nodeAnimation = [[VRT3DObjectAnimation alloc] init];
-    self.nodeAnimation.animationManager = [bridge animationManager];
+    self.nodeAnimation.bridge = bridge;  // Store bridge for lazy animation manager lookup
+    // Use moduleForClass with NSClassFromString - works better with RCTBridgeProxy in new architecture
+    Class animManagerClass = NSClassFromString(@"VRTAnimationManager");
+    if (animManagerClass) {
+        self.nodeAnimation.animationManager = [bridge moduleForClass:animManagerClass];
+    }
     self.nodeAnimation.node = self.node;
-    
+
     return self;
 }
 

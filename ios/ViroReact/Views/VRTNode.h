@@ -39,7 +39,8 @@ extern const int k2DPointsPerSpatialUnit;
 @interface VRTNodeAnimation : VRTManagedAnimation
 
 @property (readwrite, nonatomic) NSString *animationName;
-@property (readwrite, nonatomic) VRTAnimationManager *animationManager;
+@property (readwrite, nonatomic, weak) VRTAnimationManager *animationManager;
+@property (readwrite, nonatomic, weak) RCTBridge *bridge;
 
 - (std::shared_ptr<VROExecutableAnimation>)loadAnimation;
 

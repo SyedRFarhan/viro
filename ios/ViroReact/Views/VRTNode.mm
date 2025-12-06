@@ -55,11 +55,28 @@ const double kTransformDelegateDistanceFilter = 0.01;
 
 - (std::shared_ptr<VROExecutableAnimation>)loadAnimation {
     if (self.animationName != nil) {
+        // Lazily fetch animation manager from bridge if not set
+        if (self.animationManager == nil && self.bridge != nil) {
+            // Use moduleForClass with NSClassFromString - works better with RCTBridgeProxy in new architecture
+            Class animManagerClass = NSClassFromString(@"VRTAnimationManager");
+            if (animManagerClass) {
+                self.animationManager = [self.bridge moduleForClass:animManagerClass];
+            }
+            if (self.animationManager != nil) {
+                NSLog(@"VRTNodeAnimation: Lazily loaded animationManager from bridge");
+            }
+        }
+
+        if (self.animationManager == nil) {
+            NSLog(@"VRTNodeAnimation: animationManager is nil! Cannot load animation '%@'", self.animationName);
+            return nullptr;
+        }
         std::shared_ptr<VROExecutableAnimation> animation = [self.animationManager animationForName:self.animationName];
         if (animation) {
             return animation->copy();
         }
         else {
+            NSLog(@"VRTNodeAnimation: Animation '%@' not found in animation manager", self.animationName);
             return nullptr;
         }
     }
@@ -94,7 +111,13 @@ const double kTransformDelegateDistanceFilter = 0.01;
         _ignoreEventHandling = NO; // default is NO
         
         _nodeAnimation = [[VRTNodeAnimation alloc] init];
-        _nodeAnimation.animationManager = [bridge animationManager];
+        _nodeAnimation.bridge = bridge;  // Store bridge for lazy animation manager lookup
+        // Use moduleForClass with NSClassFromString - works better with RCTBridgeProxy in new architecture
+        Class animManagerClass = NSClassFromString(@"VRTAnimationManager");
+        if (animManagerClass) {
+            _nodeAnimation.animationManager = [bridge moduleForClass:animManagerClass];
+        }
+        // If animMgr is nil, loadAnimation will try to fetch it lazily from bridge
         _nodeAnimation.node = _node;
         
         // Create and attach event delegate
