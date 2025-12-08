@@ -37,6 +37,8 @@
 #import "VRTMaterialManager.h"
 #import <ViroKit/VROGeospatialAnchor.h>
 #import <ViroKit/VROSemantics.h>
+#import <ViroKit/VROARScene.h>
+#import <ViroKit/VROARWorldMesh.h>
 
 @implementation VRTARSceneNavigator {
     id <VROView> _vroView;
@@ -51,6 +53,11 @@
     BOOL _needsSemanticModeApply;
     BOOL _pendingGeospatialModeEnabled;
     BOOL _needsGeospatialModeApply;
+
+    // World mesh configuration
+    BOOL _pendingWorldMeshEnabled;
+    BOOL _needsWorldMeshApply;
+    VROWorldMeshConfig _worldMeshConfigCpp;
 }
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge {
@@ -285,6 +292,11 @@
     }
 
     _currentScene = sceneView;
+
+    // Apply pending world mesh configuration if set before scene was ready
+    if (_needsWorldMeshApply) {
+        [self applyWorldMeshEnabled];
+    }
 }
 
 - (void)willMoveToSuperview:(UIView *)newSuperview {
@@ -1166,6 +1178,90 @@
     }
 
     return frame->getSemanticLabelFraction(semanticLabel);
+}
+
+#pragma mark - World Mesh API Methods
+
+- (void)setWorldMeshEnabled:(BOOL)worldMeshEnabled {
+    _worldMeshEnabled = worldMeshEnabled;
+    _pendingWorldMeshEnabled = worldMeshEnabled;
+
+    if (!_vroView || !_currentScene) {
+        _needsWorldMeshApply = YES;
+        RCTLogInfo(@"[ViroAR] World mesh mode queued for later: %@", worldMeshEnabled ? @"enabled" : @"disabled");
+        return;
+    }
+
+    [self applyWorldMeshEnabled];
+}
+
+- (void)setWorldMeshConfig:(NSDictionary *)worldMeshConfig {
+    _worldMeshConfig = worldMeshConfig;
+
+    if (worldMeshConfig) {
+        // Parse config from dictionary
+        if (worldMeshConfig[@"stride"]) {
+            _worldMeshConfigCpp.stride = [worldMeshConfig[@"stride"] intValue];
+        }
+        if (worldMeshConfig[@"minConfidence"]) {
+            _worldMeshConfigCpp.minConfidence = [worldMeshConfig[@"minConfidence"] floatValue];
+        }
+        if (worldMeshConfig[@"maxDepth"]) {
+            _worldMeshConfigCpp.maxDepth = [worldMeshConfig[@"maxDepth"] floatValue];
+        }
+        if (worldMeshConfig[@"updateIntervalMs"]) {
+            _worldMeshConfigCpp.updateIntervalMs = [worldMeshConfig[@"updateIntervalMs"] doubleValue];
+        }
+        if (worldMeshConfig[@"meshPersistenceMs"]) {
+            _worldMeshConfigCpp.meshPersistenceMs = [worldMeshConfig[@"meshPersistenceMs"] doubleValue];
+        }
+        if (worldMeshConfig[@"friction"]) {
+            _worldMeshConfigCpp.friction = [worldMeshConfig[@"friction"] floatValue];
+        }
+        if (worldMeshConfig[@"restitution"]) {
+            _worldMeshConfigCpp.restitution = [worldMeshConfig[@"restitution"] floatValue];
+        }
+        if (worldMeshConfig[@"collisionTag"]) {
+            _worldMeshConfigCpp.collisionTag = std::string([worldMeshConfig[@"collisionTag"] UTF8String]);
+        }
+        if (worldMeshConfig[@"debugDrawEnabled"]) {
+            _worldMeshConfigCpp.debugDrawEnabled = [worldMeshConfig[@"debugDrawEnabled"] boolValue];
+        }
+    }
+
+    // Apply to AR scene if ready
+    if (_vroView && _currentScene) {
+        std::shared_ptr<VROSceneController> sceneController = [_currentScene sceneController];
+        if (sceneController) {
+            std::shared_ptr<VROARScene> arScene = std::dynamic_pointer_cast<VROARScene>(sceneController->getScene());
+            if (arScene) {
+                arScene->setWorldMeshConfig(_worldMeshConfigCpp);
+            }
+        }
+    }
+}
+
+- (void)applyWorldMeshEnabled {
+    if (!_vroView || !_currentScene) {
+        return;
+    }
+
+    std::shared_ptr<VROSceneController> sceneController = [_currentScene sceneController];
+    if (!sceneController) {
+        return;
+    }
+
+    std::shared_ptr<VROARScene> arScene = std::dynamic_pointer_cast<VROARScene>(sceneController->getScene());
+    if (!arScene) {
+        return;
+    }
+
+    // Apply config first, then enable
+    arScene->setWorldMeshConfig(_worldMeshConfigCpp);
+    arScene->setWorldMeshEnabled(_pendingWorldMeshEnabled);
+    _needsWorldMeshApply = NO;
+
+    RCTLogInfo(@"[ViroAR] World mesh applied: %@", _pendingWorldMeshEnabled ? @"enabled" : @"disabled");
 }
 
 #pragma mark RCTInvalidating methods

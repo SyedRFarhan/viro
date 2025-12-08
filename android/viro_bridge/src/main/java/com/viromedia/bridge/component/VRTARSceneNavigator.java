@@ -105,6 +105,12 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
                 navigator.applyGeospatialModeEnabled();
                 navigator.mNeedsGeospatialModeToggle = false;
             }
+
+            // Apply pending world mesh configuration
+            if (navigator.mNeedsWorldMeshToggle) {
+                navigator.applyWorldMeshEnabled();
+                navigator.mNeedsWorldMeshToggle = false;
+            }
         }
 
         @Override
@@ -556,6 +562,109 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
             return;
         }
         arScene.removeGeospatialAnchor(anchorId);
+    }
+
+    // ========================================================================
+    // World Mesh API Support
+    // ========================================================================
+
+    private boolean mWorldMeshEnabled = false;
+    private boolean mNeedsWorldMeshToggle = false;
+    private int mWorldMeshStride = 4;
+    private float mWorldMeshMinConfidence = 0.3f;
+    private float mWorldMeshMaxDepth = 5.0f;
+    private double mWorldMeshUpdateIntervalMs = 100.0;
+    private double mWorldMeshPersistenceMs = 500.0;
+    private float mWorldMeshFriction = 0.5f;
+    private float mWorldMeshRestitution = 0.3f;
+    private String mWorldMeshCollisionTag = "world";
+    private boolean mWorldMeshDebugDrawEnabled = false;
+
+    public void setWorldMeshEnabled(boolean enabled) {
+        mWorldMeshEnabled = enabled;
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            mNeedsWorldMeshToggle = true;
+            Log.i(TAG, "World mesh mode queued for later: " + (enabled ? "enabled" : "disabled"));
+            return;
+        }
+        applyWorldMeshEnabled();
+    }
+
+    public void setWorldMeshConfig(com.facebook.react.bridge.ReadableMap config) {
+        if (config == null) {
+            return;
+        }
+
+        if (config.hasKey("stride")) {
+            mWorldMeshStride = config.getInt("stride");
+        }
+        if (config.hasKey("minConfidence")) {
+            mWorldMeshMinConfidence = (float) config.getDouble("minConfidence");
+        }
+        if (config.hasKey("maxDepth")) {
+            mWorldMeshMaxDepth = (float) config.getDouble("maxDepth");
+        }
+        if (config.hasKey("updateIntervalMs")) {
+            mWorldMeshUpdateIntervalMs = config.getDouble("updateIntervalMs");
+        }
+        if (config.hasKey("meshPersistenceMs")) {
+            mWorldMeshPersistenceMs = config.getDouble("meshPersistenceMs");
+        }
+        if (config.hasKey("friction")) {
+            mWorldMeshFriction = (float) config.getDouble("friction");
+        }
+        if (config.hasKey("restitution")) {
+            mWorldMeshRestitution = (float) config.getDouble("restitution");
+        }
+        if (config.hasKey("collisionTag")) {
+            mWorldMeshCollisionTag = config.getString("collisionTag");
+        }
+        if (config.hasKey("debugDrawEnabled")) {
+            mWorldMeshDebugDrawEnabled = config.getBoolean("debugDrawEnabled");
+        }
+
+        // Apply to ARScene if available
+        ARScene arScene = getCurrentARScene();
+        if (arScene != null) {
+            arScene.setWorldMeshConfig(
+                mWorldMeshStride,
+                mWorldMeshMinConfidence,
+                mWorldMeshMaxDepth,
+                mWorldMeshUpdateIntervalMs,
+                mWorldMeshPersistenceMs,
+                mWorldMeshFriction,
+                mWorldMeshRestitution,
+                mWorldMeshCollisionTag,
+                mWorldMeshDebugDrawEnabled
+            );
+        }
+    }
+
+    private void applyWorldMeshEnabled() {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            Log.w(TAG, "Cannot apply world mesh: AR scene not available");
+            return;
+        }
+
+        // Apply config first
+        arScene.setWorldMeshConfig(
+            mWorldMeshStride,
+            mWorldMeshMinConfidence,
+            mWorldMeshMaxDepth,
+            mWorldMeshUpdateIntervalMs,
+            mWorldMeshPersistenceMs,
+            mWorldMeshFriction,
+            mWorldMeshRestitution,
+            mWorldMeshCollisionTag,
+            mWorldMeshDebugDrawEnabled
+        );
+
+        // Then enable/disable
+        arScene.setWorldMeshEnabled(mWorldMeshEnabled);
+        mNeedsWorldMeshToggle = false;
+        Log.i(TAG, "World mesh applied: " + (mWorldMeshEnabled ? "enabled" : "disabled"));
     }
 
     // ========================================================================

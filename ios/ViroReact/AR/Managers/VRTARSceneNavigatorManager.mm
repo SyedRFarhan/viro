@@ -49,6 +49,9 @@ RCT_EXPORT_VIEW_PROPERTY(occlusionMode, NSString)
 RCT_EXPORT_VIEW_PROPERTY(depthDebugEnabled, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(cloudAnchorProvider, NSString)
 RCT_EXPORT_VIEW_PROPERTY(geospatialAnchorProvider, NSString)
+RCT_EXPORT_VIEW_PROPERTY(worldMeshEnabled, BOOL)
+RCT_EXPORT_VIEW_PROPERTY(worldMeshConfig, NSDictionary)
+RCT_EXPORT_VIEW_PROPERTY(onWorldMeshUpdated, RCTDirectEventBlock)
 
 - (VRTARSceneNavigator *)view
 {

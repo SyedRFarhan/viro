@@ -24,6 +24,7 @@ package com.viromedia.bridge.component;
 import android.util.Log;
 
 import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.annotations.ReactProp;
 
@@ -101,5 +102,15 @@ public class VRTARSceneNavigatorManager extends VRTViroViewGroupManager<VRTARSce
     @ReactProp(name = "geospatialAnchorProvider")
     public void setGeospatialAnchorProvider(VRTARSceneNavigator navigator, String provider) {
         navigator.setGeospatialAnchorProvider(provider);
+    }
+
+    @ReactProp(name = "worldMeshEnabled", defaultBoolean = false)
+    public void setWorldMeshEnabled(VRTARSceneNavigator navigator, boolean enabled) {
+        navigator.setWorldMeshEnabled(enabled);
+    }
+
+    @ReactProp(name = "worldMeshConfig")
+    public void setWorldMeshConfig(VRTARSceneNavigator navigator, ReadableMap config) {
+        navigator.setWorldMeshConfig(config);
     }
 }

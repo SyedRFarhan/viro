@@ -13,6 +13,7 @@ import * as React from "react";
 import { ViewProps } from "react-native";
 import { ViroWorldOrigin, ViroCloudAnchorProvider, ViroCloudAnchorStateChangeEvent, ViroHostCloudAnchorResult, ViroResolveCloudAnchorResult, ViroGeospatialAnchorProvider, ViroGeospatialSupportResult, ViroEarthTrackingStateResult, ViroGeospatialPoseResult, ViroVPSAvailabilityResult, ViroCreateGeospatialAnchorResult, ViroQuaternion, ViroSemanticSupportResult, ViroSemanticLabelFractionsResult, ViroSemanticLabelFractionResult, ViroSemanticLabel } from "../Types/ViroEvents";
 import { Viro3DPoint, ViroNativeRef, ViroScene, ViroSceneDictionary } from "../Types/ViroUtils";
+import { ViroWorldMeshConfig, ViroWorldMeshStats } from "../Types/ViroWorldMesh";
 /**
  * Occlusion mode determines how virtual content is occluded by real-world objects.
  */
@@ -89,6 +90,29 @@ type Props = ViewProps & {
      * @platform ios,android
      */
     geospatialAnchorProvider?: ViroGeospatialAnchorProvider;
+    /**
+     * Enable world mesh for physics collision with real-world surfaces.
+     * When enabled, virtual physics objects will collide with detected
+     * real-world geometry (floors, walls, tables, etc.).
+     *
+     * Requires depth sensing capability:
+     * - iOS: LiDAR scanner (iPhone 12 Pro+, iPad Pro 2020+)
+     * - Android: ToF sensor or ARCore Depth API support
+     *
+     * @default false
+     * @platform ios,android
+     */
+    worldMeshEnabled?: boolean;
+    /**
+     * Configuration for world mesh generation and physics properties.
+     * Only used when worldMeshEnabled is true.
+     */
+    worldMeshConfig?: ViroWorldMeshConfig;
+    /**
+     * Callback fired when the world mesh is updated.
+     * Provides statistics about the current mesh state.
+     */
+    onWorldMeshUpdated?: (stats: ViroWorldMeshStats) => void;
 };
 type State = {
     sceneDictionary: ViroSceneDictionary;

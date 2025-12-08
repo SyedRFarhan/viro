@@ -52,6 +52,11 @@
 @property (nonatomic, copy) NSString *cloudAnchorProvider;
 @property (nonatomic, copy) NSString *geospatialAnchorProvider;
 
+// World mesh properties
+@property (nonatomic, assign) BOOL worldMeshEnabled;
+@property (nonatomic, copy, nullable) NSDictionary *worldMeshConfig;
+@property (nonatomic, copy, nullable) RCTDirectEventBlock onWorldMeshUpdated;
+
 - (instancetype)initWithBridge:(RCTBridge *)bridge;
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex;
 - (void)removeReactSubview:(UIView *)subview;
