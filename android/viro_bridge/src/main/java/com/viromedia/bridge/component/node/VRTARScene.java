@@ -67,6 +67,10 @@ public class VRTARScene extends VRTScene implements ARScene.Listener {
     private PointCloudImageDownloadListener mImageDownloadListener;
     private Handler mMainHandler;
 
+    // Pending occlusion mode to apply when scene is ready
+    private ARScene.OcclusionMode mPendingOcclusionMode = null;
+    private boolean mSceneDidAppear = false;
+
     public VRTARScene(ReactContext reactContext) {
         super(reactContext);
         mMainHandler = new Handler(Looper.getMainLooper());
@@ -76,6 +80,7 @@ public class VRTARScene extends VRTScene implements ARScene.Listener {
     protected Scene createSceneJni() {
         ARScene sceneControllerJni = new ARScene(true);
         sceneControllerJni.setListener(this);
+        sceneControllerJni.setVisibilityListener(this);
         return sceneControllerJni;
     }
 
@@ -128,30 +133,15 @@ public class VRTARScene extends VRTScene implements ARScene.Listener {
     }
 
     public void setAnchorDetectionTypes(ReadableArray types) {
-        // DEBUG LOGGING - START
-        android.util.Log.d("ViroAR", "=== setAnchorDetectionTypes called ===");
-        if (types != null) {
-            for (int i = 0; i < types.size(); i++) {
-                android.util.Log.d("ViroAR", "  Prop value[" + i + "]: " + types.getString(i));
-            }
-        } else {
-            android.util.Log.d("ViroAR", "  types is NULL!");
-        }
-        // DEBUG LOGGING - END
-
         EnumSet<ViroViewARCore.AnchorDetectionType> typesList = EnumSet.noneOf(ViroViewARCore.AnchorDetectionType.class);
         if (types != null) {
             for (int i = 0; i < types.size(); i++) {
                 ViroViewARCore.AnchorDetectionType type = ViroViewARCore.AnchorDetectionType.valueFromString(types.getString(i));
                 if (type != null) {
-                    android.util.Log.d("ViroAR", "  Parsed type: " + type);
                     typesList.add(type);
-                } else {
-                    android.util.Log.e("ViroAR", "  FAILED to parse: " + types.getString(i));
                 }
             }
         }
-        android.util.Log.d("ViroAR", "  Final typesList size: " + typesList.size());
         ((ARScene) mNativeScene).setAnchorDetectionTypes(typesList);
     }
 
@@ -164,16 +154,25 @@ public class VRTARScene extends VRTScene implements ARScene.Listener {
     }
 
     public void setOcclusionMode(ARScene.OcclusionMode mode) {
-        ((ARScene) mNativeScene).setOcclusionMode(mode);
+        mPendingOcclusionMode = mode;
+        if (mSceneDidAppear) {
+            ((ARScene) mNativeScene).setOcclusionMode(mode);
+        }
+    }
+
+    @Override
+    public void onSceneDidAppear() {
+        super.onSceneDidAppear();
+        mSceneDidAppear = true;
+        if (mPendingOcclusionMode != null) {
+            ((ARScene) mNativeScene).setOcclusionMode(mPendingOcclusionMode);
+        }
     }
 
     // -- ARSceneDelegate Implementation --
 
     @Override
     public void onTrackingUpdated(ARScene.TrackingState state, ARScene.TrackingStateReason reason) {
-        // DEBUG LOGGING
-        android.util.Log.d("ViroAR", "📍 Tracking updated: state=" + state + " (" + state.getId() + "), reason=" + reason + " (" + reason.getId() + ")");
-
         WritableMap returnMap = Arguments.createMap();
         returnMap.putInt("state", state.getId());
         returnMap.putInt("reason", reason.getId());

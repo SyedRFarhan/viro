@@ -52,6 +52,7 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
     private boolean mAutoFocusEnabled = false;
     private boolean mNeedsAutoFocusToggle = false;
     private ARScene.OcclusionMode mOcclusionMode = ARScene.OcclusionMode.DISABLED;
+    private boolean mNeedsOcclusionModeToggle = false;
 
     // Pending configuration for features that may be set before session is ready
     private boolean mSemanticModeEnabled = false;
@@ -92,6 +93,12 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
             if (navigator.mNeedsAutoFocusToggle) {
                 navigator.setAutoFocusEnabled(navigator.mAutoFocusEnabled);
                 navigator.mNeedsAutoFocusToggle = false;
+            }
+
+            // Apply pending occlusion mode configuration
+            if (navigator.mNeedsOcclusionModeToggle) {
+                navigator.applyOcclusionMode();
+                navigator.mNeedsOcclusionModeToggle = false;
             }
 
             // Apply pending semantic mode configuration
@@ -204,7 +211,25 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
                     break;
             }
         }
-        // Note: Occlusion mode will be applied to scenes when they are added via addView()
+        // If GL is initialized, apply immediately; otherwise queue for later
+        if (mGLInitialized) {
+            applyOcclusionMode();
+        } else {
+            mNeedsOcclusionModeToggle = true;
+        }
+    }
+
+    /**
+     * Apply occlusion mode to all existing ARScenes.
+     * Called either immediately when GL is ready, or deferred via onSuccess callback.
+     */
+    private void applyOcclusionMode() {
+        for (int i = 0; i < getChildCount(); i++) {
+            View child = getChildAt(i);
+            if (child instanceof VRTARScene) {
+                ((VRTARScene) child).setOcclusionMode(mOcclusionMode);
+            }
+        }
     }
 
     /**
