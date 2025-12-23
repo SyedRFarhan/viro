@@ -105,7 +105,15 @@
 }
 
 - (void)dealloc {
-    
+    // Clear the managed animation to prevent retain cycles
+    if (self.managedAnimation) {
+        // Clear the node reference to break potential retain cycles
+        self.managedAnimation.node = std::weak_ptr<VRONode>();
+        // Clear references to break any potential retain cycles
+        self.managedAnimation.animationManager = nil;
+        self.managedAnimation.bridge = nil;
+        self.managedAnimation = nil;
+    }
 }
 
 #pragma mark - VRTView overrides

@@ -799,4 +799,201 @@ RCT_EXPORT_METHOD(getSemanticLabelFraction:(nonnull NSNumber *)reactTag
     }];
 }
 
+#pragma mark - Monocular Depth Estimation API Methods
+
+RCT_EXPORT_METHOD(isMonocularDepthSupported:(nonnull NSNumber *)reactTag
+                                    resolve:(RCTPromiseResolveBlock)resolve
+                                     reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"supported": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            BOOL supported = [component isMonocularDepthSupported];
+            resolve(@{@"supported": @(supported)});
+        } @catch (NSException *exception) {
+            resolve(@{@"supported": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(isMonocularDepthModelDownloaded:(nonnull NSNumber *)reactTag
+                                          resolve:(RCTPromiseResolveBlock)resolve
+                                           reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"downloaded": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            BOOL downloaded = [component isMonocularDepthModelDownloaded];
+            resolve(@{@"downloaded": @(downloaded)});
+        } @catch (NSException *exception) {
+            resolve(@{@"downloaded": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(setMonocularDepthEnabled:(nonnull NSNumber *)reactTag
+                                   enabled:(BOOL)enabled) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component setMonocularDepthEnabled:enabled];
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(setMonocularDepthModelURL:(nonnull NSNumber *)reactTag
+                                    baseURL:(NSString *)baseURL) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component setMonocularDepthModelURL:baseURL];
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(downloadMonocularDepthModel:(nonnull NSNumber *)reactTag
+                                      resolve:(RCTPromiseResolveBlock)resolve
+                                       reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted"});
+                return;
+            }
+
+            [component downloadMonocularDepthModelWithProgress:nil
+                                             completionHandler:^(BOOL success, NSString *error) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(downloadMonocularDepthModelWithProgress:(nonnull NSNumber *)reactTag
+                                                  resolve:(RCTPromiseResolveBlock)resolve
+                                                   reject:(RCTPromiseRejectBlock)reject) {
+    // Note: This method downloads the model and periodically sends progress events
+    // For simplicity, we resolve with final result. Progress can be sent via events if needed.
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"progress": @0.0, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"progress": @0.0, @"error": @"AR view has been unmounted"});
+                return;
+            }
+
+            __block float lastProgress = 0.0f;
+            [component downloadMonocularDepthModelWithProgress:^(float progress) {
+                lastProgress = progress;
+                // Progress events could be sent here via RCTEventEmitter if needed
+            } completionHandler:^(BOOL success, NSString *error) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                [result setObject:@(lastProgress) forKey:@"progress"];
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"progress": @0.0, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(setPreferMonocularDepth:(nonnull NSNumber *)reactTag
+                                   prefer:(BOOL)prefer) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component setPreferMonocularDepth:prefer];
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(isPreferMonocularDepth:(nonnull NSNumber *)reactTag
+                                 resolve:(RCTPromiseResolveBlock)resolve
+                                  reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"preferred": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            BOOL preferred = [component isPreferMonocularDepth];
+            resolve(@{@"preferred": @(preferred)});
+        } @catch (NSException *exception) {
+            resolve(@{@"preferred": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+#pragma mark - Cleanup Methods
+
+RCT_EXPORT_METHOD(cleanup:(nonnull NSNumber *)reactTag) {
+    // This method is called from componentWillUnmount to ensure proper cleanup
+    // of AR resources before the native view is deallocated.
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
+                VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+                // Trigger explicit cleanup to prevent memory leaks
+                // This ensures ARSession is paused and GL resources are released
+                // even if willMoveToSuperview: is not called (e.g., in Fabric)
+                [component cleanupViroResources];
+            }
+        } @catch (NSException *exception) {
+            NSLog(@"VRTARSceneNavigatorModule: Error during cleanup: %@", exception.reason);
+        }
+    }];
+}
+
 @end

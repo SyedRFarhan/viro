@@ -654,6 +654,15 @@ RCT_EXPORT_METHOD(deleteMaterials:(NSArray *)materials) {
     [_materialChangeListeners setObject:weakListener forKey:name];
 }
 
+- (void)removeMaterialChangedListener:(NSString *)name listener:(id<VRTMaterialChangedDelegate>)listener {
+    // Remove the listener for the given material name
+    // This prevents memory leaks by ensuring deallocated objects are not called back
+    WeakMaterialChangeListenerContainer *weakListener = [_materialChangeListeners objectForKey:name];
+    if (weakListener != nil && weakListener.listener == listener) {
+        [_materialChangeListeners removeObjectForKey:name];
+    }
+}
+
 // DEPRECATED: this is only in place for Beta. This needs to be
 //             replaced with asynchronous image loading.
 //             Tracked by VIRO-912

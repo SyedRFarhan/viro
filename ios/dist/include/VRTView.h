@@ -85,4 +85,7 @@ typedef NS_ENUM(NSInteger, ViroConstraintType) {
 - (void)sceneWillAppear;
 - (void)sceneWillDisappear;
 
+// Fabric architecture compatibility - called before view recycling
+- (void)prepareForRecycle;
+
 @end

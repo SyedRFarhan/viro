@@ -59,4 +59,17 @@ RCT_EXPORT_METHOD(seekToTime:(nonnull NSNumber *)reactTag time:(float)time)
         }
     }];
 }
+
+RCT_EXPORT_METHOD(pause:(nonnull NSNumber *)reactTag)
+{
+    // This method is called from componentWillUnmount to ensure proper cleanup
+    // of video resources before the native view is deallocated.
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager, NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if ([view isKindOfClass:[VRTMaterialVideo class]]) {
+            VRTMaterialVideo *component = (VRTMaterialVideo *)view;
+            [component setPaused:YES];
+        }
+    }];
+}
 @end

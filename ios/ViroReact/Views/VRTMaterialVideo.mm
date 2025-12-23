@@ -173,4 +173,23 @@
     }
 }
 
+#pragma mark - Cleanup
+
+- (void)dealloc {
+    // Pause and cleanup video texture to prevent memory leaks
+    if (_videoTexture) {
+        _videoTexture->pause();
+        _videoTexture = nullptr;
+    }
+
+    // Clear delegate to prevent dangling pointer
+    _videoDelegate = nullptr;
+
+    // Remove material change listener to prevent callback to deallocated object
+    if (_material && self.bridge) {
+        VRTMaterialManager *materialManager = [self.bridge moduleForClass:[VRTMaterialManager class]];
+        [materialManager removeMaterialChangedListener:_material listener:self];
+    }
+}
+
 @end

@@ -25,9 +25,27 @@ export type CloudAnchorProvider = "none" | "arcore";
 export type GeospatialAnchorProvider = "none" | "arcore";
 
 /**
+ * iOS framework linkage type.
+ * - "dynamic": Use dynamic frameworks (required for ARCore SDK)
+ * - "static": Use static frameworks (smaller binary size, faster launch)
+ */
+export type IosLinkage = "dynamic" | "static";
+
+/**
  * Options interface for configuring expo plugin
  */
 export interface ViroConfigurationOptions {
+  /**
+   * iOS framework linkage type.
+   * When set to "dynamic", uses dynamic frameworks which is required for ARCore SDK.
+   * When set to "static", uses static frameworks for smaller binary size.
+   *
+   * Note: If using cloudAnchorProvider or geospatialAnchorProvider with "arcore",
+   * this will be automatically set to "dynamic" regardless of the configured value.
+   *
+   * DEFAULTS TO: undefined (uses project default, typically static)
+   */
+  iosLinkage?: IosLinkage;
   /**
    * Google Cloud API key for ARCore Cloud Anchors and Geospatial API.
    * Required if using cloudAnchorProvider: "arcore" or geospatialAnchorProvider: "arcore"
@@ -87,6 +105,17 @@ export interface ViroConfigurationOptions {
      * DEFAULTS TO: 'Allow $(PRODUCT_NAME) to use your location for AR experiences'
      */
     locationUsagePermission?: string;
+    /**
+     * Whether to include ARCore SDK pods.
+     * When true, adds ARCore/CloudAnchors, ARCore/Geospatial, and ARCore/Semantics pods.
+     * This is automatically set to true when using cloudAnchorProvider or geospatialAnchorProvider with "arcore".
+     *
+     * ViroKit is built with weak linking, so ARCore pods are optional.
+     * Without ARCore pods, cloud anchors, geospatial, and semantics features will be disabled at runtime.
+     *
+     * DEFAULTS TO: false (unless cloudAnchorProvider or geospatialAnchorProvider is "arcore")
+     */
+    includeARCore?: boolean;
   };
   android?: {
     xRMode?: XrMode[];

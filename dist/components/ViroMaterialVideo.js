@@ -47,9 +47,17 @@ const react_native_1 = require("react-native");
 class ViroMaterialVideo extends React.Component {
     _component = null;
     componentWillUnmount() {
-        // pause the current video texture on Android since java gc will release when it feels like it.
-        if (react_native_1.Platform.OS == "android") {
-            react_native_1.NativeModules.UIManager.dispatchViewManagerCommand((0, react_native_1.findNodeHandle)(this), react_native_1.NativeModules.UIManager.VRTMaterialVideo.Commands.pause, [0]);
+        // Pause the video texture on unmount to prevent memory leaks
+        // Both Android and iOS need explicit pause since GC may not release immediately
+        const nodeHandle = (0, react_native_1.findNodeHandle)(this);
+        if (nodeHandle) {
+            if (react_native_1.Platform.OS === "android") {
+                react_native_1.NativeModules.UIManager.dispatchViewManagerCommand(nodeHandle, react_native_1.NativeModules.UIManager.VRTMaterialVideo.Commands.pause, [0]);
+            }
+            else if (react_native_1.Platform.OS === "ios") {
+                // Also pause on iOS to ensure video resources are released
+                react_native_1.NativeModules.VRTMaterialVideoManager?.pause?.(nodeHandle);
+            }
         }
     }
     _onBufferStart = (event) => {

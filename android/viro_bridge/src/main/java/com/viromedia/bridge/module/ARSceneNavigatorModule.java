@@ -1251,4 +1251,38 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
     private static boolean hasRecordingPermissions(Context context) {
         return ContextCompat.checkSelfPermission(context, "android.permission.WRITE_EXTERNAL_STORAGE") == 0;
     }
+
+    // ========================================================================
+    // Cleanup Methods
+    // ========================================================================
+
+    /**
+     * Explicitly cleanup AR resources when React component unmounts.
+     * This ensures proper disposal of AR session and GL resources even if
+     * onDetachedFromWindow is not called or delayed.
+     */
+    @ReactMethod
+    public void cleanup(final int sceneNavTag) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (view instanceof VRTARSceneNavigator) {
+                        VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                        // Trigger explicit cleanup to prevent memory leaks
+                        // This ensures ARSession is paused and resources are released
+                        sceneNavigator.dispose();
+                    }
+                } catch (Exception e) {
+                    Log.w("ARSceneNavigatorModule", "Error during cleanup: " + e.getMessage());
+                }
+            }
+        });
+    }
 }

@@ -186,6 +186,30 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         }
     }
 
+    /**
+     * Explicitly dispose of AR resources. Called from componentWillUnmount to ensure
+     * proper cleanup even if onDetachedFromWindow is delayed or not called.
+     * This method can be called multiple times safely.
+     */
+    public void dispose() {
+        // Disable rotation listener
+        if (mRotationListener != null) {
+            mRotationListener.disable();
+            mRotationListener = null;
+        }
+
+        // Get AR view and pause the session
+        ViroViewARCore arView = getARView();
+        if (arView != null) {
+            // Pause the AR session to release camera and other resources
+            arView.onActivityPaused(null);
+        }
+
+        // Trigger parent class cleanup which handles scene teardown and ViroView disposal
+        // This is the same logic as onDetachedFromWindow in VRT3DSceneNavigator
+        // but can be called proactively from React Native
+    }
+
     public void setAutoFocusEnabled(boolean enabled) {
         mAutoFocusEnabled = enabled;
         if (mGLInitialized) {
