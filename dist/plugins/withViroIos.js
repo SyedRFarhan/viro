@@ -59,23 +59,18 @@ const withViroPods = (config) => {
                     viroPods +=
                         `\n  pod 'ARCore/Semantics', '~> 1.51.0'`;
                 }
-                // Add use_frameworks! if configured
-                // User's iosLinkage setting is respected; if not set and ARCore is enabled, default to dynamic
+                // For Expo apps, framework linkage should be configured via app.json expo.ios.useFrameworks
+                // or Podfile.properties.json, not injected directly into the Podfile.
+                // If ARCore is enabled and the user hasn't configured linkage, warn them.
                 const effectiveLinkage = iosLinkage || (shouldIncludeARCore ? "dynamic" : undefined);
-                if (effectiveLinkage) {
-                    // Insert use_frameworks! before the target block
-                    let linkageComment;
-                    if (shouldIncludeARCore && effectiveLinkage === "static") {
-                        // Warn user that static linkage may not work with ARCore
-                        linkageComment = `# WARNING: ARCore SDK typically requires dynamic frameworks.\n# Static linkage is set but may cause build issues with ARCore pods.`;
-                    }
-                    else if (shouldIncludeARCore) {
-                        linkageComment = `# Framework linkage: ${effectiveLinkage} (ARCore included)`;
-                    }
-                    else {
-                        linkageComment = `# Framework linkage configured via app.json (iosLinkage: "${effectiveLinkage}")`;
-                    }
-                    data = (0, insertLinesHelper_1.insertLinesHelper)(`${linkageComment}\nuse_frameworks! :linkage => :${effectiveLinkage}\n`, "target '", data, -1);
+                if (shouldIncludeARCore && !iosLinkage) {
+                    config_plugins_1.WarningAggregator.addWarningIOS("withViroIos", "ARCore SDK typically requires dynamic framework linking. " +
+                        "Please set 'iosLinkage': 'dynamic' in your Viro plugin config in app.json, " +
+                        "or configure expo.ios.useFrameworks in your app.json.");
+                }
+                else if (shouldIncludeARCore && effectiveLinkage === "static") {
+                    config_plugins_1.WarningAggregator.addWarningIOS("withViroIos", "ARCore SDK typically requires dynamic frameworks. " +
+                        "Static linkage is set but may cause build issues with ARCore pods.");
                 }
                 // Add New Architecture enforcement
                 viroPods +=
@@ -86,6 +81,42 @@ const withViroPods = (config) => {
                         `  end`;
                 // Insert the pods into the Podfile
                 data = (0, insertLinesHelper_1.insertLinesHelper)(viroPods, "post_install do |installer|", data, -1);
+                // Add ViroKit ARCore weak linking post_install hook if ARCore is enabled
+                if (shouldIncludeARCore) {
+                    const weakLinkingHook = `    # ViroKit ARCore weak linking - makes ARCore frameworks optional at runtime
+    # Only applied when ARCore pods are installed to prevent linker errors
+    virokit_targets = installer.pods_project.targets.select { |target|
+      target.name.include?('ViroKit') ||
+      target.dependencies.any? { |dep| dep.name.include?('ViroKit') }
+    }
+
+    arcore_frameworks = ['ARCoreBase', 'ARCoreGARSession', 'ARCoreCloudAnchors',
+                         'ARCoreGeospatial', 'ARCoreSemantics', 'ARCoreTFShared',
+                         'FBLPromises', 'GoogleDataTransport', 'GoogleUtilities',
+                         'FirebaseABTesting', 'FirebaseCore', 'FirebaseCoreInternal',
+                         'FirebaseInstallations', 'FirebaseRemoteConfig',
+                         'FirebaseRemoteConfigInterop', 'FirebaseSharedSwift',
+                         'GTMSessionFetcher', 'nanopb']
+
+    virokit_targets.each do |target|
+      target.build_configurations.each do |config|
+        other_ldflags = config.build_settings['OTHER_LDFLAGS'] || ['$(inherited)']
+        other_ldflags = [other_ldflags] if other_ldflags.is_a?(String)
+
+        arcore_frameworks.each do |framework|
+          unless other_ldflags.include?('-weak_framework') && other_ldflags.include?(framework)
+            other_ldflags << '-weak_framework'
+            other_ldflags << framework
+          end
+        end
+
+        config.build_settings['OTHER_LDFLAGS'] = other_ldflags
+      end
+    end
+`;
+                    // Insert weak linking hook inside post_install block (right after the block starts)
+                    data = (0, insertLinesHelper_1.insertLinesHelper)(weakLinkingHook, "post_install do |installer|", data, 1);
+                }
                 fs_1.default.writeFile(`${root}/Podfile`, data, "utf-8", function (err) {
                     if (err)
                         console.log("Error writing Podfile");
