@@ -18,9 +18,11 @@ const withViroPods = (config: ExpoConfig) => {
     async (newConfig) => {
       const root = newConfig.modRequest.platformProjectRoot;
 
-      // Check if cloud anchors or geospatial are enabled
+      // Check plugin configuration options
       let cloudAnchorProvider: string | undefined;
       let geospatialAnchorProvider: string | undefined;
+      let iosLinkage: "dynamic" | "static" | undefined;
+      let includeARCore: boolean | undefined;
       if (Array.isArray(config.plugins)) {
         const pluginConfig = config?.plugins?.find(
           (plugin) =>
@@ -30,6 +32,8 @@ const withViroPods = (config: ExpoConfig) => {
           const options = pluginConfig[1] as ViroConfigurationOptions;
           cloudAnchorProvider = options.cloudAnchorProvider;
           geospatialAnchorProvider = options.geospatialAnchorProvider;
+          iosLinkage = options.iosLinkage;
+          includeARCore = options.ios?.includeARCore;
         }
       }
 
@@ -53,16 +57,20 @@ const withViroPods = (config: ExpoConfig) => {
           `  pod 'ViroReact', :path => '../node_modules/@reactvision/react-viro/ios'\n` +
           `  pod 'ViroKit', :path => '../node_modules/@reactvision/react-viro/ios/dist/ViroRenderer/'`;
 
-        // Add ARCore pods if enabled
-        const needsARCore = cloudAnchorProvider === "arcore" || geospatialAnchorProvider === "arcore";
-        if (needsARCore) {
+        // Add ARCore pods if enabled (explicitly via includeARCore or implicitly via cloud/geospatial providers)
+        // ViroKit.podspec declares these as weak_frameworks, making ARCore optional at runtime
+        const needsARCoreForFeatures = cloudAnchorProvider === "arcore" || geospatialAnchorProvider === "arcore";
+        const shouldIncludeARCore = includeARCore === true || needsARCoreForFeatures;
+
+        if (shouldIncludeARCore) {
           viroPods +=
             `\n\n  # ARCore SDK - Cloud Anchors, Geospatial, and Scene Semantics API\n` +
-            `  # Requires GARAPIKey in Info.plist and use_frameworks! with dynamic linkage\n` +
+            `  # ViroKit uses weak linking for these frameworks, making ARCore optional at runtime.\n` +
+            `  # ViroKit checks availability using NSClassFromString and gracefully degrades if not present.\n` +
             `  pod 'ARCore/CloudAnchors', '~> 1.51.0'`;
 
-          // Add Geospatial pod if geospatial is enabled
-          if (geospatialAnchorProvider === "arcore") {
+          // Add Geospatial pod if geospatial is enabled or explicit ARCore inclusion
+          if (geospatialAnchorProvider === "arcore" || includeARCore === true) {
             viroPods +=
               `\n  pod 'ARCore/Geospatial', '~> 1.51.0'`;
           }
@@ -72,12 +80,22 @@ const withViroPods = (config: ExpoConfig) => {
             `\n  pod 'ARCore/Semantics', '~> 1.51.0'`;
         }
 
-        // Add use_frameworks! for ARCore (must be before pods)
-        if (needsARCore) {
+        // Add use_frameworks! if configured
+        // User's iosLinkage setting is respected; if not set and ARCore is enabled, default to dynamic
+        const effectiveLinkage = iosLinkage || (shouldIncludeARCore ? "dynamic" : undefined);
+        if (effectiveLinkage) {
           // Insert use_frameworks! before the target block
-          // This is unconditional (not behind an if statement) so it will always apply
+          let linkageComment: string;
+          if (shouldIncludeARCore && effectiveLinkage === "static") {
+            // Warn user that static linkage may not work with ARCore
+            linkageComment = `# WARNING: ARCore SDK typically requires dynamic frameworks.\n# Static linkage is set but may cause build issues with ARCore pods.`;
+          } else if (shouldIncludeARCore) {
+            linkageComment = `# Framework linkage: ${effectiveLinkage} (ARCore requires dynamic frameworks)`;
+          } else {
+            linkageComment = `# Framework linkage configured via app.json (iosLinkage: "${effectiveLinkage}")`;
+          }
           data = insertLinesHelper(
-            `# ARCore SDK requires dynamic frameworks\nuse_frameworks! :linkage => :dynamic\n`,
+            `${linkageComment}\nuse_frameworks! :linkage => :${effectiveLinkage}\n`,
             "target '",
             data,
             -1
@@ -99,6 +117,49 @@ const withViroPods = (config: ExpoConfig) => {
           data,
           -1
         );
+
+        // Add ViroKit ARCore weak linking post_install hook if ARCore is enabled
+        if (shouldIncludeARCore) {
+          const weakLinkingHook = `    # ViroKit ARCore weak linking - makes ARCore frameworks optional at runtime
+    # Only applied when ARCore pods are installed to prevent linker errors
+    virokit_targets = installer.pods_project.targets.select { |target|
+      target.name.include?('ViroKit') ||
+      target.dependencies.any? { |dep| dep.name.include?('ViroKit') }
+    }
+
+    arcore_frameworks = ['ARCoreBase', 'ARCoreGARSession', 'ARCoreCloudAnchors',
+                         'ARCoreGeospatial', 'ARCoreSemantics', 'ARCoreTFShared',
+                         'FBLPromises', 'GoogleDataTransport', 'GoogleUtilities',
+                         'FirebaseABTesting', 'FirebaseCore', 'FirebaseCoreInternal',
+                         'FirebaseInstallations', 'FirebaseRemoteConfig',
+                         'FirebaseRemoteConfigInterop', 'FirebaseSharedSwift',
+                         'GTMSessionFetcher', 'nanopb']
+
+    virokit_targets.each do |target|
+      target.build_configurations.each do |config|
+        other_ldflags = config.build_settings['OTHER_LDFLAGS'] || ['$(inherited)']
+        other_ldflags = [other_ldflags] if other_ldflags.is_a?(String)
+
+        arcore_frameworks.each do |framework|
+          unless other_ldflags.include?('-weak_framework') && other_ldflags.include?(framework)
+            other_ldflags << '-weak_framework'
+            other_ldflags << framework
+          end
+        end
+
+        config.build_settings['OTHER_LDFLAGS'] = other_ldflags
+      end
+    end
+`;
+
+          // Insert weak linking hook inside post_install block (right after the block starts)
+          data = insertLinesHelper(
+            weakLinkingHook,
+            "post_install do |installer|",
+            data,
+            1
+          );
+        }
 
         fs.writeFile(`${root}/Podfile`, data, "utf-8", function (err) {
           if (err) console.log("Error writing Podfile");
@@ -145,7 +206,7 @@ const withExcludedSimulatorArchitectures = (config: ExpoConfig) => {
 
 export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
   config,
-  props
+  _props
 ) => {
   let savePhotosPermission = DEFAULTS.ios.savePhotosPermission;
   let photosPermission = DEFAULTS.ios.photosPermission;
@@ -155,6 +216,7 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
   let googleCloudApiKey: string | undefined;
   let cloudAnchorProvider: string | undefined;
   let geospatialAnchorProvider: string | undefined;
+  let includeARCore: boolean | undefined;
 
   if (Array.isArray(config.plugins)) {
     const pluginConfig = config?.plugins?.find(
@@ -175,6 +237,7 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
       googleCloudApiKey = pluginOptions.googleCloudApiKey;
       cloudAnchorProvider = pluginOptions.cloudAnchorProvider;
       geospatialAnchorProvider = pluginOptions.geospatialAnchorProvider;
+      includeARCore = pluginOptions.ios?.includeARCore;
     }
   }
 
@@ -192,13 +255,15 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
     microphoneUsagePermission;
 
   // Add Google Cloud API key for ARCore Cloud Anchors/Geospatial (iOS)
-  const needsARCore = cloudAnchorProvider === "arcore" || geospatialAnchorProvider === "arcore";
-  if (googleCloudApiKey && needsARCore) {
+  const shouldIncludeARCore = includeARCore === true ||
+    cloudAnchorProvider === "arcore" ||
+    geospatialAnchorProvider === "arcore";
+  if (googleCloudApiKey && shouldIncludeARCore) {
     config.ios.infoPlist.GARAPIKey = googleCloudApiKey;
   }
 
   // Add location permissions for Geospatial API
-  if (geospatialAnchorProvider === "arcore") {
+  if (geospatialAnchorProvider === "arcore" || includeARCore === true) {
     config.ios.infoPlist.NSLocationWhenInUseUsageDescription =
       config.ios.infoPlist.NSLocationWhenInUseUsageDescription || locationUsagePermission;
     config.ios.infoPlist.NSLocationAlwaysAndWhenInUseUsageDescription =

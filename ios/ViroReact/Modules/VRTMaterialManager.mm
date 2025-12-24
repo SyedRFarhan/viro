@@ -145,6 +145,14 @@ RCT_EXPORT_METHOD(deleteMaterials:(NSArray *)materials) {
     }
 }
 
+// Clear all materials and images to release memory
+- (void)clearAllMaterials {
+    [_materialDictionary removeAllObjects];
+    [_imageDictionary removeAllObjects];
+    [_materialChangeListeners removeAllObjects];
+    [_materials removeAllObjects];
+}
+
 - (dispatch_queue_t)methodQueue {
     return dispatch_get_main_queue();
 }
@@ -652,6 +660,15 @@ RCT_EXPORT_METHOD(deleteMaterials:(NSArray *)materials) {
 - (void)addMaterialChangedListener:(NSString *)name listener:(id<VRTMaterialChangedDelegate>)listener {
     WeakMaterialChangeListenerContainer *weakListener = [[WeakMaterialChangeListenerContainer alloc] initWithListener:listener];
     [_materialChangeListeners setObject:weakListener forKey:name];
+}
+
+- (void)removeMaterialChangedListener:(NSString *)name listener:(id<VRTMaterialChangedDelegate>)listener {
+    // Remove the listener for the given material name
+    // This prevents memory leaks by ensuring deallocated objects are not called back
+    WeakMaterialChangeListenerContainer *weakListener = [_materialChangeListeners objectForKey:name];
+    if (weakListener != nil && weakListener.listener == listener) {
+        [_materialChangeListeners removeObjectForKey:name];
+    }
 }
 
 // DEPRECATED: this is only in place for Beta. This needs to be

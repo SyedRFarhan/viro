@@ -43,10 +43,12 @@
 @property (nonatomic, copy) NSMutableDictionary<NSString *, NSDictionary *> *materials;
 
 - (void)reloadMaterials;
+- (void)clearAllMaterials;
 - (std::shared_ptr<VROMaterial>)getMaterialByName:(NSString *)name;
 - (NSDictionary *)getVideoTexturesForMaterialName:(NSString *)name;
 - (BOOL)isVideoMaterial:(NSString *)materialName;
 - (void)addMaterialChangedListener:(NSString *)name listener:(id<VRTMaterialChangedDelegate>)listener;
+- (void)removeMaterialChangedListener:(NSString *)name listener:(id<VRTMaterialChangedDelegate>)listener;
 - (void)loadVideoTextureForMaterial:(NSString *)materialName driver:(std::shared_ptr<VRODriver>)driver context:(VRORenderContext *)context;
 
 - (void)setTextureForMaterial:(std::shared_ptr<VROMaterial>)material

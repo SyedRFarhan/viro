@@ -218,4 +218,20 @@
     }
 }
 
+#pragma mark - Cleanup
+
+- (void)dealloc {
+    // Pause and cleanup video texture to prevent memory leaks
+    if (_videoTexture) {
+        _videoTexture->pause();
+        _videoTexture = nullptr;
+    }
+
+    // Clear delegate to prevent dangling pointer
+    _videoDelegate = nullptr;
+
+    // Clear surface reference
+    _surface = nullptr;
+}
+
 @end

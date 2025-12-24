@@ -613,3 +613,40 @@ export type ViroSemanticLabelFractionResult = {
   fraction: number;
   error?: string;
 };
+
+// ===========================================================================
+// Monocular Depth Estimation Types
+// ===========================================================================
+
+/**
+ * Result of checking monocular depth support.
+ */
+export type ViroMonocularDepthSupportResult = {
+  supported: boolean;
+  error?: string;
+};
+
+/**
+ * Result of checking if monocular depth model is downloaded.
+ */
+export type ViroMonocularDepthModelDownloadedResult = {
+  downloaded: boolean;
+  error?: string;
+};
+
+/**
+ * Result of downloading the monocular depth model.
+ */
+export type ViroMonocularDepthDownloadResult = {
+  success: boolean;
+  progress?: number;
+  error?: string;
+};
+
+/**
+ * Result of checking monocular depth preference.
+ */
+export type ViroMonocularDepthPreferenceResult = {
+  preferred: boolean;
+  error?: string;
+};

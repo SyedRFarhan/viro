@@ -1346,17 +1346,45 @@ const double kTransformDelegateDistanceFilter = 0.01;
 
 - (void)onCollided:(std::string) bodyKey
          collision:(VROPhysicsBody::VROCollision)collision {
-    
+
     NSMutableArray *coordinate = [NSMutableArray array];
     [coordinate insertObject:[NSNumber numberWithFloat:collision.collidedPoint.x] atIndex:0];
     [coordinate insertObject:[NSNumber numberWithFloat:collision.collidedPoint.y] atIndex:1];
     [coordinate insertObject:[NSNumber numberWithFloat:collision.collidedPoint.z] atIndex:2];
-    
+
     NSMutableArray *normal = [NSMutableArray array];
     [normal insertObject:[NSNumber numberWithFloat:collision.collidedNormal.x] atIndex:0];
     [normal insertObject:[NSNumber numberWithFloat:collision.collidedNormal.y] atIndex:1];
     [normal insertObject:[NSNumber numberWithFloat:collision.collidedNormal.z] atIndex:2];
-    
+
     self.onCollisionViro(@{@"viroTag": @(collision.collidedBodyTag.c_str()), @"collidedPoint":coordinate, @"collidedNormal":normal});
 }
+
+#pragma mark - Memory Management
+
+- (void)dealloc {
+    // Clear all delegates to prevent retain cycles
+    if (_node) {
+        _node->setEventDelegate(nullptr);
+        _node->setTransformDelegate(nullptr);
+
+        // Clear physics delegate from physics body if it exists
+        std::shared_ptr<VROPhysicsBody> body = _node->getPhysicsBody();
+        if (body) {
+            body->setPhysicsDelegate(nullptr);
+        }
+    }
+
+    // Clear C++ shared_ptr delegates
+    _eventDelegate = nullptr;
+    _transformDelegate = nullptr;
+    _physicsDelegate = nullptr;
+
+    // Clear node reference
+    _node = nullptr;
+
+    // Clear animation references
+    _nodeAnimation = nil;
+}
+
 @end

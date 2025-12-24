@@ -143,6 +143,11 @@ import {
   ViroGeospatialPoseResult,
   ViroVPSAvailabilityResult,
   ViroCreateGeospatialAnchorResult,
+  // Monocular Depth Estimation Types
+  ViroMonocularDepthSupportResult,
+  ViroMonocularDepthModelDownloadedResult,
+  ViroMonocularDepthDownloadResult,
+  ViroMonocularDepthPreferenceResult,
 } from "./components/Types/ViroEvents";
 import { ViroSurface } from "./components/ViroSurface";
 import { ViroSceneNavigator } from "./components/ViroSceneNavigator";
@@ -289,4 +294,9 @@ export {
   ViroGeospatialPoseResult,
   ViroVPSAvailabilityResult,
   ViroCreateGeospatialAnchorResult,
+  // Monocular Depth Estimation Types
+  ViroMonocularDepthSupportResult,
+  ViroMonocularDepthModelDownloadedResult,
+  ViroMonocularDepthDownloadResult,
+  ViroMonocularDepthPreferenceResult,
 };
