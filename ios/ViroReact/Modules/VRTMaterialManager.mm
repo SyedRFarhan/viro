@@ -145,6 +145,14 @@ RCT_EXPORT_METHOD(deleteMaterials:(NSArray *)materials) {
     }
 }
 
+// Clear all materials and images to release memory
+- (void)clearAllMaterials {
+    [_materialDictionary removeAllObjects];
+    [_imageDictionary removeAllObjects];
+    [_materialChangeListeners removeAllObjects];
+    [_materials removeAllObjects];
+}
+
 - (dispatch_queue_t)methodQueue {
     return dispatch_get_main_queue();
 }

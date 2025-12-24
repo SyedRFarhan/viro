@@ -244,7 +244,7 @@ static float const kDefaultHeight = 1;
     }
     float aspectRatio = _downloadedImageWidth / _downloadedImageHeight;
     float targetAspectRatio = _width / _height;
-    
+
     switch(_resizeMode) {
         case VROImageResizeMode::ScaleToFit:
             if (targetAspectRatio <= aspectRatio) { // target is taller than content
@@ -281,6 +281,26 @@ static float const kDefaultHeight = 1;
             _u1 = 1;
             _v1 = 1;
     }
+}
+
+#pragma mark - Memory Management
+
+- (void)dealloc {
+    // Cancel any pending image loads
+    if (_loader) {
+        [_loader cancel];
+        _loader = nil;
+    }
+
+    // Asset loader doesn't have a cancel method, but will be deallocated
+    // and has a weak delegate reference, so no cleanup needed
+    _assetLoader = nil;
+
+    // Clear texture reference to release GPU memory
+    _texture = nullptr;
+
+    // Clear placeholder
+    _placeholderSource = nil;
 }
 
 @end

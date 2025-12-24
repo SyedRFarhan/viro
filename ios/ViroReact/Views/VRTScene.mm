@@ -348,7 +348,7 @@ static NSArray<NSNumber *> *const kDefaultSize = @[@(0), @(0), @(0)];
     float r = sqrtf((pow(forwardVector.x, 2)) + (pow(forwardVector.y, 2))+ (pow(forwardVector.z, 2)));
     float theta = toDegrees(atan(forwardVector.z / forwardVector.x));
     float phi = toDegrees(acos(forwardVector.y / r));
-    
+
     /* Required offsets because of the Right Hand Rule used for our coordinate system for Theta.
      * Currently, in the XZ plane, the observed vector and theta angles in in the following format:
      *          (-z)
@@ -365,11 +365,34 @@ static NSArray<NSNumber *> *const kDefaultSize = @[@(0), @(0), @(0)];
     } else if (forwardVector.z < 0){
         theta = theta + 360;
     }
-    
+
     NSString *log = [NSString stringWithFormat:
                      @"\nCamera Polar Coordinates: Theta %f, Phi %f. \nCamera Forward Vector %f, %f, %f",
                      theta, phi, forwardVector.x, forwardVector.y, forwardVector.z];
     [VRTLog debug:log];
+}
+
+#pragma mark - Memory Management
+
+- (void)dealloc {
+    // Clear camera references
+    if (_camera && _vroView) {
+        [_vroView setPointOfView:nullptr];
+    }
+    _camera = nil;
+
+    // Clear scene controller delegate to prevent retain cycle
+    if (_sceneController && _delegate) {
+        _sceneController->setDelegate(nullptr);
+    }
+
+    // Clear C++ shared_ptr references
+    _delegate = nullptr;
+    _sceneController = nullptr;
+    _vroScene = nullptr;
+
+    // Clear view reference
+    _vroView = nil;
 }
 
 @end

@@ -59,18 +59,23 @@ const withViroPods = (config) => {
                     viroPods +=
                         `\n  pod 'ARCore/Semantics', '~> 1.51.0'`;
                 }
-                // For Expo apps, framework linkage should be configured via app.json expo.ios.useFrameworks
-                // or Podfile.properties.json, not injected directly into the Podfile.
-                // If ARCore is enabled and the user hasn't configured linkage, warn them.
+                // Add use_frameworks! if configured
+                // User's iosLinkage setting is respected; if not set and ARCore is enabled, default to dynamic
                 const effectiveLinkage = iosLinkage || (shouldIncludeARCore ? "dynamic" : undefined);
-                if (shouldIncludeARCore && !iosLinkage) {
-                    config_plugins_1.WarningAggregator.addWarningIOS("withViroIos", "ARCore SDK typically requires dynamic framework linking. " +
-                        "Please set 'iosLinkage': 'dynamic' in your Viro plugin config in app.json, " +
-                        "or configure expo.ios.useFrameworks in your app.json.");
-                }
-                else if (shouldIncludeARCore && effectiveLinkage === "static") {
-                    config_plugins_1.WarningAggregator.addWarningIOS("withViroIos", "ARCore SDK typically requires dynamic frameworks. " +
-                        "Static linkage is set but may cause build issues with ARCore pods.");
+                if (effectiveLinkage) {
+                    // Insert use_frameworks! before the target block
+                    let linkageComment;
+                    if (shouldIncludeARCore && effectiveLinkage === "static") {
+                        // Warn user that static linkage may not work with ARCore
+                        linkageComment = `# WARNING: ARCore SDK typically requires dynamic frameworks.\n# Static linkage is set but may cause build issues with ARCore pods.`;
+                    }
+                    else if (shouldIncludeARCore) {
+                        linkageComment = `# Framework linkage: ${effectiveLinkage} (ARCore requires dynamic frameworks)`;
+                    }
+                    else {
+                        linkageComment = `# Framework linkage configured via app.json (iosLinkage: "${effectiveLinkage}")`;
+                    }
+                    data = (0, insertLinesHelper_1.insertLinesHelper)(`${linkageComment}\nuse_frameworks! :linkage => :${effectiveLinkage}\n`, "target '", data, -1);
                 }
                 // Add New Architecture enforcement
                 viroPods +=

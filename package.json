@@ -47,7 +47,6 @@
     "scripts",
     "examples",
     "app.plugin.js",
-    "plugins",
     "android/react_viro",
     "android/viro_renderer",
     "android/gvr_common",

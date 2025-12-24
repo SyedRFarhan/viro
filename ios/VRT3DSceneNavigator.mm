@@ -197,9 +197,31 @@
     return;
   }
   _hasCleanedUp = YES;
-  
+
   [self parentDidDisappear];
-  
+
+  // Clear all scenes to release their resources
+  if (_currentScene) {
+    _currentScene = nil;
+  }
+
+  // Clear all scene views to release their scene controllers and delegates
+  if (_currentViews) {
+    for (VRTScene *scene in _currentViews) {
+      // Each scene's dealloc will handle clearing its delegates
+      [scene removeFromSuperview];
+    }
+    [_currentViews removeAllObjects];
+  }
+
+  // Clear all materials and textures from material manager
+  if (_bridge) {
+    VRTMaterialManager *materialManager = [_bridge materialManager];
+    if (materialManager) {
+      [materialManager clearAllMaterials];
+    }
+  }
+
   if (_vroView) {
     VROViewScene *viewScene = (VROViewScene *)_vroView;
     @try {

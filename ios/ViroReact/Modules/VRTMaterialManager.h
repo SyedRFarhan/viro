@@ -43,6 +43,7 @@
 @property (nonatomic, copy) NSMutableDictionary<NSString *, NSDictionary *> *materials;
 
 - (void)reloadMaterials;
+- (void)clearAllMaterials;
 - (std::shared_ptr<VROMaterial>)getMaterialByName:(NSString *)name;
 - (NSDictionary *)getVideoTexturesForMaterialName:(NSString *)name;
 - (BOOL)isVideoMaterial:(NSString *)materialName;
