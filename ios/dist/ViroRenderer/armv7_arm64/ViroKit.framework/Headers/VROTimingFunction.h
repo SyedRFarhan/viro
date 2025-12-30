@@ -30,26 +30,26 @@
 #include <memory>
 
 enum class VROTimingFunctionType {
-    Linear,
-    EaseIn,
-    EaseOut,
-    EaseInEaseOut,
-    Bounce,
-    PowerDecel,
-    Step  // Hold value until next keyframe (no interpolation)
+  Linear,
+  EaseIn,
+  EaseOut,
+  EaseInEaseOut,
+  Bounce,
+  PowerDecel,
+
+  Step, // Hold value until next keyframe (no interpolation)
+  Cubic // Cubic Spline interpolation
 };
 
 class VROTimingFunction {
-    
+
 public:
-    
-    static std::unique_ptr<VROTimingFunction> forType(VROTimingFunctionType type);
+  static std::unique_ptr<VROTimingFunction> forType(VROTimingFunctionType type);
 
-    VROTimingFunction() {}
-    virtual ~VROTimingFunction() {}
+  VROTimingFunction() {}
+  virtual ~VROTimingFunction() {}
 
-    virtual float getT(float t) = 0;
-    
+  virtual float getT(float t) = 0;
 };
 
 #endif /* VROTIMINGFUNCTION_H_ */

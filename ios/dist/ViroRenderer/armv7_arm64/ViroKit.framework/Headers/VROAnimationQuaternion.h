@@ -27,76 +27,79 @@
 #ifndef VROAnimationQuaternion_h
 #define VROAnimationQuaternion_h
 
-#include <stdio.h>
-#include "VROQuaternion.h"
-#include "VROAnimation.h"
 #include "VROAnimatable.h"
+#include "VROAnimation.h"
 #include "VROMath.h"
+#include "VROQuaternion.h"
+#include "VROVector4f.h"
+#include <stdio.h>
 
 class VROAnimationQuaternion : public VROAnimation {
-    
+
 public:
-    
-    VROAnimationQuaternion(std::function<void(VROAnimatable *const, VROQuaternion)> method,
-                           VROQuaternion start,
-                           VROQuaternion end) :
-        VROAnimation(),
-        _keyTimes({ 0, 1 }),
-        _keyValues({ start, end }),
-        _method(method)
-    {}
-    
-    VROAnimationQuaternion(std::function<void(VROAnimatable *const, VROQuaternion)> method,
-                           VROQuaternion start,
-                           VROQuaternion end,
-                           std::function<void(VROAnimatable *const)> finishCallback) :
-        VROAnimation(finishCallback),
-        _keyTimes({ 0, 1 }),
-        _keyValues({ start, end }),
-        _method(method)
-    {}
-    
-    VROAnimationQuaternion(std::function<void(VROAnimatable *const, VROQuaternion)> method,
-                           std::vector<float> keyTimes,
-                           std::vector<VROQuaternion> keyValues) :
-        VROAnimation(),
-        _keyTimes(keyTimes),
-        _keyValues(keyValues),
-        _method(method)
-    {}
-    
-    VROAnimationQuaternion(std::function<void(VROAnimatable *const, VROQuaternion)> method,
-                           std::vector<float> keyTimes,
-                           std::vector<VROQuaternion> keyValues,
-                           std::function<void(VROAnimatable *const)> finishCallback) :
-        VROAnimation(finishCallback),
-        _keyTimes(keyTimes),
-        _keyValues(keyValues),
-        _method(method)
-    {}
-    
-    void processAnimationFrame(float t) {
-        VROQuaternion value = VROMathInterpolateKeyFrameQuaternion(t, _keyTimes, _keyValues);
-        
-        std::shared_ptr<VROAnimatable> animatable = _animatable.lock();
-        if (animatable) {
-            _method(animatable.get(), value);
-        }
+  VROAnimationQuaternion(
+      std::function<void(VROAnimatable *const, VROQuaternion)> method,
+      VROQuaternion start, VROQuaternion end)
+      : VROAnimation(), _keyTimes({0, 1}), _keyValues({start, end}),
+        _method(method) {}
+
+  VROAnimationQuaternion(
+      std::function<void(VROAnimatable *const, VROQuaternion)> method,
+      VROQuaternion start, VROQuaternion end,
+      std::function<void(VROAnimatable *const)> finishCallback)
+      : VROAnimation(finishCallback), _keyTimes({0, 1}),
+        _keyValues({start, end}), _method(method) {}
+
+  VROAnimationQuaternion(
+      std::function<void(VROAnimatable *const, VROQuaternion)> method,
+      std::vector<float> keyTimes, std::vector<VROQuaternion> keyValues)
+      : VROAnimation(), _keyTimes(keyTimes), _keyValues(keyValues),
+        _method(method) {}
+
+  VROAnimationQuaternion(
+      std::function<void(VROAnimatable *const, VROQuaternion)> method,
+      std::vector<float> keyTimes, std::vector<VROQuaternion> keyValues,
+      std::function<void(VROAnimatable *const)> finishCallback)
+      : VROAnimation(finishCallback), _keyTimes(keyTimes),
+        _keyValues(keyValues), _useCubic(false), _method(method) {}
+
+  VROAnimationQuaternion(
+      std::function<void(VROAnimatable *const, VROQuaternion)> method,
+      std::vector<float> keyTimes, std::vector<VROQuaternion> keyValues,
+      std::vector<VROVector4f> inTangents, std::vector<VROVector4f> outTangents)
+      : VROAnimation(), _keyTimes(keyTimes), _keyValues(keyValues),
+        _inTangents(inTangents), _outTangents(outTangents), _useCubic(true),
+        _method(method) {}
+
+  void processAnimationFrame(float t) {
+    VROQuaternion value;
+    if (_useCubic) {
+      value = VROMathInterpolateKeyFrameQuaternionCubic(
+          t, _keyTimes, _keyValues, _inTangents, _outTangents);
+    } else {
+      value = VROMathInterpolateKeyFrameQuaternion(t, _keyTimes, _keyValues);
     }
-    
-    void finish() {
-        std::shared_ptr<VROAnimatable> animatable = _animatable.lock();
-        if (animatable) {
-            _method(animatable.get(), _keyValues.back());
-        }
+
+    std::shared_ptr<VROAnimatable> animatable = _animatable.lock();
+    if (animatable) {
+      _method(animatable.get(), value);
     }
-    
+  }
+
+  void finish() {
+    std::shared_ptr<VROAnimatable> animatable = _animatable.lock();
+    if (animatable) {
+      _method(animatable.get(), _keyValues.back());
+    }
+  }
+
 private:
-    
-    std::vector<float> _keyTimes;
-    std::vector<VROQuaternion> _keyValues;
-    std::function<void(VROAnimatable *const, VROQuaternion)> _method;
-    
+  std::vector<float> _keyTimes;
+  std::vector<VROQuaternion> _keyValues;
+  std::vector<VROVector4f> _inTangents;
+  std::vector<VROVector4f> _outTangents;
+  bool _useCubic = false;
+  std::function<void(VROAnimatable *const, VROQuaternion)> _method;
 };
 
 #endif /* VROAnimationQuaternion_h */

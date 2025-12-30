@@ -27,76 +27,78 @@
 #ifndef VROAnimationVector3f_h
 #define VROAnimationVector3f_h
 
-#include <stdio.h>
-#include "VROVector3f.h"
-#include "VROAnimation.h"
 #include "VROAnimatable.h"
+#include "VROAnimation.h"
 #include "VROMath.h"
+#include "VROVector3f.h"
+#include <stdio.h>
 
 class VROAnimationVector3f : public VROAnimation {
-    
+
 public:
-    
-    VROAnimationVector3f(std::function<void(VROAnimatable *const, VROVector3f)> method,
-                         VROVector3f start,
-                         VROVector3f end) :
-        VROAnimation(),
-        _keyTimes({ 0, 1 }),
-        _keyValues({ start, end }),
-        _method(method)
-    {}
-    
-    VROAnimationVector3f(std::function<void(VROAnimatable *const, VROVector3f)> method,
-                         VROVector3f start,
-                         VROVector3f end,
-                         std::function<void(VROAnimatable *const)> finishCallback) :
-        VROAnimation(finishCallback),
-        _keyTimes({ 0, 1 }),
-        _keyValues({ start, end }),
-        _method(method)
-    {}
-    
-    VROAnimationVector3f(std::function<void(VROAnimatable *const, VROVector3f)> method,
-                         std::vector<float> keyTimes,
-                         std::vector<VROVector3f> keyValues) :
-        VROAnimation(),
-        _keyTimes(keyTimes),
-        _keyValues(keyValues),
-        _method(method)
-    {}
-    
-    VROAnimationVector3f(std::function<void(VROAnimatable *const, VROVector3f)> method,
-                         std::vector<float> keyTimes,
-                         std::vector<VROVector3f> keyValues,
-                         std::function<void(VROAnimatable *const)> finishCallback) :
-        VROAnimation(finishCallback),
-        _keyTimes(keyTimes),
-        _keyValues(keyValues),
-        _method(method)
-    {}
-    
-    void processAnimationFrame(float t) {
-        VROVector3f value = VROMathInterpolateKeyFrameVector3f(t, _keyTimes, _keyValues);
-        
-        std::shared_ptr<VROAnimatable> animatable = _animatable.lock();
-        if (animatable) {
-            _method(animatable.get(), value);
-        }
+  VROAnimationVector3f(
+      std::function<void(VROAnimatable *const, VROVector3f)> method,
+      VROVector3f start, VROVector3f end)
+      : VROAnimation(), _keyTimes({0, 1}), _keyValues({start, end}),
+        _method(method) {}
+
+  VROAnimationVector3f(
+      std::function<void(VROAnimatable *const, VROVector3f)> method,
+      VROVector3f start, VROVector3f end,
+      std::function<void(VROAnimatable *const)> finishCallback)
+      : VROAnimation(finishCallback), _keyTimes({0, 1}),
+        _keyValues({start, end}), _method(method) {}
+
+  VROAnimationVector3f(
+      std::function<void(VROAnimatable *const, VROVector3f)> method,
+      std::vector<float> keyTimes, std::vector<VROVector3f> keyValues)
+      : VROAnimation(), _keyTimes(keyTimes), _keyValues(keyValues),
+        _method(method) {}
+
+  VROAnimationVector3f(
+      std::function<void(VROAnimatable *const, VROVector3f)> method,
+      std::vector<float> keyTimes, std::vector<VROVector3f> keyValues,
+      std::function<void(VROAnimatable *const)> finishCallback)
+      : VROAnimation(finishCallback), _keyTimes(keyTimes),
+        _keyValues(keyValues), _useCubic(false), _method(method) {}
+
+  VROAnimationVector3f(
+      std::function<void(VROAnimatable *const, VROVector3f)> method,
+      std::vector<float> keyTimes, std::vector<VROVector3f> keyValues,
+      std::vector<VROVector3f> inTangents, std::vector<VROVector3f> outTangents)
+      : VROAnimation(), _keyTimes(keyTimes), _keyValues(keyValues),
+        _inTangents(inTangents), _outTangents(outTangents), _useCubic(true),
+        _method(method) {}
+
+  void processAnimationFrame(float t) {
+    VROVector3f value;
+    if (_useCubic) {
+      value = VROMathInterpolateKeyFrameVector3fCubic(
+          t, _keyTimes, _keyValues, _inTangents, _outTangents);
+    } else {
+      value = VROMathInterpolateKeyFrameVector3f(t, _keyTimes, _keyValues);
     }
-    
-    void finish() {
-        std::shared_ptr<VROAnimatable> animatable = _animatable.lock();
-        if (animatable) {
-            _method(animatable.get(), _keyValues.back());
-        }
+
+    std::shared_ptr<VROAnimatable> animatable = _animatable.lock();
+    if (animatable) {
+      _method(animatable.get(), value);
     }
-    
+  }
+
+  void finish() {
+    std::shared_ptr<VROAnimatable> animatable = _animatable.lock();
+    if (animatable) {
+      _method(animatable.get(), _keyValues.back());
+    }
+  }
+
 private:
-    
-    std::vector<float> _keyTimes;
-    std::vector<VROVector3f> _keyValues;
-    std::function<void(VROAnimatable *const, VROVector3f)> _method;
-    
+  std::vector<float> _keyTimes;
+  std::vector<VROVector3f> _keyValues;
+  std::vector<VROVector3f> _inTangents;
+  std::vector<VROVector3f> _outTangents;
+  bool _useCubic = false;
+  std::function<void(VROAnimatable *const, VROVector3f)> _method;
 };
 
 #endif /* VROAnimationVector3f_h */

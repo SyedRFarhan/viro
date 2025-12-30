@@ -47,6 +47,11 @@ uniform mat4 model_matrix;
 uniform mat4 view_matrix;
 uniform mat4 projection_matrix;
 
+// Texture Transforms
+uniform vec2 material_diffuse_texture_offset;
+uniform float material_diffuse_texture_rotation;
+uniform vec2 material_diffuse_texture_scale;
+
 #pragma geometry_modifier_uniforms
 #pragma vertex_modifier_uniforms
 
@@ -66,7 +71,19 @@ void main() {
 
 #pragma geometry_modifier_body
 
-    v_texcoord = _geometry.texcoord;
+#pragma geometry_modifier_body
+    
+    // Apply Texture Transforms
+    vec2 texcoord = _geometry.texcoord;
+    texcoord = texcoord * material_diffuse_texture_scale;
+    if (material_diffuse_texture_rotation != 0.0) {
+        float c = cos(material_diffuse_texture_rotation);
+        float s = sin(material_diffuse_texture_rotation);
+        mat2 rot = mat2(c, s, -s, c);
+        texcoord = rot * texcoord;
+    }
+    texcoord = texcoord + material_diffuse_texture_offset;
+    v_texcoord = texcoord;
     v_surface_position = (_transforms.model_matrix * vec4(_geometry.position, 1.0)).xyz;
 
     vec3 n = normalize((normal_matrix * vec4(_geometry.normal, 0.0)).xyz);

@@ -27,41 +27,47 @@
 #ifndef VROMath_h
 #define VROMath_h
 
-#include <stdio.h>
-#include <vector>
-#include <cstdlib>
-#include "VROVector3f.h"
-#include "VROVector4f.h"
-#include "VROMatrix4f.h"
-#include "VROQuaternion.h"
 #include "VROBoundingBox.h"
 #include "VRODefines.h"
+#include "VROMatrix4f.h"
+#include "VROQuaternion.h"
+#include "VROVector3f.h"
+#include "VROVector4f.h"
+#include <cstdlib>
+#include <stdio.h>
+#include <vector>
 
 static float kRoundingErrorFloat = 0.00001;
 static float kEpsilon = 0.00000001;
 
 VROMatrix4f matrix_from_scale(float sx, float sy, float sz);
 VROMatrix4f matrix_from_translation(float x, float y, float z);
-VROMatrix4f matrix_from_perspective_fov_aspectLH(const float fovY, const float aspect,
-                                                     const float nearZ, const float farZ);
+VROMatrix4f matrix_from_perspective_fov_aspectLH(const float fovY,
+                                                 const float aspect,
+                                                 const float nearZ,
+                                                 const float farZ);
 
 /*
  Compute a look-at matrix for a right handed coordinate system.
  */
-VROMatrix4f VROMathComputeLookAtMatrix(VROVector3f eye, VROVector3f forward, VROVector3f up);
+VROMatrix4f VROMathComputeLookAtMatrix(VROVector3f eye, VROVector3f forward,
+                                       VROVector3f up);
 
 /*
- Compute a frustum or perspective projection for a right handed coordinate system.
+ Compute a frustum or perspective projection for a right handed coordinate
+ system.
  */
-VROMatrix4f VROMathComputeFrustum(float left, float right, float bottom, float top,
-                                  float znear, float zfar);
-VROMatrix4f VROMathComputePerspectiveProjection(float fovyInDegrees, float aspectRatio,
-                                                float znear, float zfar);
+VROMatrix4f VROMathComputeFrustum(float left, float right, float bottom,
+                                  float top, float znear, float zfar);
+VROMatrix4f VROMathComputePerspectiveProjection(float fovyInDegrees,
+                                                float aspectRatio, float znear,
+                                                float zfar);
 
 /*
  Compute an orthographic projection for a right handed coordinate system.
  */
-VROMatrix4f VROMathComputeOrthographicProjection(float left, float right, float bottom, float top,
+VROMatrix4f VROMathComputeOrthographicProjection(float left, float right,
+                                                 float bottom, float top,
                                                  float near, float far);
 
 double degrees_to_radians(double degrees);
@@ -74,9 +80,12 @@ VROVector3f random(VROVector3f min, VROVector3f max);
 /*
  4x4 column-major matrix operations.
  */
-void VROMathMultVectorByMatrix(const float *matrix, const float *input, float *output);
-void VROMathMultVectorByMatrix_d(const double *matrix, const double *input, double *output);
-void VROMathMultVectorByMatrix_fd(const float *matrix, const double *input, double *output);
+void VROMathMultVectorByMatrix(const float *matrix, const float *input,
+                               float *output);
+void VROMathMultVectorByMatrix_d(const double *matrix, const double *input,
+                                 double *output);
+void VROMathMultVectorByMatrix_fd(const float *matrix, const double *input,
+                                  double *output);
 
 void VROMathMultMatrices(const float *a, const float *b, float *r);
 void VROMathMultMatrices_d(const double *a, const double *b, double *r);
@@ -105,14 +114,38 @@ void VROMathMultVX(const float *vx, const float *m0, float *d);
 /*
  Interpolation functions.
  */
-float  VROMathInterpolate(float input, float inMin, float inMax, float outMin, float outMax);
-double VROMathInterpolate_d(double input, double inMin, double inMax, double outMin, double outMax);
-float  VROMathInterpolateKeyFrame(float input, const std::vector<float> &inputs, const std::vector<float> &outputs);
-float  VROMathInterpolateKeyFrameIndex(float input, const std::vector<float> &inputs);
-VROVector3f   VROMathInterpolateKeyFrameVector3f(float input, const std::vector<float> &inputs, const std::vector<VROVector3f> &outputs);
-VROQuaternion VROMathInterpolateKeyFrameQuaternion(float input, const std::vector<float> &inputs, const std::vector<VROQuaternion> &outputs);
-VROMatrix4f   VROMathInterpolateKeyFrameMatrix4f(float input, const std::vector<float> &inputs, const std::vector<VROMatrix4f> &outputs);
-void   VROMathInterpolatePoint(const float *bottom, const float *top, float amount, int size, float *result);
+float VROMathInterpolate(float input, float inMin, float inMax, float outMin,
+                         float outMax);
+double VROMathInterpolate_d(double input, double inMin, double inMax,
+                            double outMin, double outMax);
+float VROMathInterpolateKeyFrame(float input, const std::vector<float> &inputs,
+                                 const std::vector<float> &outputs);
+float VROMathInterpolateKeyFrameIndex(float input,
+                                      const std::vector<float> &inputs);
+VROVector3f
+VROMathInterpolateKeyFrameVector3f(float input,
+                                   const std::vector<float> &inputs,
+                                   const std::vector<VROVector3f> &outputs);
+VROVector3f VROMathInterpolateKeyFrameVector3fCubic(
+    float input, const std::vector<float> &inputs,
+    const std::vector<VROVector3f> &outputs,
+    const std::vector<VROVector3f> &inTangents,
+    const std::vector<VROVector3f> &outTangents);
+VROQuaternion
+VROMathInterpolateKeyFrameQuaternion(float input,
+                                     const std::vector<float> &inputs,
+                                     const std::vector<VROQuaternion> &outputs);
+VROQuaternion VROMathInterpolateKeyFrameQuaternionCubic(
+    float input, const std::vector<float> &inputs,
+    const std::vector<VROQuaternion> &outputs,
+    const std::vector<VROVector4f> &inTangents,
+    const std::vector<VROVector4f> &outTangents);
+VROMatrix4f
+VROMathInterpolateKeyFrameMatrix4f(float input,
+                                   const std::vector<float> &inputs,
+                                   const std::vector<VROMatrix4f> &outputs);
+void VROMathInterpolatePoint(const float *bottom, const float *top,
+                             float amount, int size, float *result);
 
 /*
  * Clamps input between min and max
@@ -134,11 +167,14 @@ float toDegrees(float radians);
 /*
  Rotation.
  */
-void VROMathRotateAroundX(const VROVector3f &vector, float radians, VROVector3f *result);
-void VROMathRotateAroundZ(const VROVector3f &vector, float radians, VROVector3f *result);
+void VROMathRotateAroundX(const VROVector3f &vector, float radians,
+                          VROVector3f *result);
+void VROMathRotateAroundZ(const VROVector3f &vector, float radians,
+                          VROVector3f *result);
 
 /*
- Normalize the given angle between [0,2PI] or [-PI,PI], and find the distance between two angles.
+ Normalize the given angle between [0,2PI] or [-PI,PI], and find the distance
+ between two angles.
  */
 float VROMathNormalizeAngle2PI(float rad);
 float VROMathNormalizeAnglePI(float rad);
@@ -165,35 +201,36 @@ float VROMathFastSquareRoot(float x);
  range reduction step, and may perform slightly faster, but is
  unnessisary.
  */
-void  VROMathFastSinCos(float x, float r[2]);
+void VROMathFastSinCos(float x, float r[2]);
 
-void  VROMathFastSinCos2x(const float *angles, float * r);
+void VROMathFastSinCos2x(const float *angles, float *r);
 
 /**
- Determine whether point (x,y) is within polygon (x1,y1 to x2,y2 to x3,y3 to x4,y4 to x1,y1)
- Point on edge is considered within.
- Only for use with convex polygons.
+ Determine whether point (x,y) is within polygon (x1,y1 to x2,y2 to x3,y3 to
+ x4,y4 to x1,y1) Point on edge is considered within. Only for use with convex
+ polygons.
  */
-bool VROMathPointIsInPolygon(float x, float y, float x1, float y1,
-                             float x2, float y2, float x3, float y3,
-                             float x4, float y4);
+bool VROMathPointIsInPolygon(float x, float y, float x1, float y1, float x2,
+                             float y2, float x3, float y3, float x4, float y4);
 
 /*
  Get the point on segment AB that is closest to p.
  */
-VROVector3f VROMathGetClosestPointOnSegment(const VROVector3f A, const VROVector3f B, const VROVector3f p);
+VROVector3f VROMathGetClosestPointOnSegment(const VROVector3f A,
+                                            const VROVector3f B,
+                                            const VROVector3f p);
 
 /* return the power of 2 that is equal or greater to the given value */
-static inline uint32_t
-power2_ceil(const uint32_t v) {
-    return  (v < 2) ? v + 1 : 1 << (sizeof(uint32_t) * 8 - __builtin_clz(v - 1));
+static inline uint32_t power2_ceil(const uint32_t v) {
+  return (v < 2) ? v + 1 : 1 << (sizeof(uint32_t) * 8 - __builtin_clz(v - 1));
 }
 
 float VROMathReciprocal(float value);
 float VROMathReciprocalSquareRoot(float value);
 
 bool VROMathIsZero(const float a, const float tolerance = kRoundingErrorFloat);
-bool VROMathEquals(const float a, const float b, const float tolerance = kRoundingErrorFloat);
+bool VROMathEquals(const float a, const float b,
+                   const float tolerance = kRoundingErrorFloat);
 
 float VROFloat16ToFloat(short fltInt16);
 short VROFloatToFloat16(float value);

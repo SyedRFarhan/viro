@@ -32,6 +32,7 @@
 #include <string>
 #include <functional>
 #include "VRODefines.h"
+#include "VROVector2f.h"
 
 // Constants for ETC2 ripped from NDKr9 headers
 #define GL_COMPRESSED_RGB8_ETC2                          0x9274
@@ -106,6 +107,17 @@ enum class VROFilterMode {
     None,
     Nearest,
     Linear
+};
+
+struct VROTextureTransform {
+    VROVector2f offset;
+    float rotation;
+    VROVector2f scale;
+    
+    VROTextureTransform() :
+        offset(0, 0),
+        rotation(0),
+        scale(1, 1) {}
 };
 
 class VROTexture : public std::enable_shared_from_this<VROTexture> {
@@ -264,6 +276,16 @@ public:
     }
 
     /*
+     Access/set the texture coordinate transformation.
+     */
+    void setTextureTransform(VROTextureTransform transform) {
+        _textureTransform = transform;
+    }
+    VROTextureTransform getTextureTransform() const {
+        return _textureTransform;
+    }
+
+    /*
      Width and height (available for any 2D texture created through an image).
      */
     int getWidth() const {
@@ -347,6 +369,7 @@ private:
      */
     VROWrapMode _wrapS, _wrapT;
     VROFilterMode _minificationFilter, _magnificationFilter, _mipFilter;
+    VROTextureTransform _textureTransform;
     
     /*
      Callbacks invoked when the texture is hydrated.

@@ -28,7 +28,7 @@
 #define VRODefines_h
 
 #ifdef __OBJC__
-#import "TargetConditionals.h" 
+#import "TargetConditionals.h"
 #if TARGET_IPHONE_SIMULATOR || TARGET_OS_IPHONE
 #define VRO_PLATFORM_ANDROID 0
 #define VRO_PLATFORM_IOS 1
@@ -49,7 +49,7 @@
 
 #define VRO_C_INCLUDE "VROWasmCAPI.h"
 
-#else  // !WASM_PLATFORM
+#else // !WASM_PLATFORM
 #define VRO_PLATFORM_ANDROID 1
 #define VRO_PLATFORM_IOS 0
 #define VRO_PLATFORM_WASM 0
