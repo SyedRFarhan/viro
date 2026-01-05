@@ -68,6 +68,9 @@
 - (VROVector3f)unprojectPoint:(VROVector3f)point;
 - (VROVector3f)projectPoint:(VROVector3f)point;
 
+// Native ARSession access for advanced features like ARWorldMap
+- (ARSession *)getNativeARSession;
+
 - (void)startVideoRecording:(NSString *)fileName
            saveToCameraRoll:(BOOL)saveToCameraRoll
                     onError:(RCTResponseSenderBlock)onError;

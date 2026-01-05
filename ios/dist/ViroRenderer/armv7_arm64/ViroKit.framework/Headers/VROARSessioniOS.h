@@ -159,6 +159,8 @@ public:
      Internal methods.
      */
     void setFrame(ARFrame *frame);
+    std::shared_ptr<VROARSessioniOS> getNativeARSessioniOS() { return shared_from_this(); }
+    ARSession *getNativeARSession() { return _session; }
     std::shared_ptr<VROARAnchor> getAnchorForNative(ARAnchor *anchor);
     void updateAnchor(std::shared_ptr<VROARAnchor> anchor);
 

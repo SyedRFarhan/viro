@@ -1012,7 +1012,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				8A2161D02036558500D60008 /* ViroKit.framework in Frameworks */,
-				23F5DDD5684FE6B174061322 /* libPods-ViroReact.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

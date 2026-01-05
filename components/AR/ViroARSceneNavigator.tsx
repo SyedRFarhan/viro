@@ -639,6 +639,29 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
    * @param resetTracking - determines if the tracking should be reset.
    * @param removeAnchors - determines if the existing anchors should be removed too.
    */
+  /**
+   * [iOS Only]
+   *
+   * Checks if the native ARSession is available and accessible.
+   * Useful for verifying if the AR session has been successfully initialized
+   * and exposed to the React Native bridge.
+   *
+   * @returns Promise resolving to a boolean indicating availability
+   */
+  _isNativeARSessionAvailable = async (): Promise<boolean> => {
+    return await ViroARSceneNavigatorModule.isNativeARSessionAvailable(
+      findNodeHandle(this)
+    );
+  };
+
+  /**
+   * [iOS Only]
+   *
+   * Resets the tracking of the AR session.
+   *
+   * @param resetTracking - determines if the tracking should be reset.
+   * @param removeAnchors - determines if the existing anchors should be removed too.
+   */
   _resetARSession = (resetTracking: any, removeAnchors: any) => {
     ViroARSceneNavigatorModule.resetARSession(
       findNodeHandle(this),
@@ -1063,6 +1086,7 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     startVideoRecording: this._startVideoRecording,
     stopVideoRecording: this._stopVideoRecording,
     takeScreenshot: this._takeScreenshot,
+    isNativeARSessionAvailable: this._isNativeARSessionAvailable,
     resetARSession: this._resetARSession,
     setWorldOrigin: this._setWorldOrigin,
     project: this._project,
@@ -1104,6 +1128,7 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     startVideoRecording: this._startVideoRecording,
     stopVideoRecording: this._stopVideoRecording,
     takeScreenshot: this._takeScreenshot,
+    isNativeARSessionAvailable: this._isNativeARSessionAvailable,
     resetARSession: this._resetARSession,
     setWorldOrigin: this._setWorldOrigin,
     project: this._project,

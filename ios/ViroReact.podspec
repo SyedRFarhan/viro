@@ -14,25 +14,28 @@ Pod::Spec.new do |s|
   s.platform            = :ios, '12.0'
   s.ios.deployment_target = '12.0'
   
-  # Base source files (always included)
-  source_files_array = ['ViroReact/**/*.{h,m,mm}']
-  header_files_array = ['ViroReact/**/*.h']
-  
-  # Include dist files if they exist (for release builds)
-  if File.exist?(File.join(__dir__, 'dist/include'))
-    source_files_array << 'dist/include/**/*.{h,m,mm}'
-    header_files_array << 'dist/include/*.h'
+  # Check for prebuilt library
+  lib_path = 'dist/lib/libViroReact.a'
+  has_prebuilt_lib = File.exist?(File.join(__dir__, lib_path))
+
+  if has_prebuilt_lib
+    # If prebuilt lib exists, only include headers in source_files and vendor the lib
+    s.source_files = ['ViroReact/**/*.h', 'dist/include/**/*.h']
+    s.public_header_files = ['ViroReact/**/*.h', 'dist/include/**/*.h']
+    s.vendored_libraries = lib_path
+  else
+    # Otherwise fallback to building from source
+    source_files_array = ['ViroReact/**/*.{h,m,mm}']
+    if File.exist?(File.join(__dir__, 'dist/include'))
+      source_files_array << 'dist/include/**/*.{h,m,mm}'
+    end
+    s.source_files = source_files_array
+    s.public_header_files = ['ViroReact/**/*.h', 'dist/include/**/*.h']
   end
-  
-  s.source_files        = source_files_array
-  s.public_header_files = header_files_array
-  
-  if File.exist?(File.join(__dir__, 'dist/lib/libViroReact.a'))
-    s.vendored_libraries = 'dist/lib/libViroReact.a'
-  end
-  
+
   # React Native dependencies
   s.dependency 'React-Core'
+  s.dependency 'ViroKit'
   
   # Fabric dependencies
   s.dependency 'React-RCTFabric'

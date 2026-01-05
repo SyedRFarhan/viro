@@ -30,6 +30,8 @@
 #import "VROARSession.h"
 #import "VROARHitTestResult.h"
 
+@class ARSession;
+
 class VROARSessionDelegate;
 class VRORendererConfiguration;
 class VROViewport;
@@ -103,6 +105,11 @@ enum class VROCameraPosition;
  Returns the ARSession
  */
 - (std::shared_ptr<VROARSession>)getARSession;
+
+/*
+ Returns the native ARKit ARSession.
+ */
+- (ARSession *)getNativeARSession;
 
 /*
  Returns true if AR is supported by this device.

@@ -499,6 +499,16 @@
     return projectedPoint;
 }
 
+#pragma mark - Native ARSession Access
+
+- (ARSession *)getNativeARSession {
+    if (!_vroView) {
+        return nil;
+    }
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    return [viewAR getNativeARSession];
+}
+
 #pragma mark - Cloud Anchor Methods
 
 - (void)setCloudAnchorProvider:(NSString *)cloudAnchorProvider {

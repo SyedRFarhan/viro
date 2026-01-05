@@ -148,6 +148,22 @@ RCT_EXPORT_METHOD(takeScreenshot:(nonnull NSNumber *)reactTag
     }];
 }
 
+RCT_EXPORT_METHOD(isNativeARSessionAvailable:(nonnull NSNumber *)reactTag
+                                      resolve:(RCTPromiseResolveBlock)resolve
+                                       reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+            resolve(@{@"available": @NO, @"reason": @"Invalid view type"});
+            return;
+        }
+        VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+        ARSession *session = [component getNativeARSession];
+        resolve(@{@"available": @(session != nil)});
+    }];
+}
+
 RCT_EXPORT_METHOD(resetARSession:(nonnull NSNumber *)reactTag
                   resetTracking:(BOOL)resetTracking
                   removeAnchors:(BOOL)removeAnchors) {
