@@ -26,6 +26,7 @@
 //
 
 #import <ViroKit/ViroKit.h>
+#import <ARKit/ARKit.h>
 #import "VRTARSceneNavigator.h"
 #import <React/RCTAssert.h>
 #import <React/RCTLog.h>
@@ -58,6 +59,11 @@
     BOOL _pendingWorldMeshEnabled;
     BOOL _needsWorldMeshApply;
     VROWorldMeshConfig _worldMeshConfigCpp;
+
+    // World map persistence
+    NSTimer *_worldMapAutoSaveTimer;
+    BOOL _worldMapLoadAttempted;
+    BOOL _isSavingWorldMap;
 }
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge {
@@ -83,6 +89,17 @@
         _bloomEnabled = YES;
         _shadowsEnabled = YES;
         _multisamplingEnabled = NO;
+
+        // World map persistence defaults
+        _worldMapAutoSaveInterval = 30; // seconds
+        _worldMapLoadAttempted = NO;
+        _isSavingWorldMap = NO;
+
+        // Register for app lifecycle notifications
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(appWillResignActive:)
+                                                     name:UIApplicationWillResignActiveNotification
+                                                   object:nil];
     }
     return self;
 }
@@ -200,6 +217,14 @@
             [self applyGeospatialModeEnabled];
             _needsGeospatialModeApply = NO;
         }
+
+        // Load world map if sessionId was set before view was ready
+        if (_sessionId && !_worldMapLoadAttempted) {
+            [self loadWorldMapFromFile];
+        }
+
+        // Start auto-save timer if sessionId is set
+        [self restartAutoSaveTimerIfNeeded];
     }
 }
 
@@ -320,6 +345,14 @@
         return;
     }
     _hasCleanedUp = YES;
+
+    // Stop world map auto-save timer
+    [self stopAutoSaveTimer];
+
+    // Remove notification observers
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                    name:UIApplicationWillResignActiveNotification
+                                                  object:nil];
 
     [self parentDidDisappear];
 
@@ -1377,6 +1410,258 @@
 
     VROViewAR *viewAR = (VROViewAR *) _vroView;
     return [viewAR isPreferMonocularDepth];
+}
+
+#pragma mark - World Map Persistence Methods
+
+- (void)setSessionId:(NSString *)sessionId {
+    _sessionId = [sessionId copy];
+
+    // Attempt to load world map when session is ready
+    if (_sessionId && _vroView && !_worldMapLoadAttempted) {
+        [self loadWorldMapFromFile];
+    }
+
+    // Start auto-save timer if sessionId is set and interval > 0
+    [self restartAutoSaveTimerIfNeeded];
+}
+
+- (void)setWorldMapAutoSaveInterval:(NSInteger)worldMapAutoSaveInterval {
+    _worldMapAutoSaveInterval = worldMapAutoSaveInterval;
+    [self restartAutoSaveTimerIfNeeded];
+}
+
+- (NSString *)worldMapFilePath {
+    if (!_sessionId) {
+        return nil;
+    }
+
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    NSString *cachesDirectory = [paths firstObject];
+    NSString *worldMapsDirectory = [cachesDirectory stringByAppendingPathComponent:@"ViroARWorldMaps"];
+
+    // Create directory if it doesn't exist
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:worldMapsDirectory]) {
+        NSError *error;
+        [fileManager createDirectoryAtPath:worldMapsDirectory
+               withIntermediateDirectories:YES
+                                attributes:nil
+                                     error:&error];
+        if (error) {
+            RCTLogError(@"[ViroAR] Failed to create world maps directory: %@", error.localizedDescription);
+            return nil;
+        }
+    }
+
+    NSString *sanitizedSessionId = [_sessionId stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
+    return [worldMapsDirectory stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"%@.arworldmap", sanitizedSessionId]];
+}
+
+- (void)sendPersistenceStatus:(NSString *)status error:(NSString *)error {
+    if (_onWorldMapPersistenceStatus && _sessionId) {
+        NSMutableDictionary *event = [NSMutableDictionary dictionaryWithDictionary:@{
+            @"status": status,
+            @"sessionId": _sessionId
+        }];
+        if (error) {
+            event[@"error"] = error;
+        }
+        _onWorldMapPersistenceStatus(event);
+    }
+}
+
+- (void)restartAutoSaveTimerIfNeeded {
+    // Stop existing timer
+    [_worldMapAutoSaveTimer invalidate];
+    _worldMapAutoSaveTimer = nil;
+
+    // Start new timer if conditions are met
+    if (_sessionId && _worldMapAutoSaveInterval > 0 && _vroView) {
+        _worldMapAutoSaveTimer = [NSTimer scheduledTimerWithTimeInterval:_worldMapAutoSaveInterval
+                                                                  target:self
+                                                                selector:@selector(autoSaveTimerFired:)
+                                                                userInfo:nil
+                                                                 repeats:YES];
+        RCTLogInfo(@"[ViroAR] World map auto-save timer started with interval: %ld seconds", (long)_worldMapAutoSaveInterval);
+    }
+}
+
+- (void)autoSaveTimerFired:(NSTimer *)timer {
+    if (_sessionId && !_isSavingWorldMap) {
+        [self saveWorldMapToFileWithCompletion:nil silent:YES];
+    }
+}
+
+- (void)appWillResignActive:(NSNotification *)notification {
+    // Save world map when app goes to background
+    if (_sessionId && !_isSavingWorldMap) {
+        RCTLogInfo(@"[ViroAR] App resigning active, saving world map for session: %@", _sessionId);
+        [self saveWorldMapToFileWithCompletion:nil silent:NO];
+    }
+}
+
+- (void)loadWorldMapFromFile {
+    if (!_sessionId || _worldMapLoadAttempted) {
+        return;
+    }
+    _worldMapLoadAttempted = YES;
+
+    NSString *filePath = [self worldMapFilePath];
+    if (!filePath) {
+        return;
+    }
+
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:filePath]) {
+        RCTLogInfo(@"[ViroAR] No saved world map found for session: %@", _sessionId);
+        return;
+    }
+
+    [self sendPersistenceStatus:@"loading" error:nil];
+
+    ARSession *session = [self getNativeARSession];
+    if (!session) {
+        [self sendPersistenceStatus:@"error" error:@"AR session not available"];
+        return;
+    }
+
+    NSError *error;
+    NSData *mapData = [NSData dataWithContentsOfFile:filePath options:0 error:&error];
+    if (!mapData) {
+        [self sendPersistenceStatus:@"error" error:error.localizedDescription ?: @"Failed to read world map file"];
+        return;
+    }
+
+    ARWorldMap *worldMap = [NSKeyedUnarchiver unarchivedObjectOfClass:[ARWorldMap class]
+                                                             fromData:mapData
+                                                                error:&error];
+    if (!worldMap) {
+        [self sendPersistenceStatus:@"error" error:error.localizedDescription ?: @"Failed to decode world map"];
+        return;
+    }
+
+    // Get current configuration and apply world map
+    ARWorldTrackingConfiguration *config = [[ARWorldTrackingConfiguration alloc] init];
+    config.initialWorldMap = worldMap;
+
+    // Preserve current autofocus setting
+    config.autoFocusEnabled = _autofocus;
+
+    [session runWithConfiguration:config options:ARSessionRunOptionResetTracking];
+
+    RCTLogInfo(@"[ViroAR] World map loaded for session: %@", _sessionId);
+    [self sendPersistenceStatus:@"loaded" error:nil];
+}
+
+- (void)saveWorldMapToFileWithCompletion:(WorldMapSaveCompletionHandler)completionHandler silent:(BOOL)silent {
+    if (!_sessionId) {
+        if (completionHandler) {
+            completionHandler(NO, @"No sessionId set");
+        }
+        return;
+    }
+
+    if (_isSavingWorldMap) {
+        if (completionHandler) {
+            completionHandler(NO, @"Save already in progress");
+        }
+        return;
+    }
+
+    ARSession *session = [self getNativeARSession];
+    if (!session) {
+        if (completionHandler) {
+            completionHandler(NO, @"AR session not available");
+        }
+        if (!silent) {
+            [self sendPersistenceStatus:@"error" error:@"AR session not available"];
+        }
+        return;
+    }
+
+    _isSavingWorldMap = YES;
+    if (!silent) {
+        [self sendPersistenceStatus:@"saving" error:nil];
+    }
+
+    __weak VRTARSceneNavigator *weakSelf = self;
+    [session getCurrentWorldMapWithCompletionHandler:^(ARWorldMap *worldMap, NSError *error) {
+        VRTARSceneNavigator *strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
+
+        strongSelf->_isSavingWorldMap = NO;
+
+        if (!worldMap) {
+            NSString *errorMsg = error.localizedDescription ?: @"World map not available yet";
+            if (completionHandler) {
+                completionHandler(NO, errorMsg);
+            }
+            if (!silent) {
+                [strongSelf sendPersistenceStatus:@"notAvailable" error:errorMsg];
+            }
+            return;
+        }
+
+        NSString *filePath = [strongSelf worldMapFilePath];
+        if (!filePath) {
+            if (completionHandler) {
+                completionHandler(NO, @"Failed to get file path");
+            }
+            if (!silent) {
+                [strongSelf sendPersistenceStatus:@"error" error:@"Failed to get file path"];
+            }
+            return;
+        }
+
+        NSError *archiveError;
+        NSData *mapData = [NSKeyedArchiver archivedDataWithRootObject:worldMap
+                                               requiringSecureCoding:YES
+                                                               error:&archiveError];
+        if (!mapData) {
+            NSString *errorMsg = archiveError.localizedDescription ?: @"Failed to archive world map";
+            if (completionHandler) {
+                completionHandler(NO, errorMsg);
+            }
+            if (!silent) {
+                [strongSelf sendPersistenceStatus:@"error" error:errorMsg];
+            }
+            return;
+        }
+
+        NSError *writeError;
+        BOOL success = [mapData writeToFile:filePath options:NSDataWritingAtomic error:&writeError];
+        if (!success) {
+            NSString *errorMsg = writeError.localizedDescription ?: @"Failed to write world map file";
+            if (completionHandler) {
+                completionHandler(NO, errorMsg);
+            }
+            if (!silent) {
+                [strongSelf sendPersistenceStatus:@"error" error:errorMsg];
+            }
+            return;
+        }
+
+        RCTLogInfo(@"[ViroAR] World map saved for session: %@", strongSelf->_sessionId);
+        if (completionHandler) {
+            completionHandler(YES, nil);
+        }
+        if (!silent) {
+            [strongSelf sendPersistenceStatus:@"saved" error:nil];
+        }
+    }];
+}
+
+- (void)saveWorldMap:(WorldMapSaveCompletionHandler)completionHandler {
+    [self saveWorldMapToFileWithCompletion:completionHandler silent:NO];
+}
+
+- (void)stopAutoSaveTimer {
+    [_worldMapAutoSaveTimer invalidate];
+    _worldMapAutoSaveTimer = nil;
 }
 
 #pragma mark RCTInvalidating methods

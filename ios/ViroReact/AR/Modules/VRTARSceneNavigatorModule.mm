@@ -990,6 +990,41 @@ RCT_EXPORT_METHOD(isPreferMonocularDepth:(nonnull NSNumber *)reactTag
     }];
 }
 
+#pragma mark - World Map Persistence Methods
+
+RCT_EXPORT_METHOD(saveWorldMap:(nonnull NSNumber *)reactTag
+                       resolve:(RCTPromiseResolveBlock)resolve
+                        reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted"});
+                return;
+            }
+
+            [component saveWorldMap:^(BOOL success, NSString *error) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
 #pragma mark - Cleanup Methods
 
 RCT_EXPORT_METHOD(cleanup:(nonnull NSNumber *)reactTag) {

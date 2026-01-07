@@ -52,6 +52,9 @@ RCT_EXPORT_VIEW_PROPERTY(geospatialAnchorProvider, NSString)
 RCT_EXPORT_VIEW_PROPERTY(worldMeshEnabled, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(worldMeshConfig, NSDictionary)
 RCT_EXPORT_VIEW_PROPERTY(onWorldMeshUpdated, RCTDirectEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(sessionId, NSString)
+RCT_EXPORT_VIEW_PROPERTY(worldMapAutoSaveInterval, NSInteger)
+RCT_EXPORT_VIEW_PROPERTY(onWorldMapPersistenceStatus, RCTDirectEventBlock)
 
 - (VRTARSceneNavigator *)view
 {

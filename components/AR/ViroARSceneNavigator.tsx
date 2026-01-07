@@ -52,6 +52,10 @@ import {
   ViroWorldMeshConfig,
   ViroWorldMeshStats,
 } from "../Types/ViroWorldMesh";
+import {
+  ViroWorldMapPersistenceEvent,
+  ViroSaveWorldMapResult,
+} from "../Types/ViroWorldMap";
 
 const ViroARSceneNavigatorModule = NativeModules.VRTARSceneNavigatorModule;
 
@@ -167,6 +171,30 @@ type Props = ViewProps & {
    * Provides statistics about the current mesh state.
    */
   onWorldMeshUpdated?: (stats: ViroWorldMeshStats) => void;
+
+  /**
+   * [iOS Only] Session persistence identifier.
+   * When provided, ViroReact will automatically:
+   * - Save the AR world map periodically and when app goes to background
+   * - Load and restore the world map when remounting with the same sessionId
+   *
+   * This enables AR session continuity across component lifecycle.
+   */
+  sessionId?: string;
+
+  /**
+   * [iOS Only] Auto-save interval in seconds for world map persistence.
+   * Only used when sessionId is set.
+   * Set to 0 to disable auto-save (manual save only via saveWorldMap()).
+   * @default 30
+   */
+  worldMapAutoSaveInterval?: number;
+
+  /**
+   * [iOS Only] Callback fired when world map persistence status changes.
+   * Useful for showing UI feedback during save/load operations.
+   */
+  onWorldMapPersistenceStatus?: (event: ViroWorldMapPersistenceEvent) => void;
 };
 
 type State = {
@@ -1051,6 +1079,23 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     );
   };
 
+  // ===========================================================================
+  // World Map Persistence API Methods (iOS Only)
+  // ===========================================================================
+
+  /**
+   * [iOS Only] Manually trigger a world map save.
+   * Use this to ensure the world map is saved before navigating away,
+   * or when you want to save at a specific point in time.
+   *
+   * Note: A sessionId must be set for this to work.
+   *
+   * @returns Promise resolving to the save result
+   */
+  _saveWorldMap = async (): Promise<ViroSaveWorldMapResult> => {
+    return await ViroARSceneNavigatorModule.saveWorldMap(findNodeHandle(this));
+  };
+
   /**
    * Renders the Scene Views in the stack.
    *
@@ -1117,6 +1162,8 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     downloadMonocularDepthModel: this._downloadMonocularDepthModel,
     setPreferMonocularDepth: this._setPreferMonocularDepth,
     isPreferMonocularDepth: this._isPreferMonocularDepth,
+    // World Map Persistence API (iOS only)
+    saveWorldMap: this._saveWorldMap,
     viroAppProps: {} as any,
   };
   sceneNavigator = {
@@ -1159,6 +1206,8 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     downloadMonocularDepthModel: this._downloadMonocularDepthModel,
     setPreferMonocularDepth: this._setPreferMonocularDepth,
     isPreferMonocularDepth: this._isPreferMonocularDepth,
+    // World Map Persistence API (iOS only)
+    saveWorldMap: this._saveWorldMap,
     viroAppProps: {} as any,
   };
 

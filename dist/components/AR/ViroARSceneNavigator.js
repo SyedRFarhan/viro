@@ -710,6 +710,21 @@ class ViroARSceneNavigator extends React.Component {
     _isPreferMonocularDepth = async () => {
         return await ViroARSceneNavigatorModule.isPreferMonocularDepth((0, react_native_1.findNodeHandle)(this));
     };
+    // ===========================================================================
+    // World Map Persistence API Methods (iOS Only)
+    // ===========================================================================
+    /**
+     * [iOS Only] Manually trigger a world map save.
+     * Use this to ensure the world map is saved before navigating away,
+     * or when you want to save at a specific point in time.
+     *
+     * Note: A sessionId must be set for this to work.
+     *
+     * @returns Promise resolving to the save result
+     */
+    _saveWorldMap = async () => {
+        return await ViroARSceneNavigatorModule.saveWorldMap((0, react_native_1.findNodeHandle)(this));
+    };
     /**
      * Renders the Scene Views in the stack.
      *
@@ -767,6 +782,8 @@ class ViroARSceneNavigator extends React.Component {
         downloadMonocularDepthModel: this._downloadMonocularDepthModel,
         setPreferMonocularDepth: this._setPreferMonocularDepth,
         isPreferMonocularDepth: this._isPreferMonocularDepth,
+        // World Map Persistence API (iOS only)
+        saveWorldMap: this._saveWorldMap,
         viroAppProps: {},
     };
     sceneNavigator = {
@@ -809,6 +826,8 @@ class ViroARSceneNavigator extends React.Component {
         downloadMonocularDepthModel: this._downloadMonocularDepthModel,
         setPreferMonocularDepth: this._setPreferMonocularDepth,
         isPreferMonocularDepth: this._isPreferMonocularDepth,
+        // World Map Persistence API (iOS only)
+        saveWorldMap: this._saveWorldMap,
         viroAppProps: {},
     };
     render() {

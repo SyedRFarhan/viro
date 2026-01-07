@@ -57,6 +57,11 @@
 @property (nonatomic, copy, nullable) NSDictionary *worldMeshConfig;
 @property (nonatomic, copy, nullable) RCTDirectEventBlock onWorldMeshUpdated;
 
+// World map persistence properties (iOS only)
+@property (nonatomic, copy, nullable) NSString *sessionId;
+@property (nonatomic, assign) NSInteger worldMapAutoSaveInterval; // seconds, default 30
+@property (nonatomic, copy, nullable) RCTDirectEventBlock onWorldMapPersistenceStatus;
+
 - (instancetype)initWithBridge:(RCTBridge *)bridge;
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex;
 - (void)removeReactSubview:(UIView *)subview;
@@ -70,6 +75,14 @@
 
 // Native ARSession access for advanced features like ARWorldMap
 - (ARSession *)getNativeARSession;
+
+#pragma mark - World Map Persistence Methods
+
+// Completion handler for world map save operations
+typedef void (^WorldMapSaveCompletionHandler)(BOOL success, NSString * _Nullable error);
+
+// Manually trigger a world map save (async)
+- (void)saveWorldMap:(WorldMapSaveCompletionHandler)completionHandler;
 
 - (void)startVideoRecording:(NSString *)fileName
            saveToCameraRoll:(BOOL)saveToCameraRoll
