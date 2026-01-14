@@ -31,6 +31,7 @@
 #import "VRTNode.h"
 
 @class VRTScene;
+@class VROFrameCaptureService;
 
 @interface VRTARSceneNavigator : VRTView<VRORenderDelegate, RCTInvalidating>
 
@@ -227,5 +228,27 @@ typedef void (^MonocularDepthDownloadCompletionHandler)(BOOL success, NSString *
 
 // Check if monocular depth is preferred over LiDAR
 - (BOOL)isPreferMonocularDepth;
+
+#pragma mark - Frame Streaming API (for Gemini Vision integration)
+
+// Frame streaming event callback
+@property (nonatomic, copy, nullable) RCTDirectEventBlock onFrameUpdate;
+
+// Frame capture service for streaming AR frames to JavaScript
+@property (nonatomic, strong, nullable) VROFrameCaptureService *frameCaptureService;
+
+// Start streaming AR frames with the given configuration
+// Config keys: enabled (BOOL), width (int), height (int), fps (float), quality (float)
+- (void)startFrameStream:(NSDictionary *)config;
+
+// Stop streaming AR frames
+- (void)stopFrameStream;
+
+// Resolve 2D detection points to 3D world coordinates using capture-time data
+// Points array: [{x: 0-1, y: 0-1}, ...]
+// Returns: {frameId, results: [{input, ok, worldPos?, confidence?, method?, error?}]}
+- (void)resolveDetections:(NSString *)frameId
+                   points:(NSArray<NSDictionary *> *)points
+        completionHandler:(void (^)(NSDictionary * _Nonnull result))completionHandler;
 
 @end

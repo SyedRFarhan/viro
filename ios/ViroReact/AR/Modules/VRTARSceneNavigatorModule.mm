@@ -1167,6 +1167,87 @@ RCT_EXPORT_METHOD(setMaxRenderZoom:(nonnull NSNumber *)reactTag
     }];
 }
 
+#pragma mark - Frame Streaming Methods
+
+RCT_EXPORT_METHOD(startFrameStream:(nonnull NSNumber *)reactTag
+                            config:(NSDictionary *)config) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                RCTLogError(@"startFrameStream: Invalid view returned from registry, expecting VRTARSceneNavigator, got: %@", view);
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                RCTLogWarn(@"Cannot start frame stream: AR view has been unmounted");
+                return;
+            }
+
+            [component startFrameStream:config];
+        } @catch (NSException *exception) {
+            RCTLogError(@"Error starting frame stream: %@", exception.reason);
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(stopFrameStream:(nonnull NSNumber *)reactTag) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                RCTLogError(@"stopFrameStream: Invalid view returned from registry, expecting VRTARSceneNavigator, got: %@", view);
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component stopFrameStream];
+        } @catch (NSException *exception) {
+            RCTLogError(@"Error stopping frame stream: %@", exception.reason);
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(resolveDetections:(nonnull NSNumber *)reactTag
+                            frameId:(NSString *)frameId
+                             points:(NSArray<NSDictionary *> *)points
+                           resolver:(RCTPromiseResolveBlock)resolve
+                           rejecter:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                reject(@"invalid_view", @"Invalid view returned from registry, expecting VRTARSceneNavigator", nil);
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{
+                    @"frameId": frameId ?: @"",
+                    @"results": @[],
+                    @"error": @"AR view has been unmounted"
+                });
+                return;
+            }
+
+            [component resolveDetections:frameId
+                                  points:points
+                       completionHandler:^(NSDictionary *result) {
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            reject(@"resolve_error", [NSString stringWithFormat:@"Error resolving detections: %@", exception.reason], nil);
+        }
+    }];
+}
+
 #pragma mark - Cleanup Methods
 
 RCT_EXPORT_METHOD(cleanup:(nonnull NSNumber *)reactTag) {

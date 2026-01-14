@@ -668,3 +668,120 @@ export type ViroMaxRenderZoomResult = {
   maxZoomFactor: number;
   error?: string;
 };
+
+// ===========================================================================
+// Frame Streaming Types (for Gemini Vision integration)
+// ===========================================================================
+
+/**
+ * Configuration for AR frame streaming.
+ */
+export type ViroFrameStreamConfig = {
+  /** Enable/disable frame streaming */
+  enabled: boolean;
+  /** Target output width in pixels (e.g., 640) */
+  width: number;
+  /** Target output height in pixels (e.g., 480) */
+  height: number;
+  /** Target frames per second (1-5, default: 5) */
+  fps: number;
+  /** JPEG compression quality (0.0-1.0, default: 0.7) */
+  quality: number;
+};
+
+/**
+ * AR tracking state for frame events.
+ */
+export type ViroFrameTrackingState = "normal" | "limited" | "notAvailable";
+
+/**
+ * Camera intrinsics for the JPEG image.
+ * Includes crop offsets applied during scale+crop encoding.
+ */
+export type ViroFrameIntrinsics = {
+  /** Focal length X (in JPEG pixels) */
+  fx: number;
+  /** Focal length Y (in JPEG pixels) */
+  fy: number;
+  /** Principal point X (in JPEG pixels, crop-adjusted) */
+  cx: number;
+  /** Principal point Y (in JPEG pixels, crop-adjusted) */
+  cy: number;
+};
+
+/**
+ * Event payload for AR frame updates.
+ * Contains the JPEG image and all data needed for 2D→3D mapping.
+ */
+export type ViroFrameEvent = {
+  /** Unique ID for this capture (use with resolveDetections) */
+  frameId: string;
+  /** ARFrame timestamp */
+  timestamp: number;
+  /** Session ID (increments on AR session reset/relocalization) */
+  sessionId: number;
+
+  /** Base64-encoded JPEG image data */
+  imageData: string;
+  /** Exact image width in pixels */
+  width: number;
+  /** Exact image height in pixels */
+  height: number;
+
+  /** Camera intrinsics mapped to JPEG dimensions with crop offsets */
+  intrinsics: ViroFrameIntrinsics;
+
+  /** Camera pose at capture time (4x4 matrix, 16 elements, column-major) */
+  cameraToWorld: number[];
+
+  /**
+   * Transform: JPEG normalized UV (0-1) → AR image normalized UV (0-1)
+   * Use this to map JPEG coords back to AR image space (e.g., for depth lookup)
+   * Format: [a, b, 0, c, d, 0, tx, ty, 1] (3x3 affine matrix as flat array)
+   */
+  jpegToARTransform: number[];
+
+  /** Current AR tracking state */
+  trackingState: ViroFrameTrackingState;
+};
+
+/**
+ * Resolution method used for 2D→3D detection mapping.
+ * Listed in order of preference/accuracy.
+ */
+export type ViroDetectionMethod =
+  | "lidar" // Most accurate (0.95 confidence), uses stored LiDAR depth
+  | "raycast_geometry" // Highest raycast (0.95), hits actual plane mesh
+  | "raycast_infinite" // High raycast (0.85), extends beyond detected plane bounds
+  | "raycast_estimated" // Lower raycast (0.6), hits estimated plane (can shift)
+  | "pointcloud"; // Fallback (0.3-0.6), uses stored feature points
+
+/**
+ * Result of resolving a single 2D detection point to 3D.
+ */
+export type ViroDetectionResult = {
+  /** Input point (normalized 0-1 UV in JPEG space) */
+  input: { x: number; y: number };
+  /** Whether resolution succeeded */
+  ok: boolean;
+  /** World position [x, y, z] (valid if ok === true) */
+  worldPos?: [number, number, number];
+  /** Confidence level (0-1, varies by method) */
+  confidence?: number;
+  /** Resolution method used */
+  method?: ViroDetectionMethod;
+  /** Error message if resolution failed (ok === false) */
+  error?: string;
+};
+
+/**
+ * Result of resolving detections using capture-time data.
+ */
+export type ViroDetectionResolutionResult = {
+  /** The frameId that was used for resolution */
+  frameId: string;
+  /** Array of resolution results (same order as input points) */
+  results: ViroDetectionResult[];
+  /** Error message if the entire operation failed */
+  error?: string;
+};

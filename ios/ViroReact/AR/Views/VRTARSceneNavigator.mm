@@ -41,6 +41,9 @@
 #import <ViroKit/VROSemantics.h>
 #import <ViroKit/VROARScene.h>
 #import <ViroKit/VROARWorldMesh.h>
+#import "VROFrameCaptureService.h"
+#import "VRODetectionResolver.h"
+#import "VROFrameRingBuffer.h"
 
 @implementation VRTARSceneNavigator {
     id <VROView> _vroView;
@@ -65,6 +68,9 @@
     NSTimer *_worldMapAutoSaveTimer;
     BOOL _worldMapLoadAttempted;
     BOOL _isSavingWorldMap;
+
+    // Frame streaming timer
+    NSTimer *_frameStreamTimer;
 }
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge {
@@ -1494,6 +1500,188 @@
     return [viewAR isPreferMonocularDepth];
 }
 
+#pragma mark - Frame Streaming API Methods
+
+- (void)startFrameStream:(NSDictionary *)config {
+    RCTLogInfo(@"[ViroFrameStream] Starting frame stream with config: %@", config);
+    RCTLogInfo(@"[ViroFrameStream] onFrameUpdate callback is: %@", _onFrameUpdate ? @"SET" : @"NIL");
+
+    if (!_frameCaptureService) {
+        _frameCaptureService = [[VROFrameCaptureService alloc] initWithRingBufferCapacity:30];
+
+        __weak VRTARSceneNavigator *weakSelf = self;
+        _frameCaptureService.onFrameReady = ^(NSDictionary *frameData) {
+            VRTARSceneNavigator *strongSelf = weakSelf;
+            if (strongSelf && strongSelf.onFrameUpdate) {
+                NSLog(@"[ViroFrameStream DEBUG] Forwarding frame to JS via onFrameUpdate");
+                strongSelf.onFrameUpdate(frameData);
+            } else {
+                NSLog(@"[ViroFrameStream DEBUG] onFrameUpdate is nil! strongSelf=%@, onFrameUpdate=%@",
+                      strongSelf ? @"exists" : @"nil",
+                      strongSelf.onFrameUpdate ? @"exists" : @"nil");
+            }
+        };
+    }
+
+    // Apply configuration
+    _frameCaptureService.enabled = config[@"enabled"] ? [config[@"enabled"] boolValue] : YES;
+    _frameCaptureService.targetWidth = config[@"width"] ? [config[@"width"] intValue] : 640;
+    _frameCaptureService.targetHeight = config[@"height"] ? [config[@"height"] intValue] : 480;
+    _frameCaptureService.targetFPS = config[@"fps"] ? [config[@"fps"] floatValue] : 5.0f;
+    _frameCaptureService.jpegQuality = config[@"quality"] ? [config[@"quality"] floatValue] : 0.7f;
+
+    RCTLogInfo(@"[ViroFrameStream] Frame stream started: %dx%d @ %.1f FPS, quality: %.2f",
+               _frameCaptureService.targetWidth,
+               _frameCaptureService.targetHeight,
+               _frameCaptureService.targetFPS,
+               _frameCaptureService.jpegQuality);
+
+    // Start timer to pump ARFrames to capture service
+    // Poll at 30 FPS - the capture service's rate limiting will filter to target FPS
+    [_frameStreamTimer invalidate];
+    _frameStreamTimer = [NSTimer scheduledTimerWithTimeInterval:1.0/30.0
+                                                         target:self
+                                                       selector:@selector(frameStreamTimerFired:)
+                                                       userInfo:nil
+                                                        repeats:YES];
+    RCTLogInfo(@"[ViroFrameStream] Timer started (30 FPS polling)");
+}
+
+- (void)stopFrameStream {
+    RCTLogInfo(@"[ViroFrameStream] Stopping frame stream");
+
+    // Invalidate timer first
+    [_frameStreamTimer invalidate];
+    _frameStreamTimer = nil;
+
+    if (_frameCaptureService) {
+        _frameCaptureService.enabled = NO;
+    }
+}
+
+#pragma mark - Frame Stream Timer
+
+- (void)frameStreamTimerFired:(NSTimer *)timer {
+    if (!_frameCaptureService || !_frameCaptureService.enabled) {
+        return;
+    }
+
+    ARSession *session = [self getNativeARSession];
+    if (!session) {
+        return;
+    }
+
+    ARFrame *frame = session.currentFrame;
+    if (frame) {
+        [_frameCaptureService onARFrame:frame session:session];
+    }
+}
+
+- (void)resolveDetections:(NSString *)frameId
+                   points:(NSArray<NSDictionary *> *)points
+        completionHandler:(void (^)(NSDictionary * _Nonnull result))completionHandler {
+
+    if (!_frameCaptureService) {
+        if (completionHandler) {
+            completionHandler(@{
+                @"frameId": frameId ?: @"",
+                @"results": @[],
+                @"error": @"Frame capture service not initialized"
+            });
+        }
+        return;
+    }
+
+    VROFrameEntry *entry = [_frameCaptureService frameEntryForId:frameId];
+
+    if (!entry) {
+        RCTLogWarn(@"[ViroFrameStream] Frame not found in ring buffer: %@", frameId);
+        if (completionHandler) {
+            completionHandler(@{
+                @"frameId": frameId ?: @"",
+                @"results": @[],
+                @"error": @"Frame not found in ring buffer (may have been evicted)"
+            });
+        }
+        return;
+    }
+
+    ARSession *session = [self getNativeARSession];
+    if (!session) {
+        if (completionHandler) {
+            completionHandler(@{
+                @"frameId": frameId,
+                @"results": @[],
+                @"error": @"AR session not available"
+            });
+        }
+        return;
+    }
+
+    // Resolve detections on background thread
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSArray<VRODetectionResult *> *results =
+            [VRODetectionResolver resolvePoints:points
+                                     frameEntry:entry
+                                      arSession:session];
+
+        // Convert results to dictionary format
+        NSMutableArray *resultsArray = [NSMutableArray arrayWithCapacity:results.count];
+        for (VRODetectionResult *r in results) {
+            NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+            dict[@"input"] = @{@"x": @(r.inputX), @"y": @(r.inputY)};
+            dict[@"ok"] = @(r.ok);
+
+            if (r.ok) {
+                dict[@"worldPos"] = @[@(r.worldPos.x), @(r.worldPos.y), @(r.worldPos.z)];
+                dict[@"confidence"] = @(r.confidence);
+                dict[@"method"] = r.method ?: @"unknown";
+            } else if (r.error) {
+                dict[@"error"] = r.error;
+            }
+
+            [resultsArray addObject:dict];
+        }
+
+        // Return result on main thread
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completionHandler) {
+                completionHandler(@{
+                    @"frameId": frameId,
+                    @"results": resultsArray
+                });
+            }
+        });
+    });
+}
+
+#pragma mark - VRORenderDelegate Frame Streaming Hook
+
+- (void)userDidRequestExitVR {
+    // Not used for AR
+}
+
+- (void)willRenderFrame:(std::shared_ptr<VRORenderer>)renderer
+                context:(std::shared_ptr<VRORenderContext>)context
+                 driver:(std::shared_ptr<VRODriver>)driver {
+    // Fan-out AR frames to capture service for streaming
+    if (_frameCaptureService && _frameCaptureService.enabled) {
+        ARSession *session = [self getNativeARSession];
+        if (session) {
+            ARFrame *frame = session.currentFrame;
+            if (frame) {
+                [_frameCaptureService onARFrame:frame session:session];
+            }
+        }
+    }
+}
+
+- (void)didRenderFrame:(std::shared_ptr<VRORenderer>)renderer
+               context:(std::shared_ptr<VRORenderContext>)context
+                driver:(std::shared_ptr<VRODriver>)driver {
+    // No-op for AR scene navigator
+}
+
 #pragma mark - World Map Persistence Methods
 
 - (void)setSessionId:(NSString *)sessionId {
@@ -1749,6 +1937,10 @@
 #pragma mark RCTInvalidating methods
 
 - (void)invalidate {
+    // Stop frame stream timer
+    [_frameStreamTimer invalidate];
+    _frameStreamTimer = nil;
+
     if (_vroView) {
         // pause the view before removing it.
         VROViewAR *viewAR = (VROViewAR *)_vroView;

@@ -11,7 +11,7 @@
  */
 import * as React from "react";
 import { ViewProps } from "react-native";
-import { ViroWorldOrigin, ViroCloudAnchorProvider, ViroCloudAnchorStateChangeEvent, ViroHostCloudAnchorResult, ViroResolveCloudAnchorResult, ViroGeospatialAnchorProvider, ViroGeospatialSupportResult, ViroEarthTrackingStateResult, ViroGeospatialPoseResult, ViroVPSAvailabilityResult, ViroCreateGeospatialAnchorResult, ViroQuaternion, ViroSemanticSupportResult, ViroSemanticLabelFractionsResult, ViroSemanticLabelFractionResult, ViroSemanticLabel, ViroMonocularDepthSupportResult, ViroMonocularDepthModelDownloadedResult, ViroMonocularDepthDownloadResult, ViroMonocularDepthPreferenceResult, ViroRenderZoomResult, ViroMaxRenderZoomResult } from "../Types/ViroEvents";
+import { ViroWorldOrigin, ViroCloudAnchorProvider, ViroCloudAnchorStateChangeEvent, ViroHostCloudAnchorResult, ViroResolveCloudAnchorResult, ViroGeospatialAnchorProvider, ViroGeospatialSupportResult, ViroEarthTrackingStateResult, ViroGeospatialPoseResult, ViroVPSAvailabilityResult, ViroCreateGeospatialAnchorResult, ViroQuaternion, ViroSemanticSupportResult, ViroSemanticLabelFractionsResult, ViroSemanticLabelFractionResult, ViroSemanticLabel, ViroMonocularDepthSupportResult, ViroMonocularDepthModelDownloadedResult, ViroMonocularDepthDownloadResult, ViroMonocularDepthPreferenceResult, ViroRenderZoomResult, ViroMaxRenderZoomResult, ViroFrameStreamConfig, ViroFrameEvent, ViroDetectionResolutionResult } from "../Types/ViroEvents";
 import { Viro3DPoint, ViroNativeRef, ViroScene, ViroSceneDictionary } from "../Types/ViroUtils";
 import { ViroWorldMeshConfig, ViroWorldMeshStats } from "../Types/ViroWorldMesh";
 import { ViroWorldMapPersistenceEvent, ViroSaveWorldMapResult } from "../Types/ViroWorldMap";
@@ -135,6 +135,13 @@ type Props = ViewProps & {
      * Useful for showing UI feedback during save/load operations.
      */
     onWorldMapPersistenceStatus?: (event: ViroWorldMapPersistenceEvent) => void;
+    /**
+     * [iOS Only] Callback fired when a new AR frame is captured for streaming.
+     * Use this to stream frames to external services like Gemini for vision AI.
+     *
+     * Note: Frame streaming must be started with startFrameStream() first.
+     */
+    onFrameUpdate?: (event: ViroFrameEvent) => void;
 };
 type State = {
     sceneDictionary: ViroSceneDictionary;
@@ -542,6 +549,52 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
      */
     _saveWorldMap: () => Promise<ViroSaveWorldMapResult>;
     /**
+     * [iOS Only] Start streaming AR frames for external processing (e.g., Gemini Vision).
+     *
+     * Frames are captured at a configurable rate, JPEG-encoded to exact target dimensions
+     * using scale+crop (cover), and delivered via the onFrameUpdate callback.
+     *
+     * Each frame includes:
+     * - frameId: Unique identifier for later 2D→3D resolution
+     * - imageData: Base64 JPEG
+     * - intrinsics: Camera intrinsics mapped to JPEG dimensions (with crop offsets)
+     * - cameraToWorld: Camera pose at capture time
+     * - jpegToARTransform: Transform from JPEG UV to AR image UV
+     *
+     * @param config - Frame streaming configuration
+     * @platform ios
+     */
+    _startFrameStream: (config: ViroFrameStreamConfig) => void;
+    /**
+     * [iOS Only] Stop streaming AR frames.
+     *
+     * @platform ios
+     */
+    _stopFrameStream: () => void;
+    /**
+     * [iOS Only] Resolve 2D detection points to 3D world coordinates.
+     *
+     * This uses capture-time data stored in the ring buffer, ensuring correct
+     * mapping even when the camera has moved since the frame was captured.
+     * This is critical for delayed responses from vision AI services like Gemini.
+     *
+     * Resolution uses a fallback ladder (in order of preference):
+     * 1. LiDAR depth sampling (0.95 confidence) - most accurate on Pro devices
+     * 2. Raycast vs plane geometry (0.95) - hits actual mesh
+     * 3. Raycast vs plane extent (0.85) - hits bounding box
+     * 4. Raycast vs estimated planes (0.6) - can shift over time
+     * 5. Point cloud fallback (0.3-0.6) - finds nearest feature point to ray
+     *
+     * @param frameId - The frameId from a ViroFrameEvent
+     * @param points - Array of normalized UV coordinates (0-1) in JPEG space
+     * @returns Promise resolving to resolution results
+     * @platform ios
+     */
+    _resolveDetections: (frameId: string, points: Array<{
+        x: number;
+        y: number;
+    }>) => Promise<ViroDetectionResolutionResult>;
+    /**
      * Set zoom using UIView transform (CGAffineTransform scale).
      * This scales the entire ARView visually, different from camera optical zoom.
      * Useful for quick visual zoom without camera hardware changes.
@@ -632,6 +685,12 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         setPreferMonocularDepth: (prefer: boolean) => void;
         isPreferMonocularDepth: () => Promise<ViroMonocularDepthPreferenceResult>;
         saveWorldMap: () => Promise<ViroSaveWorldMapResult>;
+        startFrameStream: (config: ViroFrameStreamConfig) => void;
+        stopFrameStream: () => void;
+        resolveDetections: (frameId: string, points: Array<{
+            x: number;
+            y: number;
+        }>) => Promise<ViroDetectionResolutionResult>;
         setViewZoom: (zoomFactor: number) => void;
         setRenderZoom: (zoomFactor: number) => void;
         getRenderZoom: () => Promise<ViroRenderZoomResult>;
@@ -678,6 +737,12 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         setPreferMonocularDepth: (prefer: boolean) => void;
         isPreferMonocularDepth: () => Promise<ViroMonocularDepthPreferenceResult>;
         saveWorldMap: () => Promise<ViroSaveWorldMapResult>;
+        startFrameStream: (config: ViroFrameStreamConfig) => void;
+        stopFrameStream: () => void;
+        resolveDetections: (frameId: string, points: Array<{
+            x: number;
+            y: number;
+        }>) => Promise<ViroDetectionResolutionResult>;
         setViewZoom: (zoomFactor: number) => void;
         setRenderZoom: (zoomFactor: number) => void;
         getRenderZoom: () => Promise<ViroRenderZoomResult>;

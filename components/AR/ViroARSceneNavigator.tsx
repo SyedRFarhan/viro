@@ -43,6 +43,9 @@ import {
   ViroMonocularDepthPreferenceResult,
   ViroRenderZoomResult,
   ViroMaxRenderZoomResult,
+  ViroFrameStreamConfig,
+  ViroFrameEvent,
+  ViroDetectionResolutionResult,
 } from "../Types/ViroEvents";
 import {
   Viro3DPoint,
@@ -197,6 +200,14 @@ type Props = ViewProps & {
    * Useful for showing UI feedback during save/load operations.
    */
   onWorldMapPersistenceStatus?: (event: ViroWorldMapPersistenceEvent) => void;
+
+  /**
+   * [iOS Only] Callback fired when a new AR frame is captured for streaming.
+   * Use this to stream frames to external services like Gemini for vision AI.
+   *
+   * Note: Frame streaming must be started with startFrameStream() first.
+   */
+  onFrameUpdate?: (event: ViroFrameEvent) => void;
 };
 
 type State = {
@@ -1121,6 +1132,69 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
   };
 
   // ===========================================================================
+  // Frame Streaming API Methods (for Gemini Vision integration)
+  // ===========================================================================
+
+  /**
+   * [iOS Only] Start streaming AR frames for external processing (e.g., Gemini Vision).
+   *
+   * Frames are captured at a configurable rate, JPEG-encoded to exact target dimensions
+   * using scale+crop (cover), and delivered via the onFrameUpdate callback.
+   *
+   * Each frame includes:
+   * - frameId: Unique identifier for later 2D→3D resolution
+   * - imageData: Base64 JPEG
+   * - intrinsics: Camera intrinsics mapped to JPEG dimensions (with crop offsets)
+   * - cameraToWorld: Camera pose at capture time
+   * - jpegToARTransform: Transform from JPEG UV to AR image UV
+   *
+   * @param config - Frame streaming configuration
+   * @platform ios
+   */
+  _startFrameStream = (config: ViroFrameStreamConfig) => {
+    ViroARSceneNavigatorModule.startFrameStream(findNodeHandle(this), config);
+  };
+
+  /**
+   * [iOS Only] Stop streaming AR frames.
+   *
+   * @platform ios
+   */
+  _stopFrameStream = () => {
+    ViroARSceneNavigatorModule.stopFrameStream(findNodeHandle(this));
+  };
+
+  /**
+   * [iOS Only] Resolve 2D detection points to 3D world coordinates.
+   *
+   * This uses capture-time data stored in the ring buffer, ensuring correct
+   * mapping even when the camera has moved since the frame was captured.
+   * This is critical for delayed responses from vision AI services like Gemini.
+   *
+   * Resolution uses a fallback ladder (in order of preference):
+   * 1. LiDAR depth sampling (0.95 confidence) - most accurate on Pro devices
+   * 2. Raycast vs plane geometry (0.95) - hits actual mesh
+   * 3. Raycast vs plane extent (0.85) - hits bounding box
+   * 4. Raycast vs estimated planes (0.6) - can shift over time
+   * 5. Point cloud fallback (0.3-0.6) - finds nearest feature point to ray
+   *
+   * @param frameId - The frameId from a ViroFrameEvent
+   * @param points - Array of normalized UV coordinates (0-1) in JPEG space
+   * @returns Promise resolving to resolution results
+   * @platform ios
+   */
+  _resolveDetections = async (
+    frameId: string,
+    points: Array<{ x: number; y: number }>
+  ): Promise<ViroDetectionResolutionResult> => {
+    return await ViroARSceneNavigatorModule.resolveDetections(
+      findNodeHandle(this),
+      frameId,
+      points
+    );
+  };
+
+  // ===========================================================================
   // Camera Zoom API Methods
   // ===========================================================================
 
@@ -1260,6 +1334,10 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     isPreferMonocularDepth: this._isPreferMonocularDepth,
     // World Map Persistence API (iOS only)
     saveWorldMap: this._saveWorldMap,
+    // Frame Streaming API (iOS only, for Gemini Vision integration)
+    startFrameStream: this._startFrameStream,
+    stopFrameStream: this._stopFrameStream,
+    resolveDetections: this._resolveDetections,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,
     // Render Zoom API (Projection-Based)
@@ -1312,6 +1390,10 @@ export class ViroARSceneNavigator extends React.Component<Props, State> {
     isPreferMonocularDepth: this._isPreferMonocularDepth,
     // World Map Persistence API (iOS only)
     saveWorldMap: this._saveWorldMap,
+    // Frame Streaming API (iOS only, for Gemini Vision integration)
+    startFrameStream: this._startFrameStream,
+    stopFrameStream: this._stopFrameStream,
+    resolveDetections: this._resolveDetections,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,
     // Render Zoom API (Projection-Based)

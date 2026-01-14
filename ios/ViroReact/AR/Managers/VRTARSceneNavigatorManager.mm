@@ -55,6 +55,7 @@ RCT_EXPORT_VIEW_PROPERTY(onWorldMeshUpdated, RCTDirectEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(sessionId, NSString)
 RCT_EXPORT_VIEW_PROPERTY(worldMapAutoSaveInterval, NSInteger)
 RCT_EXPORT_VIEW_PROPERTY(onWorldMapPersistenceStatus, RCTDirectEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onFrameUpdate, RCTDirectEventBlock)
 
 - (VRTARSceneNavigator *)view
 {
