@@ -27,6 +27,7 @@
 
 #import <ViroKit/ViroKit.h>
 #import <ARKit/ARKit.h>
+#import <AVFoundation/AVFoundation.h>
 #import "VRTARSceneNavigator.h"
 #import <React/RCTAssert.h>
 #import <React/RCTLog.h>
@@ -124,6 +125,80 @@
         VROViewAR *viewAR = (VROViewAR *) _vroView;
         std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
         arSession->setVideoQuality(_vroVideoQuality);
+    }
+}
+
+#pragma mark - View Transform Zoom
+
+- (void)setViewZoom:(float)zoomFactor {
+    NSLog(@"[ViroZoom] setViewZoom called with zoomFactor: %.2f", zoomFactor);
+    // UIView transform zoom - scales the entire ARView visually
+    // This is different from camera zoom - it's a visual scale of the rendered view
+    if (_vroView) {
+        // Cast to UIView to access view properties (VROView protocol is implemented by UIView subclasses)
+        UIView *view = (UIView *)_vroView;
+
+        // Set content mode to scale from center and clip overflow
+        view.contentMode = UIViewContentModeCenter;
+        view.clipsToBounds = YES;
+
+        // Apply scale transform
+        view.transform = CGAffineTransformMakeScale(zoomFactor, zoomFactor);
+        NSLog(@"[ViroZoom] setViewZoom: SUCCESS - view transform set to %.2f (frame: %.0fx%.0f)",
+              zoomFactor, view.frame.size.width, view.frame.size.height);
+    } else {
+        NSLog(@"[ViroZoom] setViewZoom: FAILED - vroView is nil");
+    }
+}
+
+#pragma mark - Render Zoom (Projection-Based)
+
+- (void)setRenderZoom:(float)zoomFactor {
+    NSLog(@"[ViroZoom] setRenderZoom called with zoomFactor: %.2f", zoomFactor);
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+        if (arSession) {
+            arSession->setRenderZoom(zoomFactor);
+            NSLog(@"[ViroZoom] setRenderZoom: SUCCESS - render zoom set to %.2f", arSession->getRenderZoom());
+        } else {
+            NSLog(@"[ViroZoom] setRenderZoom: FAILED - arSession is nil");
+        }
+    } else {
+        NSLog(@"[ViroZoom] setRenderZoom: FAILED - vroView is nil");
+    }
+}
+
+- (float)getRenderZoom {
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+        if (arSession) {
+            return arSession->getRenderZoom();
+        }
+    }
+    return 1.0f;
+}
+
+- (float)getMaxRenderZoom {
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+        if (arSession) {
+            return arSession->getMaxRenderZoom();
+        }
+    }
+    return 5.0f;
+}
+
+- (void)setMaxRenderZoom:(float)maxZoom {
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+        if (arSession) {
+            arSession->setMaxRenderZoom(maxZoom);
+            NSLog(@"[ViroZoom] setMaxRenderZoom: SUCCESS - max render zoom set to %.2f", arSession->getMaxRenderZoom());
+        }
     }
 }
 
@@ -300,7 +375,14 @@
      completionHandler:(VROViewWriteMediaFinishBlock)completionHandler {
     VROViewAR *viewAR = (VROViewAR *) _vroView;
     [viewAR takeScreenshot:fileName saveToCameraRoll:saveToCameraRoll withCompletionHandler:completionHandler];
-    
+
+}
+
+- (void)takeHighResolutionPhoto:(NSString *)fileName
+               saveToCameraRoll:(BOOL)saveToCameraRoll
+              completionHandler:(VROViewWriteMediaFinishBlock)completionHandler {
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    [viewAR takeHighResolutionPhoto:fileName saveToCameraRoll:saveToCameraRoll withCompletionHandler:completionHandler];
 }
 
 - (void)setSceneView:(VRTScene *)sceneView {

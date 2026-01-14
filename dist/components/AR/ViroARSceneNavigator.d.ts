@@ -11,7 +11,7 @@
  */
 import * as React from "react";
 import { ViewProps } from "react-native";
-import { ViroWorldOrigin, ViroCloudAnchorProvider, ViroCloudAnchorStateChangeEvent, ViroHostCloudAnchorResult, ViroResolveCloudAnchorResult, ViroGeospatialAnchorProvider, ViroGeospatialSupportResult, ViroEarthTrackingStateResult, ViroGeospatialPoseResult, ViroVPSAvailabilityResult, ViroCreateGeospatialAnchorResult, ViroQuaternion, ViroSemanticSupportResult, ViroSemanticLabelFractionsResult, ViroSemanticLabelFractionResult, ViroSemanticLabel, ViroMonocularDepthSupportResult, ViroMonocularDepthModelDownloadedResult, ViroMonocularDepthDownloadResult, ViroMonocularDepthPreferenceResult } from "../Types/ViroEvents";
+import { ViroWorldOrigin, ViroCloudAnchorProvider, ViroCloudAnchorStateChangeEvent, ViroHostCloudAnchorResult, ViroResolveCloudAnchorResult, ViroGeospatialAnchorProvider, ViroGeospatialSupportResult, ViroEarthTrackingStateResult, ViroGeospatialPoseResult, ViroVPSAvailabilityResult, ViroCreateGeospatialAnchorResult, ViroQuaternion, ViroSemanticSupportResult, ViroSemanticLabelFractionsResult, ViroSemanticLabelFractionResult, ViroSemanticLabel, ViroMonocularDepthSupportResult, ViroMonocularDepthModelDownloadedResult, ViroMonocularDepthDownloadResult, ViroMonocularDepthPreferenceResult, ViroRenderZoomResult, ViroMaxRenderZoomResult } from "../Types/ViroEvents";
 import { Viro3DPoint, ViroNativeRef, ViroScene, ViroSceneDictionary } from "../Types/ViroUtils";
 import { ViroWorldMeshConfig, ViroWorldMeshStats } from "../Types/ViroWorldMesh";
 import { ViroWorldMapPersistenceEvent, ViroSaveWorldMapResult } from "../Types/ViroWorldMap";
@@ -171,6 +171,18 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
      * returns Object w/ success, url and errorCode keys.
      */
     _takeScreenshot: (fileName: string, saveToCameraRoll: boolean) => Promise<any>;
+    /**
+     * Takes a high-resolution photo using ARKit's captureHighResolutionFrame (iOS 16+).
+     * This captures the camera image at full sensor resolution (up to 12MP) with
+     * the 3D scene composited on top.
+     *
+     * @param fileName - name of the file (without extension)
+     * @param saveToCameraRoll - whether or not the file should also be saved to the camera roll
+     * @returns Object with success, url, and errorCode keys.
+     *          errorCode: 0=success, 1=no permissions, 5=write failed,
+     *                     10=iOS<16 not supported, 11=capture failed, 15=session not ready
+     */
+    _takeHighResolutionPhoto: (fileName: string, saveToCameraRoll: boolean) => Promise<any>;
     /**
      * @todo document _project
      *
@@ -530,6 +542,52 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
      */
     _saveWorldMap: () => Promise<ViroSaveWorldMapResult>;
     /**
+     * Set zoom using UIView transform (CGAffineTransform scale).
+     * This scales the entire ARView visually, different from camera optical zoom.
+     * Useful for quick visual zoom without camera hardware changes.
+     *
+     * @param zoomFactor - The scale factor (1.0 = normal, 2.0 = 2x scale, etc.)
+     * @platform ios
+     */
+    _setViewZoom: (zoomFactor: number) => void;
+    /**
+     * Set render zoom using projection matrix scaling.
+     * This modifies the camera's field of view and background texture to achieve
+     * a real zoom effect that IS captured in screenshots, video recordings, and photos.
+     *
+     * Unlike setViewZoom (which uses UI scaling and isn't captured), setRenderZoom
+     * modifies the actual render pipeline:
+     * - Scales the projection matrix to narrow the field of view
+     * - Crops the camera background texture to match
+     * - Adjusts hit testing to account for the zoomed viewport
+     *
+     * @param zoomFactor - The zoom factor (1.0 = no zoom, 2.0 = 2x zoom, etc.)
+     *                     Clamped to range [1.0, maxRenderZoom]
+     * @platform ios
+     */
+    _setRenderZoom: (zoomFactor: number) => void;
+    /**
+     * Get the current render zoom factor.
+     *
+     * @returns Promise resolving to the current zoom factor
+     * @platform ios
+     */
+    _getRenderZoom: () => Promise<ViroRenderZoomResult>;
+    /**
+     * Get the maximum render zoom factor.
+     *
+     * @returns Promise resolving to the maximum zoom factor
+     * @platform ios
+     */
+    _getMaxRenderZoom: () => Promise<ViroMaxRenderZoomResult>;
+    /**
+     * Set the maximum render zoom factor.
+     *
+     * @param maxZoom - The maximum zoom factor (must be >= 1.0)
+     * @platform ios
+     */
+    _setMaxRenderZoom: (maxZoom: number) => void;
+    /**
      * Renders the Scene Views in the stack.
      *
      * @returns Array of rendered Scene views.
@@ -544,6 +602,7 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         startVideoRecording: (fileName: string, saveToCameraRoll: boolean, onError: (errorCode: number) => void) => void;
         stopVideoRecording: () => Promise<any>;
         takeScreenshot: (fileName: string, saveToCameraRoll: boolean) => Promise<any>;
+        takeHighResolutionPhoto: (fileName: string, saveToCameraRoll: boolean) => Promise<any>;
         isNativeARSessionAvailable: () => Promise<boolean>;
         resetARSession: (resetTracking: any, removeAnchors: any) => void;
         setWorldOrigin: (worldOrigin: ViroWorldOrigin) => void;
@@ -573,6 +632,11 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         setPreferMonocularDepth: (prefer: boolean) => void;
         isPreferMonocularDepth: () => Promise<ViroMonocularDepthPreferenceResult>;
         saveWorldMap: () => Promise<ViroSaveWorldMapResult>;
+        setViewZoom: (zoomFactor: number) => void;
+        setRenderZoom: (zoomFactor: number) => void;
+        getRenderZoom: () => Promise<ViroRenderZoomResult>;
+        getMaxRenderZoom: () => Promise<ViroMaxRenderZoomResult>;
+        setMaxRenderZoom: (maxZoom: number) => void;
         viroAppProps: any;
     };
     sceneNavigator: {
@@ -584,6 +648,7 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         startVideoRecording: (fileName: string, saveToCameraRoll: boolean, onError: (errorCode: number) => void) => void;
         stopVideoRecording: () => Promise<any>;
         takeScreenshot: (fileName: string, saveToCameraRoll: boolean) => Promise<any>;
+        takeHighResolutionPhoto: (fileName: string, saveToCameraRoll: boolean) => Promise<any>;
         isNativeARSessionAvailable: () => Promise<boolean>;
         resetARSession: (resetTracking: any, removeAnchors: any) => void;
         setWorldOrigin: (worldOrigin: ViroWorldOrigin) => void;
@@ -613,6 +678,11 @@ export declare class ViroARSceneNavigator extends React.Component<Props, State> 
         setPreferMonocularDepth: (prefer: boolean) => void;
         isPreferMonocularDepth: () => Promise<ViroMonocularDepthPreferenceResult>;
         saveWorldMap: () => Promise<ViroSaveWorldMapResult>;
+        setViewZoom: (zoomFactor: number) => void;
+        setRenderZoom: (zoomFactor: number) => void;
+        getRenderZoom: () => Promise<ViroRenderZoomResult>;
+        getMaxRenderZoom: () => Promise<ViroMaxRenderZoomResult>;
+        setMaxRenderZoom: (maxZoom: number) => void;
         viroAppProps: any;
     };
     render(): React.JSX.Element;

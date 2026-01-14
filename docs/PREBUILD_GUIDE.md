@@ -5,6 +5,7 @@ This document describes how to build the `libViroReact.a` static library for iOS
 ## Prerequisites
 
 - **Xcode 15+** with iOS SDK 18.x
+- **iOS 18.0+ minimum deployment target** (required for ARKit camera zoom APIs)
 - **Node.js** (v18+ recommended, managed via nvm or similar)
 - **CocoaPods** installed (`gem install cocoapods`)
 - React Native 0.81+ with New Architecture enabled

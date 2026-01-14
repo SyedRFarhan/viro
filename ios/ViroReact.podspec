@@ -11,8 +11,8 @@ Pod::Spec.new do |s|
   s.license             = { :type => 'MIT', :file => '../LICENSE' }
   s.author              = 'ReactVision'
   s.requires_arc        = true
-  s.platform            = :ios, '12.0'
-  s.ios.deployment_target = '12.0'
+  s.platform            = :ios, '18.0'
+  s.ios.deployment_target = '18.0'
   
   # Check for prebuilt library
   lib_path = 'dist/lib/libViroReact.a'

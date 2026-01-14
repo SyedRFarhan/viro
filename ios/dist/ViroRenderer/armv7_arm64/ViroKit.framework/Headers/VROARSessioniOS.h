@@ -102,6 +102,14 @@ public:
     void setVideoQuality(VROVideoQuality quality);
     void setVisionModel(std::shared_ptr<VROVisionModel> visionModel);
 
+    /*
+     Capture a high-resolution photo using ARKit's captureHighResolutionFrame (iOS 16+).
+     The completion handler is called with the captured image, camera transform, and any error.
+     Returns false immediately if the feature is not supported (iOS < 16).
+     */
+    bool captureHighResolutionFrame(
+        std::function<void(CVPixelBufferRef image, VROMatrix4f cameraTransform, NSError *error)> completion);
+
     // Occlusion support
     void setOcclusionMode(VROOcclusionMode mode) override;
     bool isOcclusionSupported() const override;

@@ -37,4 +37,6 @@ var ViroARTrackingReasonConstants;
     ViroARTrackingReasonConstants[ViroARTrackingReasonConstants["TRACKING_REASON_NONE"] = 1] = "TRACKING_REASON_NONE";
     ViroARTrackingReasonConstants[ViroARTrackingReasonConstants["TRACKING_REASON_EXCESSIVE_MOTION"] = 2] = "TRACKING_REASON_EXCESSIVE_MOTION";
     ViroARTrackingReasonConstants[ViroARTrackingReasonConstants["TRACKING_REASON_INSUFFICIENT_FEATURES"] = 3] = "TRACKING_REASON_INSUFFICIENT_FEATURES";
+    ViroARTrackingReasonConstants[ViroARTrackingReasonConstants["TRACKING_REASON_INSUFFICIENT_LIGHT"] = 4] = "TRACKING_REASON_INSUFFICIENT_LIGHT";
+    ViroARTrackingReasonConstants[ViroARTrackingReasonConstants["TRACKING_REASON_RELOCALIZING"] = 5] = "TRACKING_REASON_RELOCALIZING";
 })(ViroARTrackingReasonConstants || (exports.ViroARTrackingReasonConstants = ViroARTrackingReasonConstants = {}));

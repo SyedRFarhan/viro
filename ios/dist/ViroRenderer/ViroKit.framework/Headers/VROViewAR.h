@@ -204,4 +204,25 @@ enum class VROCameraPosition;
  */
 - (BOOL)isPreferMonocularDepth;
 
+#pragma mark - High Resolution Photo Capture
+
+/*
+ Capture a high-resolution photo using ARKit's captureHighResolutionFrame (iOS 16+).
+ This captures the camera image at full sensor resolution (up to 12MP) and renders
+ the 3D scene at matching resolution for compositing.
+
+ @param fileName The base filename (without extension) for the saved image
+ @param saveToCamera If YES, saves to the device's camera roll
+ @param completionHandler Called with (success, url, nil, errorCode) where errorCode:
+        0 = success
+        1 = no permissions
+        5 = write failed
+        10 = iOS version not supported (< 16)
+        11 = capture failed
+        15 = session not ready
+ */
+- (void)takeHighResolutionPhoto:(NSString *)fileName
+               saveToCameraRoll:(BOOL)saveToCamera
+          withCompletionHandler:(VROViewWriteMediaFinishBlock)completionHandler;
+
 @end

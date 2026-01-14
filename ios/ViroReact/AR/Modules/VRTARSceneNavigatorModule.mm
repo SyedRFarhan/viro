@@ -148,6 +148,45 @@ RCT_EXPORT_METHOD(takeScreenshot:(nonnull NSNumber *)reactTag
     }];
 }
 
+RCT_EXPORT_METHOD(takeHighResolutionPhoto:(nonnull NSNumber *)reactTag
+                        fileName:(NSString *)fileName
+                saveToCameraRoll:(BOOL)saveToCameraRoll
+                         resolve:(RCTPromiseResolveBlock)resolve
+                          reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager, NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                reject(@"invalid_view", @"Invalid view returned from registry, expecting VRTARSceneNavigator", nil);
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            // Check if component is still valid
+            if (!component.rootVROView) {
+                NSMutableDictionary *toReturn = [NSMutableDictionary new];
+                [toReturn setObject:@(NO) forKey:kVRTRecordingKeySuccess];
+                [toReturn setObject:@(2) forKey:kVRTRecordingKeyErrorCode]; // Error code 2: View unmounted
+                resolve(toReturn);
+                return;
+            }
+
+            [component takeHighResolutionPhoto:fileName
+                              saveToCameraRoll:saveToCameraRoll
+                             completionHandler:^(BOOL success, NSURL *url, NSURL *gifPath, NSInteger errorCode) {
+                NSMutableDictionary *toReturn = [NSMutableDictionary new];
+                [toReturn setObject:@(success) forKey:kVRTRecordingKeySuccess];
+                if (url) [toReturn setObject:[url path] forKey:kVRTRecordingKeyUrl];
+                [toReturn setObject:@(errorCode) forKey:kVRTRecordingKeyErrorCode];
+                resolve(toReturn);
+            }];
+        } @catch (NSException *exception) {
+            reject(@"high_res_photo_error", [NSString stringWithFormat:@"Error taking high-res photo: %@", exception.reason], nil);
+        }
+    }];
+}
+
 RCT_EXPORT_METHOD(isNativeARSessionAvailable:(nonnull NSNumber *)reactTag
                                       resolve:(RCTPromiseResolveBlock)resolve
                                        reject:(RCTPromiseRejectBlock)reject) {
@@ -1021,6 +1060,109 @@ RCT_EXPORT_METHOD(saveWorldMap:(nonnull NSNumber *)reactTag
             }];
         } @catch (NSException *exception) {
             resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+#pragma mark - View Transform Zoom
+
+RCT_EXPORT_METHOD(setViewZoom:(nonnull NSNumber *)reactTag
+                   zoomFactor:(float)zoomFactor) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                RCTLogWarn(@"setViewZoom: Invalid view type");
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component setViewZoom:zoomFactor];
+        } @catch (NSException *exception) {
+            RCTLogError(@"setViewZoom error: %@", exception.reason);
+        }
+    }];
+}
+
+#pragma mark - Render Zoom (Projection-Based)
+
+RCT_EXPORT_METHOD(setRenderZoom:(nonnull NSNumber *)reactTag
+                     zoomFactor:(float)zoomFactor) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                RCTLogWarn(@"setRenderZoom: Invalid view type");
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component setRenderZoom:zoomFactor];
+        } @catch (NSException *exception) {
+            RCTLogError(@"setRenderZoom error: %@", exception.reason);
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(getRenderZoom:(nonnull NSNumber *)reactTag
+                        resolve:(RCTPromiseResolveBlock)resolve
+                         reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"zoomFactor": @1.0});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            float zoomFactor = [component getRenderZoom];
+            resolve(@{@"zoomFactor": @(zoomFactor)});
+        } @catch (NSException *exception) {
+            resolve(@{@"zoomFactor": @1.0, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(getMaxRenderZoom:(nonnull NSNumber *)reactTag
+                           resolve:(RCTPromiseResolveBlock)resolve
+                            reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"maxZoomFactor": @5.0});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            float maxZoom = [component getMaxRenderZoom];
+            resolve(@{@"maxZoomFactor": @(maxZoom)});
+        } @catch (NSException *exception) {
+            resolve(@{@"maxZoomFactor": @5.0, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(setMaxRenderZoom:(nonnull NSNumber *)reactTag
+                           maxZoom:(float)maxZoom) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                RCTLogWarn(@"setMaxRenderZoom: Invalid view type");
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component setMaxRenderZoom:maxZoom];
+        } @catch (NSException *exception) {
+            RCTLogError(@"setMaxRenderZoom error: %@", exception.reason);
         }
     }];
 }

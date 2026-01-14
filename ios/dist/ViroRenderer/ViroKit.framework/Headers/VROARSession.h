@@ -519,10 +519,50 @@ public:
         return _semanticModeEnabled;
     }
 
+    // ===========================================================================
+    // Render Zoom (Projection-based zoom)
+    // ===========================================================================
+
+    /*
+     * Set the render zoom factor. This applies a zoom effect by modifying the
+     * projection matrix and camera background texture coordinates. The zoom
+     * affects both the preview and any captured screenshots/videos.
+     *
+     * @param zoomFactor 1.0 = no zoom, 2.0 = 2x zoom, etc.
+     *                   Values are clamped to [1.0, maxRenderZoom]
+     */
+    virtual void setRenderZoom(float zoomFactor) {
+        _renderZoomFactor = std::max(1.0f, std::min(zoomFactor, _maxRenderZoom));
+    }
+
+    /*
+     * Get the current render zoom factor.
+     */
+    virtual float getRenderZoom() const {
+        return _renderZoomFactor;
+    }
+
+    /*
+     * Get the maximum supported render zoom factor.
+     * Higher values may cause edge distortion artifacts.
+     */
+    virtual float getMaxRenderZoom() const {
+        return _maxRenderZoom;
+    }
+
+    /*
+     * Set the maximum render zoom factor (default 5.0).
+     */
+    virtual void setMaxRenderZoom(float maxZoom) {
+        _maxRenderZoom = std::max(1.0f, maxZoom);
+    }
+
 protected:
 
     VROTrackingType _trackingType;
     bool _semanticModeEnabled = false;
+    float _renderZoomFactor = 1.0f;
+    float _maxRenderZoom = 5.0f;
 
 private:
 

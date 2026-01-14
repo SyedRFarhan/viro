@@ -94,6 +94,20 @@ typedef void (^WorldMapSaveCompletionHandler)(BOOL success, NSString * _Nullable
       saveToCameraRoll:(BOOL)saveToCameraRoll
      completionHandler:(VROViewWriteMediaFinishBlock)completionHandler;
 
+- (void)takeHighResolutionPhoto:(NSString *)fileName
+               saveToCameraRoll:(BOOL)saveToCameraRoll
+              completionHandler:(VROViewWriteMediaFinishBlock)completionHandler;
+
+// View transform zoom - scales the entire ARView using CGAffineTransform
+- (void)setViewZoom:(float)zoomFactor;
+
+// Render zoom (projection-based) - modifies projection matrix and camera texture
+// This zoom is captured in screenshots, video recordings, and high-res photos
+- (void)setRenderZoom:(float)zoomFactor;
+- (float)getRenderZoom;
+- (float)getMaxRenderZoom;
+- (void)setMaxRenderZoom:(float)maxZoom;
+
 #pragma mark - Cloud Anchor Methods
 
 // Cloud Anchor completion handler types

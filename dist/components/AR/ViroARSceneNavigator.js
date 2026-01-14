@@ -113,6 +113,20 @@ class ViroARSceneNavigator extends React.Component {
         return await ViroARSceneNavigatorModule.takeScreenshot((0, react_native_1.findNodeHandle)(this), fileName, saveToCameraRoll);
     };
     /**
+     * Takes a high-resolution photo using ARKit's captureHighResolutionFrame (iOS 16+).
+     * This captures the camera image at full sensor resolution (up to 12MP) with
+     * the 3D scene composited on top.
+     *
+     * @param fileName - name of the file (without extension)
+     * @param saveToCameraRoll - whether or not the file should also be saved to the camera roll
+     * @returns Object with success, url, and errorCode keys.
+     *          errorCode: 0=success, 1=no permissions, 5=write failed,
+     *                     10=iOS<16 not supported, 11=capture failed, 15=session not ready
+     */
+    _takeHighResolutionPhoto = async (fileName, saveToCameraRoll) => {
+        return await ViroARSceneNavigatorModule.takeHighResolutionPhoto((0, react_native_1.findNodeHandle)(this), fileName, saveToCameraRoll);
+    };
+    /**
      * @todo document _project
      *
      * @param point
@@ -725,6 +739,68 @@ class ViroARSceneNavigator extends React.Component {
     _saveWorldMap = async () => {
         return await ViroARSceneNavigatorModule.saveWorldMap((0, react_native_1.findNodeHandle)(this));
     };
+    // ===========================================================================
+    // Camera Zoom API Methods
+    // ===========================================================================
+    /**
+     * Set zoom using UIView transform (CGAffineTransform scale).
+     * This scales the entire ARView visually, different from camera optical zoom.
+     * Useful for quick visual zoom without camera hardware changes.
+     *
+     * @param zoomFactor - The scale factor (1.0 = normal, 2.0 = 2x scale, etc.)
+     * @platform ios
+     */
+    _setViewZoom = (zoomFactor) => {
+        ViroARSceneNavigatorModule.setViewZoom((0, react_native_1.findNodeHandle)(this), zoomFactor);
+    };
+    // ===========================================================================
+    // Render Zoom API Methods (Projection-Based)
+    // ===========================================================================
+    /**
+     * Set render zoom using projection matrix scaling.
+     * This modifies the camera's field of view and background texture to achieve
+     * a real zoom effect that IS captured in screenshots, video recordings, and photos.
+     *
+     * Unlike setViewZoom (which uses UI scaling and isn't captured), setRenderZoom
+     * modifies the actual render pipeline:
+     * - Scales the projection matrix to narrow the field of view
+     * - Crops the camera background texture to match
+     * - Adjusts hit testing to account for the zoomed viewport
+     *
+     * @param zoomFactor - The zoom factor (1.0 = no zoom, 2.0 = 2x zoom, etc.)
+     *                     Clamped to range [1.0, maxRenderZoom]
+     * @platform ios
+     */
+    _setRenderZoom = (zoomFactor) => {
+        ViroARSceneNavigatorModule.setRenderZoom((0, react_native_1.findNodeHandle)(this), zoomFactor);
+    };
+    /**
+     * Get the current render zoom factor.
+     *
+     * @returns Promise resolving to the current zoom factor
+     * @platform ios
+     */
+    _getRenderZoom = async () => {
+        return await ViroARSceneNavigatorModule.getRenderZoom((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * Get the maximum render zoom factor.
+     *
+     * @returns Promise resolving to the maximum zoom factor
+     * @platform ios
+     */
+    _getMaxRenderZoom = async () => {
+        return await ViroARSceneNavigatorModule.getMaxRenderZoom((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * Set the maximum render zoom factor.
+     *
+     * @param maxZoom - The maximum zoom factor (must be >= 1.0)
+     * @platform ios
+     */
+    _setMaxRenderZoom = (maxZoom) => {
+        ViroARSceneNavigatorModule.setMaxRenderZoom((0, react_native_1.findNodeHandle)(this), maxZoom);
+    };
     /**
      * Renders the Scene Views in the stack.
      *
@@ -751,6 +827,7 @@ class ViroARSceneNavigator extends React.Component {
         startVideoRecording: this._startVideoRecording,
         stopVideoRecording: this._stopVideoRecording,
         takeScreenshot: this._takeScreenshot,
+        takeHighResolutionPhoto: this._takeHighResolutionPhoto,
         isNativeARSessionAvailable: this._isNativeARSessionAvailable,
         resetARSession: this._resetARSession,
         setWorldOrigin: this._setWorldOrigin,
@@ -784,6 +861,13 @@ class ViroARSceneNavigator extends React.Component {
         isPreferMonocularDepth: this._isPreferMonocularDepth,
         // World Map Persistence API (iOS only)
         saveWorldMap: this._saveWorldMap,
+        // View Transform Zoom API
+        setViewZoom: this._setViewZoom,
+        // Render Zoom API (Projection-Based)
+        setRenderZoom: this._setRenderZoom,
+        getRenderZoom: this._getRenderZoom,
+        getMaxRenderZoom: this._getMaxRenderZoom,
+        setMaxRenderZoom: this._setMaxRenderZoom,
         viroAppProps: {},
     };
     sceneNavigator = {
@@ -795,6 +879,7 @@ class ViroARSceneNavigator extends React.Component {
         startVideoRecording: this._startVideoRecording,
         stopVideoRecording: this._stopVideoRecording,
         takeScreenshot: this._takeScreenshot,
+        takeHighResolutionPhoto: this._takeHighResolutionPhoto,
         isNativeARSessionAvailable: this._isNativeARSessionAvailable,
         resetARSession: this._resetARSession,
         setWorldOrigin: this._setWorldOrigin,
@@ -828,6 +913,13 @@ class ViroARSceneNavigator extends React.Component {
         isPreferMonocularDepth: this._isPreferMonocularDepth,
         // World Map Persistence API (iOS only)
         saveWorldMap: this._saveWorldMap,
+        // View Transform Zoom API
+        setViewZoom: this._setViewZoom,
+        // Render Zoom API (Projection-Based)
+        setRenderZoom: this._setRenderZoom,
+        getRenderZoom: this._getRenderZoom,
+        getMaxRenderZoom: this._getMaxRenderZoom,
+        setMaxRenderZoom: this._setMaxRenderZoom,
         viroAppProps: {},
     };
     render() {

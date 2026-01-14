@@ -318,7 +318,9 @@ export type ViroTrackingState =
 export type ViroTrackingReason =
   | ViroARTrackingReasonConstants.TRACKING_REASON_NONE
   | ViroARTrackingReasonConstants.TRACKING_REASON_EXCESSIVE_MOTION
-  | ViroARTrackingReasonConstants.TRACKING_REASON_INSUFFICIENT_FEATURES;
+  | ViroARTrackingReasonConstants.TRACKING_REASON_INSUFFICIENT_FEATURES
+  | ViroARTrackingReasonConstants.TRACKING_REASON_INSUFFICIENT_LIGHT
+  | ViroARTrackingReasonConstants.TRACKING_REASON_RELOCALIZING;
 
 export type ViroAmbientLightUpdateEvent = {
   ambientLightInfo: ViroAmbientLightInfo;
@@ -648,5 +650,21 @@ export type ViroMonocularDepthDownloadResult = {
  */
 export type ViroMonocularDepthPreferenceResult = {
   preferred: boolean;
+  error?: string;
+};
+
+/**
+ * Result of getting the current render zoom factor.
+ */
+export type ViroRenderZoomResult = {
+  zoomFactor: number;
+  error?: string;
+};
+
+/**
+ * Result of getting the maximum render zoom factor.
+ */
+export type ViroMaxRenderZoomResult = {
+  maxZoomFactor: number;
   error?: string;
 };
