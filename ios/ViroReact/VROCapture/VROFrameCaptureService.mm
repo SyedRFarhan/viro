@@ -20,6 +20,14 @@
 @property (nonatomic, assign) float scale;
 @property (nonatomic, assign) float cropX;
 @property (nonatomic, assign) float cropY;
+/// Dimensions BEFORE rotation (landscape, used for coordinate transforms)
+@property (nonatomic, assign) int preRotationWidth;
+@property (nonatomic, assign) int preRotationHeight;
+/// Dimensions of the final JPEG (after rotation if applied)
+@property (nonatomic, assign) int outputWidth;
+@property (nonatomic, assign) int outputHeight;
+/// Whether the image was rotated 90° CCW for portrait
+@property (nonatomic, assign) BOOL rotatedToPortrait;
 @end
 
 @implementation VROJpegEncodeResult
@@ -189,15 +197,26 @@
                 return;
             }
 
-            NSLog(@"[ViroFrameStream DEBUG] JPEG encoded: %lu bytes, scale=%.3f, crop=(%.1f, %.1f)",
+            NSLog(@"[ViroFrameStream DEBUG] JPEG encoded: %lu bytes, scale=%.3f, crop=(%.1f, %.1f), preRot=%dx%d, output=%dx%d, rotated=%@",
                   (unsigned long)encodeResult.jpegData.length, encodeResult.scale,
-                  encodeResult.cropX, encodeResult.cropY);
+                  encodeResult.cropX, encodeResult.cropY,
+                  encodeResult.preRotationWidth, encodeResult.preRotationHeight,
+                  encodeResult.outputWidth, encodeResult.outputHeight,
+                  encodeResult.rotatedToPortrait ? @"YES" : @"NO");
 
             float scale = encodeResult.scale;
             float cropX = encodeResult.cropX;
             float cropY = encodeResult.cropY;
+            // Pre-rotation (landscape) dimensions - used for intrinsics and transforms
+            int preRotationWidth = encodeResult.preRotationWidth;
+            int preRotationHeight = encodeResult.preRotationHeight;
+            // Post-rotation (portrait) dimensions - what JS receives
+            int outputWidth = encodeResult.outputWidth;
+            int outputHeight = encodeResult.outputHeight;
+            BOOL rotatedToPortrait = encodeResult.rotatedToPortrait;
 
             // 2. Calculate JPEG-space intrinsics WITH CROP OFFSETS
+            // These are in LANDSCAPE space (pre-rotation) for coordinate resolution
             // fx' = fx * scale
             // fy' = fy * scale
             // cx' = (cx * scale) - cropX   <-- CRITICAL: subtract crop offset!
@@ -208,7 +227,9 @@
             intrinsicsJPEG.columns[2][0] = arIntrinsics.columns[2][0] * scale - cropX;  // cx
             intrinsicsJPEG.columns[2][1] = arIntrinsics.columns[2][1] * scale - cropY;  // cy
 
-            // 3. Calculate jpegToARTransform: JPEG UV (0-1) → AR image UV (0-1)
+            // 3. Calculate jpegToARTransform: LANDSCAPE JPEG UV (0-1) → AR image UV (0-1)
+            // NOTE: This transform is in LANDSCAPE space (pre-rotation).
+            // The resolver first converts portrait→landscape coords before applying this.
             //
             // Pipeline (forward):
             //   scaled_px = AR_px * scale
@@ -218,22 +239,22 @@
             //   scaled_px = JPEG_px + crop
             //   AR_px = scaled_px / scale = (JPEG_px + crop) / scale
             //
-            // In UV space:
-            //   JPEG_px = jpegU * targetWidth
+            // In UV space (using pre-rotation/landscape dimensions):
+            //   JPEG_px = jpegU * preRotationWidth
             //   AR_px = (JPEG_px + cropX) / scale
-            //   AR_u = AR_px / arWidth = (jpegU * targetWidth + cropX) / (scale * arWidth)
-            //        = jpegU * (targetWidth / (scale * arWidth)) + cropX / (scale * arWidth)
+            //   AR_u = AR_px / arWidth = (jpegU * preRotationWidth + cropX) / (scale * arWidth)
+            //        = jpegU * (preRotationWidth / (scale * arWidth)) + cropX / (scale * arWidth)
             //
             // So the transform coefficients are:
-            //   a = targetWidth / (scale * arWidth)     <-- CRITICAL: divide by scale!
-            //   d = targetHeight / (scale * arHeight)
+            //   a = preRotationWidth / (scale * arWidth)
+            //   d = preRotationHeight / (scale * arHeight)
             //   tx = cropX / (scale * arWidth)
             //   ty = cropY / (scale * arHeight)
             float scaledARWidth = scale * arImageSize.width;
             float scaledARHeight = scale * arImageSize.height;
 
-            float jpegToAR_scaleX = (float)targetWidth / scaledARWidth;
-            float jpegToAR_scaleY = (float)targetHeight / scaledARHeight;
+            float jpegToAR_scaleX = (float)preRotationWidth / scaledARWidth;
+            float jpegToAR_scaleY = (float)preRotationHeight / scaledARHeight;
             float jpegToAR_offsetX = cropX / scaledARWidth;
             float jpegToAR_offsetY = cropY / scaledARHeight;
 
@@ -251,8 +272,12 @@
             entry.sessionId = sessionId;
             entry.cameraToWorld = cameraTransform;
 
+            // Store LANDSCAPE intrinsics (pre-rotation) for coordinate resolution
+            // Even though JS receives portrait image, intrinsics are in landscape space
             entry.intrinsicsJPEG = intrinsicsJPEG;
-            entry.jpegSize = CGSizeMake(targetWidth, targetHeight);
+            // Store PORTRAIT dimensions (what JS sees) - for display reference
+            entry.jpegSize = CGSizeMake(outputWidth, outputHeight);
+            entry.rotatedToPortrait = rotatedToPortrait;
 
             entry.intrinsicsAR = arIntrinsics;
             entry.arImageSize = arImageSize;
@@ -278,8 +303,10 @@
             event[@"timestamp"] = @(timestamp);
             event[@"sessionId"] = @(sessionId);
             event[@"imageData"] = [encodeResult.jpegData base64EncodedStringWithOptions:0];
-            event[@"width"] = @(targetWidth);
-            event[@"height"] = @(targetHeight);
+            // Send portrait dimensions (what JS sees after rotation)
+            event[@"width"] = @(outputWidth);
+            event[@"height"] = @(outputHeight);
+            event[@"rotatedToPortrait"] = @(rotatedToPortrait);
 
             event[@"intrinsics"] = @{
                 @"fx": @(intrinsicsJPEG.columns[0][0]),
@@ -318,8 +345,8 @@
 
             // Emit to JS (non-blocking - event queued to main thread)
             if (self.onFrameReady) {
-                NSLog(@"[ViroFrameStream DEBUG] Emitting frame %@ to JS (%dx%d, tracking=%@)",
-                      frameId, targetWidth, targetHeight, event[@"trackingState"]);
+                NSLog(@"[ViroFrameStream DEBUG] Emitting frame %@ to JS (%dx%d portrait, tracking=%@)",
+                      frameId, outputWidth, outputHeight, event[@"trackingState"]);
                 dispatch_async(dispatch_get_main_queue(), ^{
                     self.onFrameReady(event);
                 });
@@ -366,9 +393,16 @@
     size_t srcWidth = CVPixelBufferGetWidth(pixelBuffer);
     size_t srcHeight = CVPixelBufferGetHeight(pixelBuffer);
 
+    // User passes PORTRAIT dimensions (e.g., 720x1280) as the desired final output.
+    // Since we rotate 90° CCW at the end, we need to crop LANDSCAPE first.
+    // Pre-rotation crop dimensions are swapped: cropWidth=targetHeight, cropHeight=targetWidth
+    // After 90° CCW rotation: (cropWidth x cropHeight) → (targetWidth x targetHeight)
+    int cropWidth = targetHeight;   // Landscape width = portrait height
+    int cropHeight = targetWidth;   // Landscape height = portrait width
+
     // Use MAX scale (cover) to ensure we can crop to exact target size
-    float scaleX = (float)targetWidth / srcWidth;
-    float scaleY = (float)targetHeight / srcHeight;
+    float scaleX = (float)cropWidth / srcWidth;
+    float scaleY = (float)cropHeight / srcHeight;
     float scale = MAX(scaleX, scaleY);  // COVER, not fit!
 
     // Scale the image
@@ -380,16 +414,16 @@
     float scaledWidth = scaledExtent.size.width;
     float scaledHeight = scaledExtent.size.height;
 
-    // Crop offsets in SCALED space (same as JPEG pixels)
-    float cropX = (scaledWidth - targetWidth) / 2.0f;
-    float cropY = (scaledHeight - targetHeight) / 2.0f;
+    // Crop offsets in SCALED space (landscape pre-rotation)
+    float cropX = (scaledWidth - cropWidth) / 2.0f;
+    float cropY = (scaledHeight - cropHeight) / 2.0f;
 
-    // Crop rect in scaled image coordinates
+    // Crop rect in scaled image coordinates (landscape, pre-rotation)
     CGRect cropRect = CGRectMake(
         scaledExtent.origin.x + cropX,
         scaledExtent.origin.y + cropY,
-        targetWidth,
-        targetHeight
+        cropWidth,
+        cropHeight
     );
 
     // Create CGImage from cropped region
@@ -405,7 +439,15 @@
     UIImage *uiImage = [UIImage imageWithCGImage:cgImage];
     CGImageRelease(cgImage);
 
-    NSData *jpegData = UIImageJPEGRepresentation(uiImage, quality);
+    // Rotate 90° CCW for portrait orientation
+    // ARKit captures in landscape right; rotating CCW gives correct portrait view
+    UIImage *rotatedImage = [self rotateImage:uiImage byDegrees:90];
+    if (!rotatedImage) {
+        NSLog(@"[ViroFrameStream DEBUG] encodeJPEGWithCrop: Failed to rotate image");
+        return nil;
+    }
+
+    NSData *jpegData = UIImageJPEGRepresentation(rotatedImage, quality);
     if (!jpegData) {
         NSLog(@"[ViroFrameStream DEBUG] encodeJPEGWithCrop: Failed to encode JPEG");
         return nil;
@@ -416,8 +458,57 @@
     result.scale = scale;
     result.cropX = cropX;
     result.cropY = cropY;
+    // Pre-rotation (landscape) dimensions - used for coordinate transforms
+    result.preRotationWidth = cropWidth;
+    result.preRotationHeight = cropHeight;
+    // After 90° CCW rotation of (cropWidth x cropHeight), output is (targetWidth x targetHeight)
+    // This matches the user's requested portrait dimensions
+    result.outputWidth = targetWidth;   // User's requested portrait width
+    result.outputHeight = targetHeight; // User's requested portrait height
+    result.rotatedToPortrait = YES;
 
     return result;
+}
+
+#pragma mark - Image Rotation
+
+/**
+ * Rotate UIImage by specified degrees counter-clockwise.
+ * For portrait correction, we rotate 90° CCW (which is 270° CW or -90° in UIKit terms).
+ */
+- (UIImage *)rotateImage:(UIImage *)image byDegrees:(CGFloat)degrees {
+    if (!image) return nil;
+
+    // 90° CCW = -90° in standard rotation = 270° CW
+    // UIImage uses a coordinate system where positive rotation is CCW
+    CGFloat radians = degrees * M_PI / 180.0;
+
+    CGSize originalSize = image.size;
+    // For 90° rotation, swap width and height
+    CGSize rotatedSize = CGSizeMake(originalSize.height, originalSize.width);
+
+    UIGraphicsBeginImageContextWithOptions(rotatedSize, NO, image.scale);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+
+    if (!context) {
+        UIGraphicsEndImageContext();
+        return nil;
+    }
+
+    // Move origin to center of rotated canvas
+    CGContextTranslateCTM(context, rotatedSize.width / 2, rotatedSize.height / 2);
+
+    // Rotate CCW (positive radians in UIKit coordinate system)
+    CGContextRotateCTM(context, radians);
+
+    // Draw image centered at origin
+    [image drawInRect:CGRectMake(-originalSize.width / 2, -originalSize.height / 2,
+                                  originalSize.width, originalSize.height)];
+
+    UIImage *rotatedImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+
+    return rotatedImage;
 }
 
 #pragma mark - Frame Retrieval

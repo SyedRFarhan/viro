@@ -1029,9 +1029,10 @@ RCT_EXPORT_METHOD(isPreferMonocularDepth:(nonnull NSNumber *)reactTag
     }];
 }
 
-#pragma mark - World Map Persistence Methods
+#pragma mark - World Map Persistence Methods (Imperative API)
 
 RCT_EXPORT_METHOD(saveWorldMap:(nonnull NSNumber *)reactTag
+                     sessionId:(nonnull NSString *)sessionId
                        resolve:(RCTPromiseResolveBlock)resolve
                         reject:(RCTPromiseRejectBlock)reject) {
     [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
@@ -1039,27 +1040,145 @@ RCT_EXPORT_METHOD(saveWorldMap:(nonnull NSNumber *)reactTag
         @try {
             VRTView *view = (VRTView *)viewRegistry[reactTag];
             if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
-                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                resolve(@{@"success": @NO, @"error": @"Invalid view type", @"code": @"SESSION_UNAVAILABLE"});
                 return;
             }
 
             VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
 
             if (!component.rootVROView) {
-                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted"});
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted", @"code": @"SESSION_UNAVAILABLE"});
                 return;
             }
 
-            [component saveWorldMap:^(BOOL success, NSString *error) {
+            [component saveWorldMapForSession:sessionId completionHandler:^(BOOL success, NSString *errorCode, NSString *errorMessage) {
                 NSMutableDictionary *result = [NSMutableDictionary new];
                 [result setObject:@(success) forKey:@"success"];
-                if (error) {
-                    [result setObject:error forKey:@"error"];
+                if (errorCode) {
+                    [result setObject:errorCode forKey:@"code"];
+                }
+                if (errorMessage) {
+                    [result setObject:errorMessage forKey:@"error"];
                 }
                 resolve(result);
             }];
         } @catch (NSException *exception) {
-            resolve(@{@"success": @NO, @"error": exception.reason});
+            resolve(@{@"success": @NO, @"error": exception.reason, @"code": @"SESSION_UNAVAILABLE"});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(loadWorldMap:(nonnull NSNumber *)reactTag
+                     sessionId:(nonnull NSString *)sessionId
+                       resolve:(RCTPromiseResolveBlock)resolve
+                        reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type", @"code": @"SESSION_UNAVAILABLE"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted", @"code": @"SESSION_UNAVAILABLE"});
+                return;
+            }
+
+            [component loadWorldMapForSession:sessionId completionHandler:^(BOOL success, NSString *errorCode, NSString *errorMessage) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (errorCode) {
+                    [result setObject:errorCode forKey:@"code"];
+                }
+                if (errorMessage) {
+                    [result setObject:errorMessage forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason, @"code": @"SESSION_UNAVAILABLE"});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(deleteWorldMap:(nonnull NSNumber *)reactTag
+                       sessionId:(nonnull NSString *)sessionId
+                         resolve:(RCTPromiseResolveBlock)resolve
+                          reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type", @"code": @"SESSION_UNAVAILABLE"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted", @"code": @"SESSION_UNAVAILABLE"});
+                return;
+            }
+
+            [component deleteWorldMapForSession:sessionId completionHandler:^(BOOL success, NSString *errorCode, NSString *errorMessage) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (errorCode) {
+                    [result setObject:errorCode forKey:@"code"];
+                }
+                if (errorMessage) {
+                    [result setObject:errorMessage forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason, @"code": @"SESSION_UNAVAILABLE"});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(getWorldMappingStatus:(nonnull NSNumber *)reactTag
+                                resolve:(RCTPromiseResolveBlock)resolve
+                                 reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{
+                    @"mappingStatus": @"notAvailable",
+                    @"trackingState": @"notAvailable",
+                    @"canSave": @NO
+                });
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{
+                    @"mappingStatus": @"notAvailable",
+                    @"trackingState": @"notAvailable",
+                    @"canSave": @NO
+                });
+                return;
+            }
+
+            [component getWorldMappingStatusWithCompletionHandler:^(NSDictionary *result) {
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{
+                @"mappingStatus": @"notAvailable",
+                @"trackingState": @"notAvailable",
+                @"canSave": @NO,
+                @"error": exception.reason
+            });
         }
     }];
 }

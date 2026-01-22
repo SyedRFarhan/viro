@@ -51,8 +51,9 @@ const ViroARSceneNavigatorModule = react_native_1.NativeModules.VRTARSceneNaviga
 let mathRandomOffset = 0;
 /**
  * ViroARSceneNavigator is used to transition between multiple AR Scenes.
+ * Internal class component - use ViroARSceneNavigator (the forwardRef wrapper) for ref access.
  */
-class ViroARSceneNavigator extends React.Component {
+class ViroARSceneNavigatorClass extends React.Component {
     _component = null;
     constructor(props) {
         super(props);
@@ -732,12 +733,44 @@ class ViroARSceneNavigator extends React.Component {
      * Use this to ensure the world map is saved before navigating away,
      * or when you want to save at a specific point in time.
      *
-     * Note: A sessionId must be set for this to work.
-     *
-     * @returns Promise resolving to the save result
+     * @param sessionId - Unique identifier for the session (used as filename)
+     * @returns Promise resolving to the save result with success/error/code
      */
-    _saveWorldMap = async () => {
-        return await ViroARSceneNavigatorModule.saveWorldMap((0, react_native_1.findNodeHandle)(this));
+    _saveWorldMap = async (sessionId) => {
+        return await ViroARSceneNavigatorModule.saveWorldMap((0, react_native_1.findNodeHandle)(this), sessionId);
+    };
+    /**
+     * [iOS Only] Load a previously saved world map and restart the AR session.
+     *
+     * Note: success=true means the session was restarted with initialWorldMap set.
+     * Relocalization happens asynchronously - monitor trackingState for .normal.
+     *
+     * @param sessionId - Unique identifier for the session to load
+     * @returns Promise resolving to the load result with success/error/code
+     */
+    _loadWorldMap = async (sessionId) => {
+        return await ViroARSceneNavigatorModule.loadWorldMap((0, react_native_1.findNodeHandle)(this), sessionId);
+    };
+    /**
+     * [iOS Only] Delete a previously saved world map from storage.
+     *
+     * @param sessionId - Unique identifier for the session to delete
+     * @returns Promise resolving to the delete result with success/error/code
+     */
+    _deleteWorldMap = async (sessionId) => {
+        return await ViroARSceneNavigatorModule.deleteWorldMap((0, react_native_1.findNodeHandle)(this), sessionId);
+    };
+    /**
+     * [iOS Only] Get the current world mapping status.
+     * Use this to check if the world map is ready to save, or to show
+     * scanning progress UI.
+     *
+     * For continuous updates, use the onWorldMappingStatusChanged prop instead.
+     *
+     * @returns Promise resolving to current mapping status, tracking state, and canSave flag
+     */
+    _getWorldMappingStatus = async () => {
+        return await ViroARSceneNavigatorModule.getWorldMappingStatus((0, react_native_1.findNodeHandle)(this));
     };
     // ===========================================================================
     // Frame Streaming API Methods (for Gemini Vision integration)
@@ -911,8 +944,11 @@ class ViroARSceneNavigator extends React.Component {
         downloadMonocularDepthModel: this._downloadMonocularDepthModel,
         setPreferMonocularDepth: this._setPreferMonocularDepth,
         isPreferMonocularDepth: this._isPreferMonocularDepth,
-        // World Map Persistence API (iOS only)
+        // World Map Persistence API (iOS only) - imperative methods
         saveWorldMap: this._saveWorldMap,
+        loadWorldMap: this._loadWorldMap,
+        deleteWorldMap: this._deleteWorldMap,
+        getWorldMappingStatus: this._getWorldMappingStatus,
         // Frame Streaming API (iOS only, for Gemini Vision integration)
         startFrameStream: this._startFrameStream,
         stopFrameStream: this._stopFrameStream,
@@ -967,8 +1003,11 @@ class ViroARSceneNavigator extends React.Component {
         downloadMonocularDepthModel: this._downloadMonocularDepthModel,
         setPreferMonocularDepth: this._setPreferMonocularDepth,
         isPreferMonocularDepth: this._isPreferMonocularDepth,
-        // World Map Persistence API (iOS only)
+        // World Map Persistence API (iOS only) - imperative methods
         saveWorldMap: this._saveWorldMap,
+        loadWorldMap: this._loadWorldMap,
+        deleteWorldMap: this._deleteWorldMap,
+        getWorldMappingStatus: this._getWorldMappingStatus,
         // Frame Streaming API (iOS only, for Gemini Vision integration)
         startFrameStream: this._startFrameStream,
         stopFrameStream: this._stopFrameStream,
@@ -1006,7 +1045,57 @@ class ViroARSceneNavigator extends React.Component {
       </VRTARSceneNavigator>);
     }
 }
-exports.ViroARSceneNavigator = ViroARSceneNavigator;
+/**
+ * ViroARSceneNavigator with ref support for imperative world map persistence API.
+ *
+ * @example
+ * ```tsx
+ * const ref = useRef<ViroARSceneNavigatorHandle>(null);
+ *
+ * <ViroARSceneNavigator ref={ref} ... />
+ *
+ * // Save world map
+ * await ref.current?.saveWorldMap("my-session");
+ *
+ * // Load world map (restarts AR session)
+ * await ref.current?.loadWorldMap("my-session");
+ *
+ * // Delete world map
+ * await ref.current?.deleteWorldMap("my-session");
+ * ```
+ */
+exports.ViroARSceneNavigator = React.forwardRef((props, ref) => {
+    const innerRef = React.useRef(null);
+    React.useImperativeHandle(ref, () => ({
+        saveWorldMap: (sessionId) => innerRef.current?._saveWorldMap(sessionId) ??
+            Promise.resolve({
+                success: false,
+                error: "Component not mounted",
+                code: "SESSION_UNAVAILABLE",
+            }),
+        loadWorldMap: (sessionId) => innerRef.current?._loadWorldMap(sessionId) ??
+            Promise.resolve({
+                success: false,
+                error: "Component not mounted",
+                code: "SESSION_UNAVAILABLE",
+            }),
+        deleteWorldMap: (sessionId) => innerRef.current?._deleteWorldMap(sessionId) ??
+            Promise.resolve({
+                success: false,
+                error: "Component not mounted",
+                code: "SESSION_UNAVAILABLE",
+            }),
+        getWorldMappingStatus: () => innerRef.current?._getWorldMappingStatus() ??
+            Promise.resolve({
+                mappingStatus: "notAvailable",
+                trackingState: "notAvailable",
+                canSave: false,
+            }),
+    }));
+    return <ViroARSceneNavigatorClass ref={innerRef} {...props}/>;
+});
+// Set display name for React DevTools
+exports.ViroARSceneNavigator.displayName = "ViroARSceneNavigator";
 const styles = react_native_1.StyleSheet.create({
     container: {
         flex: 1,
@@ -1016,6 +1105,6 @@ const styles = react_native_1.StyleSheet.create({
 });
 const VRTARSceneNavigator = (0, react_native_1.requireNativeComponent)("VRTARSceneNavigator", 
 // @ts-ignore
-ViroARSceneNavigator, {
+ViroARSceneNavigatorClass, {
     nativeOnly: { currentSceneIndex: true },
 });

@@ -52,9 +52,8 @@ RCT_EXPORT_VIEW_PROPERTY(geospatialAnchorProvider, NSString)
 RCT_EXPORT_VIEW_PROPERTY(worldMeshEnabled, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(worldMeshConfig, NSDictionary)
 RCT_EXPORT_VIEW_PROPERTY(onWorldMeshUpdated, RCTDirectEventBlock)
-RCT_EXPORT_VIEW_PROPERTY(sessionId, NSString)
-RCT_EXPORT_VIEW_PROPERTY(worldMapAutoSaveInterval, NSInteger)
-RCT_EXPORT_VIEW_PROPERTY(onWorldMapPersistenceStatus, RCTDirectEventBlock)
+// World map persistence is now fully imperative via ref API (props removed)
+RCT_EXPORT_VIEW_PROPERTY(onWorldMappingStatusChanged, RCTDirectEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(onFrameUpdate, RCTDirectEventBlock)
 
 - (VRTARSceneNavigator *)view

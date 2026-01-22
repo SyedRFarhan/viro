@@ -58,10 +58,9 @@
 @property (nonatomic, copy, nullable) NSDictionary *worldMeshConfig;
 @property (nonatomic, copy, nullable) RCTDirectEventBlock onWorldMeshUpdated;
 
-// World map persistence properties (iOS only)
-@property (nonatomic, copy, nullable) NSString *sessionId;
-@property (nonatomic, assign) NSInteger worldMapAutoSaveInterval; // seconds, default 30
-@property (nonatomic, copy, nullable) RCTDirectEventBlock onWorldMapPersistenceStatus;
+// World map persistence - now uses imperative ref-based API (properties removed)
+// Callback fired when world mapping status changes (for UI feedback)
+@property (nonatomic, copy, nullable) RCTDirectEventBlock onWorldMappingStatusChanged;
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge;
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex;
@@ -77,13 +76,67 @@
 // Native ARSession access for advanced features like ARWorldMap
 - (ARSession *)getNativeARSession;
 
-#pragma mark - World Map Persistence Methods
+#pragma mark - World Map Persistence Methods (Imperative API)
 
-// Completion handler for world map save operations
-typedef void (^WorldMapSaveCompletionHandler)(BOOL success, NSString * _Nullable error);
+// Completion handler for world map operations - includes error code for structured handling
+typedef void (^WorldMapCompletionHandler)(BOOL success,
+                                           NSString * _Nullable errorCode,
+                                           NSString * _Nullable errorMessage);
 
-// Manually trigger a world map save (async)
-- (void)saveWorldMap:(WorldMapSaveCompletionHandler)completionHandler;
+/**
+ * Save the current world map to persistent storage.
+ *
+ * @param sessionId Unique identifier for the session (used for filename)
+ * @param completionHandler Called with success/errorCode/errorMessage
+ *
+ * Error codes:
+ * - BUSY: Another world map operation is in progress
+ * - SESSION_UNAVAILABLE: AR session not available
+ * - WORLD_MAP_NOT_READY: Tracking state not normal or mapping status not mapped/extending
+ */
+- (void)saveWorldMapForSession:(NSString *)sessionId
+             completionHandler:(WorldMapCompletionHandler)completionHandler;
+
+/**
+ * Load a previously saved world map and restart the AR session.
+ *
+ * @param sessionId Unique identifier for the session to load
+ * @param completionHandler Called with success/errorCode/errorMessage
+ *
+ * Note: success=YES means the session was restarted with initialWorldMap set.
+ * Relocalization happens asynchronously - monitor trackingState for .normal.
+ *
+ * Error codes:
+ * - BUSY: Another world map operation is in progress
+ * - NOT_FOUND: No saved world map file found for this sessionId
+ * - DECODE_FAILED: Failed to decode the world map file
+ * - SESSION_UNAVAILABLE: AR session not available
+ */
+- (void)loadWorldMapForSession:(NSString *)sessionId
+             completionHandler:(WorldMapCompletionHandler)completionHandler;
+
+/**
+ * Delete a previously saved world map from storage.
+ *
+ * @param sessionId Unique identifier for the session to delete
+ * @param completionHandler Called with success/errorCode/errorMessage
+ *
+ * Error codes:
+ * - BUSY: Another world map operation is in progress
+ * - NOT_FOUND: No saved world map file found for this sessionId
+ */
+- (void)deleteWorldMapForSession:(NSString *)sessionId
+               completionHandler:(WorldMapCompletionHandler)completionHandler;
+
+/**
+ * Get current world mapping status for UI feedback.
+ *
+ * @param completionHandler Called with status dictionary containing:
+ *   - mappingStatus: "notAvailable" | "limited" | "extending" | "mapped"
+ *   - trackingState: "notAvailable" | "limited" | "normal"
+ *   - canSave: BOOL (true if ready to save world map)
+ */
+- (void)getWorldMappingStatusWithCompletionHandler:(void (^)(NSDictionary *result))completionHandler;
 
 - (void)startVideoRecording:(NSString *)fileName
            saveToCameraRoll:(BOOL)saveToCameraRoll

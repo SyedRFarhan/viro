@@ -152,6 +152,17 @@ import {
 import { ViroSurface } from "./components/ViroSurface";
 import { ViroSceneNavigator } from "./components/ViroSceneNavigator";
 import { VIRO_VERSION } from "./components/Utilities/ViroVersion";
+import {
+  ViroARSceneNavigatorHandle,
+  ViroWorldMapErrorCode,
+  ViroSaveWorldMapResult,
+  ViroLoadWorldMapResult,
+  ViroDeleteWorldMapResult,
+  ViroWorldMappingStatus,
+  ViroTrackingStateValue,
+  ViroWorldMappingStatusResult,
+  ViroWorldMappingStatusChangedEvent,
+} from "./components/Types/ViroWorldMap";
 
 export {
   ViroARImageMarker,
@@ -299,4 +310,14 @@ export {
   ViroMonocularDepthModelDownloadedResult,
   ViroMonocularDepthDownloadResult,
   ViroMonocularDepthPreferenceResult,
+  // World Map Persistence Types
+  ViroARSceneNavigatorHandle,
+  ViroWorldMapErrorCode,
+  ViroSaveWorldMapResult,
+  ViroLoadWorldMapResult,
+  ViroDeleteWorldMapResult,
+  ViroWorldMappingStatus,
+  ViroTrackingStateValue,
+  ViroWorldMappingStatusResult,
+  ViroWorldMappingStatusChangedEvent,
 };

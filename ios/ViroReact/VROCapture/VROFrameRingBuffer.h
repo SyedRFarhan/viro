@@ -72,6 +72,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Scale factor used (MAX of scaleX/scaleY for "cover" behavior)
 @property (nonatomic, assign) float scale;
 
+#pragma mark - Portrait Orientation
+
+/// Whether the JPEG was rotated 90° CCW for portrait display
+/// When true, JS receives portrait coordinates that must be mapped back to landscape
+@property (nonatomic, assign) BOOL rotatedToPortrait;
+
 #pragma mark - JPEG Data
 
 /// Encoded JPEG data (base64 encoded for JS event)

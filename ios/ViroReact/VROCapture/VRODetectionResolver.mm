@@ -28,13 +28,25 @@
     NSMutableArray<VRODetectionResult *> *results = [NSMutableArray arrayWithCapacity:points.count];
 
     for (NSDictionary *point in points) {
-        float jpegU = [point[@"x"] floatValue];  // Normalized 0-1 in JPEG space
-        float jpegV = [point[@"y"] floatValue];
+        float inputU = [point[@"x"] floatValue];  // Normalized 0-1 (portrait space if rotated)
+        float inputV = [point[@"y"] floatValue];
 
         VRODetectionResult *result = [[VRODetectionResult alloc] init];
-        result.inputX = jpegU;
-        result.inputY = jpegV;
+        result.inputX = inputU;
+        result.inputY = inputV;
         result.ok = NO;
+
+        // If frame was rotated for portrait display, map coordinates back to landscape
+        // Portrait UV → Landscape UV: u' = v, v' = 1 - u
+        // This reverses the 90° CCW rotation applied to the image
+        float jpegU, jpegV;
+        if (entry.rotatedToPortrait) {
+            jpegU = inputV;           // Portrait Y → Landscape X
+            jpegV = 1.0f - inputU;    // Portrait X → inverted Landscape Y
+        } else {
+            jpegU = inputU;
+            jpegV = inputV;
+        }
 
         // Try methods in order of preference
 
@@ -252,13 +264,26 @@
     );
 
     // Use JPEG-space intrinsics (with crop offsets)
+    // Note: intrinsicsJPEG is always in LANDSCAPE space (pre-rotation)
     float fx = entry.intrinsicsJPEG.columns[0][0];
     float fy = entry.intrinsicsJPEG.columns[1][1];
     float cx = entry.intrinsicsJPEG.columns[2][0];
     float cy = entry.intrinsicsJPEG.columns[2][1];
 
-    float px = jpegU * entry.jpegSize.width;
-    float py = jpegV * entry.jpegSize.height;
+    // Get landscape JPEG dimensions for pixel calculation
+    // jpegU/jpegV are already in landscape space (transformed from portrait if needed)
+    // jpegSize stores portrait dimensions, so we swap if rotated
+    float landscapeWidth, landscapeHeight;
+    if (entry.rotatedToPortrait) {
+        landscapeWidth = entry.jpegSize.height;   // Portrait height = landscape width
+        landscapeHeight = entry.jpegSize.width;   // Portrait width = landscape height
+    } else {
+        landscapeWidth = entry.jpegSize.width;
+        landscapeHeight = entry.jpegSize.height;
+    }
+
+    float px = jpegU * landscapeWidth;
+    float py = jpegV * landscapeHeight;
 
     // Camera-space ray direction (normalized)
     float camDirX = (px - cx) / fx;

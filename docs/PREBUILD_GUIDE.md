@@ -30,7 +30,50 @@ viro/
 └── package.json
 ```
 
-## Step 1: Install Dependencies
+## Quick Build (Recommended)
+
+For routine builds after code changes, use the `after:release` script which handles everything:
+
+```bash
+cd viro
+
+# If using nvm, source your shell config first
+source ~/.zshrc  # or ~/.bashrc
+
+# 1. Build the native library
+cd ios
+RCT_NEW_ARCH_ENABLED=1 \
+REACT_NATIVE_PATH=$(pwd)/../node_modules/react-native \
+xcodebuild \
+  -workspace ViroReact.xcworkspace \
+  -scheme ViroReact \
+  -configuration Release \
+  -sdk iphoneos \
+  -destination 'generic/platform=iOS' \
+  build
+
+# 2. Copy LATEST build to dist (IMPORTANT: verify timestamp!)
+LATEST_LIB=$(find ~/Library/Developer/Xcode/DerivedData \
+  -name "libViroReact.a" -path "*ViroReact*Release-iphoneos*" \
+  -print0 | xargs -0 ls -t | head -1)
+cp "$LATEST_LIB" dist/lib/
+ls -la dist/lib/libViroReact.a  # Verify timestamp is current!
+
+# 3. Bump version and package
+cd ..
+# Edit package.json to bump version (e.g., 2.61.7 -> 2.61.8)
+npm run after:release
+```
+
+The `after:release` script runs TypeScript compilation, tests, and creates the tarball.
+
+> ⚠️ **Always verify the library timestamp!** DerivedData may contain old builds. If the timestamp doesn't match your build time, you're copying stale code.
+
+---
+
+## Full Setup (First Time)
+
+### Step 1: Install Dependencies
 
 ```bash
 cd viro
@@ -57,12 +100,15 @@ which node
 
 **Important:** This file contains a machine-specific path. For portability, you may need to update this on each development machine.
 
-## Step 3: Build the Static Library
+### Step 3: Build the Static Library
 
 Run the following command from the `viro/ios` directory:
 
 ```bash
 cd viro/ios
+
+# IMPORTANT: If using nvm, source your shell config first!
+source ~/.zshrc  # or ~/.bashrc
 
 RCT_NEW_ARCH_ENABLED=1 \
 REACT_NATIVE_PATH=$(pwd)/../node_modules/react-native \
@@ -75,6 +121,8 @@ xcodebuild \
   build
 ```
 
+**Note:** The `source ~/.zshrc` ensures nvm-managed Node.js is available to Xcode build scripts.
+
 ### Build Command Breakdown
 
 | Parameter | Purpose |
@@ -85,24 +133,42 @@ xcodebuild \
 | `-sdk iphoneos` | Builds for physical iOS devices |
 | `-destination 'generic/platform=iOS'` | Generic iOS destination |
 
-## Step 4: Copy Built Library to dist
+### Step 4: Copy Built Library to dist
 
-After a successful build, copy the library to the distribution folder:
+After a successful build, copy the library to the distribution folder.
+
+**IMPORTANT:** DerivedData may contain multiple builds. Always verify you're copying the LATEST one!
 
 ```bash
-# Find and copy the built library
-find ~/Library/Developer/Xcode/DerivedData \
+# Find the NEWEST libViroReact.a (sorted by modification time)
+LATEST_LIB=$(find ~/Library/Developer/Xcode/DerivedData \
   -name "libViroReact.a" \
-  -path "*Release-iphoneos*" \
-  -exec cp {} dist/lib/ \;
+  -path "*ViroReact*Release-iphoneos*" \
+  -print0 | xargs -0 ls -t | head -1)
+
+echo "Latest build: $LATEST_LIB"
+ls -la "$LATEST_LIB"
+
+# Copy to dist
+cp "$LATEST_LIB" dist/lib/
+
+# Verify the copy timestamp matches
+ls -la dist/lib/libViroReact.a
 ```
 
-Alternatively, locate it manually:
+**Quick copy** (if you just ran the build and there's only one project):
 ```bash
-ls ~/Library/Developer/Xcode/DerivedData/ViroReact-*/Build/Products/Release-iphoneos/libViroReact.a
+cp ~/Library/Developer/Xcode/DerivedData/ViroReact-*/Build/Products/Release-iphoneos/libViroReact.a \
+   dist/lib/
 ```
 
-## Step 5: Verify the Library
+**Verify it's recent** - the timestamp should match your build time:
+```bash
+stat -f "%Sm" dist/lib/libViroReact.a
+# Should show current date/time, e.g., "Jan 14 11:37:00 2025"
+```
+
+### Step 5: Verify the Library
 
 Check that the library contains the expected symbols:
 
@@ -116,7 +182,7 @@ Expected output should include symbols like:
 -[VRTARSceneNavigatorModule isNativeARSessionAvailable:resolve:reject:]
 ```
 
-## Step 6: Build TypeScript
+### Step 6: Build TypeScript
 
 Compile the TypeScript components:
 
@@ -127,16 +193,28 @@ npm run build
 
 This generates the `dist/` folder with compiled JavaScript and type definitions.
 
-## Step 7: Package for Local Use
+### Step 7: Package for Local Use
 
-Create a tarball for local installation:
+**Recommended:** Use the `after:release` script which handles TypeScript build, tests, and packaging:
 
 ```bash
 cd viro
-npm pack
+
+# First, bump the version in package.json
+# e.g., "version": "2.61.7" -> "version": "2.61.8"
+
+# Then run the release script
+npm run after:release
 ```
 
-This creates `reactvision-react-viro-X.X.X.tgz`.
+This creates `reactvision-react-viro-X.X.X.tgz` with all necessary files.
+
+**Alternative:** Manual packaging (if you only need the tarball):
+```bash
+cd viro
+npm run build  # Build TypeScript first
+npm pack
+```
 
 ## Using the Prebuilt Library in Another App
 
@@ -184,6 +262,34 @@ npx expo run:ios --device
 
 ## Troubleshooting
 
+### Stale Build (Code Changes Not Appearing)
+
+**Symptom:** You made code changes but they don't appear in the app after rebuild.
+
+**Cause:** DerivedData contains multiple builds; you may have copied an OLD build instead of the latest.
+
+**Solution:** Always find and copy the NEWEST library:
+```bash
+# List all builds sorted by time (newest first)
+find ~/Library/Developer/Xcode/DerivedData \
+  -name "libViroReact.a" -path "*ViroReact*Release-iphoneos*" \
+  -print0 | xargs -0 ls -lt
+
+# Copy the newest one
+LATEST_LIB=$(find ~/Library/Developer/Xcode/DerivedData \
+  -name "libViroReact.a" -path "*ViroReact*Release-iphoneos*" \
+  -print0 | xargs -0 ls -t | head -1)
+cp "$LATEST_LIB" dist/lib/
+
+# Verify timestamp matches your build time
+ls -la dist/lib/libViroReact.a
+```
+
+**Prevention:** Clean DerivedData periodically:
+```bash
+rm -rf ~/Library/Developer/Xcode/DerivedData/ViroReact-*
+```
+
 ### Hermes Script Failure
 
 **Error:** `[Hermes] Replace Hermes for the right configuration, if needed` fails
@@ -197,7 +303,13 @@ REACT_NATIVE_PATH=$(pwd)/../node_modules/react-native xcodebuild ...
 
 **Error:** Build fails with "node: command not found"
 
-**Solution:** Update `ios/.xcode.env.local` with the correct path:
+**Solution 1:** Source your shell config before building (if using nvm):
+```bash
+source ~/.zshrc  # or ~/.bashrc
+# Then run xcodebuild
+```
+
+**Solution 2:** Update `ios/.xcode.env.local` with the correct path:
 ```bash
 export NODE_BINARY=$(which node)
 # Then copy the output to .xcode.env.local as a hardcoded path
