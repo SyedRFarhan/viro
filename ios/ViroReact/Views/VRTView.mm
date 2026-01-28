@@ -57,12 +57,18 @@
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex {
     // Subclasses must override to perform physical actions (i.e adding
     // nodes in the renderer), then invoke this
-    
-    VRTView *view = (VRTView *)subview;
-    
+
     [_childViews insertObject:subview atIndex:atIndex];
+
+    // Check if subview is a VRTView before calling VRTView-specific methods
+    // (Fabric may insert RCTLegacyViewManagerInteropComponentView wrappers)
+    if (![subview isKindOfClass:[VRTView class]]) {
+        return;
+    }
+
+    VRTView *view = (VRTView *)subview;
     view.superview = self;
-    
+
     /*
      If the scene has appeared, meaning the renderer is ready, then invoke
      sceneWillAppear on insertion. Note if the scene has not yet appeared, then
@@ -74,7 +80,7 @@
         view.scene = self.scene;
         [view sceneWillAppear];
     }
-    
+
     /*
      If this view shouldAppear, then let the given child know that its parentDidAppear.
      */
@@ -86,12 +92,16 @@
 - (void)removeReactSubview:(UIView *)subview {
     // Subclasses must override to perform physical actions (i.e. removing
     // nodes from the renderer)
-    
-    VRTView *view = (VRTView *)subview;
-    [view parentDidDisappear];
-    
+
+    // Check if subview is a VRTView before calling VRTView-specific methods
+    // (Fabric may insert RCTLegacyViewManagerInteropComponentView wrappers)
+    if ([subview respondsToSelector:@selector(parentDidDisappear)]) {
+        VRTView *view = (VRTView *)subview;
+        [view parentDidDisappear];
+        view.superview = NULL;
+    }
+
     [_childViews removeObject:subview];
-    view.superview = NULL;
 }
 
 - (NSArray *)reactSubviews {
@@ -118,28 +128,32 @@
 - (void)handleAppearanceChange {
     if ([self shouldAppear]) {
         for (id childView in _childViews) {
-            VRTView *view = (VRTView *)childView;
-            [view parentDidAppear];
+            if ([childView isKindOfClass:[VRTView class]]) {
+                [(VRTView *)childView parentDidAppear];
+            }
         }
     } else {
         for (id childView in _childViews) {
-            VRTView *view = (VRTView *)childView;
-            [view parentDidDisappear];
+            if ([childView isKindOfClass:[VRTView class]]) {
+                [(VRTView *)childView parentDidDisappear];
+            }
         }
     }
 }
 
 - (void)sceneWillAppear {
     for (id childView in _childViews) {
-        VRTView *view = (VRTView *)childView;
-        [view sceneWillAppear];
+        if ([childView isKindOfClass:[VRTView class]]) {
+            [(VRTView *)childView sceneWillAppear];
+        }
     }
 }
 
 - (void)sceneWillDisappear {
     for (id childView in _childViews) {
-        VRTView *view = (VRTView *)childView;
-        [view sceneWillDisappear];
+        if ([childView isKindOfClass:[VRTView class]]) {
+            [(VRTView *)childView sceneWillDisappear];
+        }
     }
 }
 

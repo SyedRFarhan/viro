@@ -30,31 +30,41 @@
 #import <ARKit/ARKit.h>
 #import <CoreLocation/CoreLocation.h>
 
-#if __has_include(<ARCore/ARCore.h>)
-#define ARCORE_AVAILABLE 1
-#import <ARCore/ARCore.h>
+// ARCore SDK detection - requires ALL core headers to be available
+// Note: With xcframeworks, __has_include may not find framework headers properly.
+// The GARSession header check is critical because that's where GARSession class is defined.
+#if __has_include(<ARCoreGARSession/ARCoreGARSession.h>)
+    #define ARCORE_GARSESSION_FOUND 1
+    #import <ARCoreGARSession/ARCoreGARSession.h>
 #else
-#define ARCORE_AVAILABLE 0
+    #define ARCORE_GARSESSION_FOUND 0
+#endif
+
+// ARCore base header - defines ARCORE_AVAILABLE based on both base AND GARSession availability
+#if __has_include(<ARCore/ARCore.h>) && ARCORE_GARSESSION_FOUND
+    #define ARCORE_AVAILABLE 1
+    #import <ARCore/ARCore.h>
+#else
+    #define ARCORE_AVAILABLE 0
 #endif
 
 // ARCore Geospatial is part of the main ARCore SDK when using CocoaPods
-// The geospatial classes (GAREarth, GARGeospatialTransform) are in ARCoreGARSession
-#if __has_include(<ARCoreGARSession/ARCoreGARSession.h>)
-#define ARCORE_GEOSPATIAL_AVAILABLE 1
-#import <ARCoreGARSession/ARCoreGARSession.h>
+// The geospatial classes (GAREarth, GARGeospatialTransform) are in ARCoreGARSession or ARCoreGeospatial
+#if ARCORE_GARSESSION_FOUND
+    #define ARCORE_GEOSPATIAL_AVAILABLE 1
 #elif __has_include(<ARCoreGeospatial/ARCoreGeospatial.h>)
-#define ARCORE_GEOSPATIAL_AVAILABLE 1
-#import <ARCoreGeospatial/ARCoreGeospatial.h>
+    #define ARCORE_GEOSPATIAL_AVAILABLE 1
+    #import <ARCoreGeospatial/ARCoreGeospatial.h>
 #else
-#define ARCORE_GEOSPATIAL_AVAILABLE 0
+    #define ARCORE_GEOSPATIAL_AVAILABLE 0
 #endif
 
 // ARCore Semantics for Scene Semantics API (ML-based scene understanding)
 #if __has_include(<ARCoreSemantics/ARCoreSemantics.h>)
-#define ARCORE_SEMANTICS_AVAILABLE 1
-#import <ARCoreSemantics/ARCoreSemantics.h>
+    #define ARCORE_SEMANTICS_AVAILABLE 1
+    #import <ARCoreSemantics/ARCoreSemantics.h>
 #else
-#define ARCORE_SEMANTICS_AVAILABLE 0
+    #define ARCORE_SEMANTICS_AVAILABLE 0
 #endif
 
 #include <memory>
@@ -134,11 +144,6 @@ API_AVAILABLE(ios(12.0))
 // ========================================================================
 // Geospatial API
 // ========================================================================
-
-/**
- * Check if geospatial mode is available.
- */
-+ (BOOL)isGeospatialAvailable;
 
 /**
  * Check if geospatial mode is supported on this device.

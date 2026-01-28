@@ -187,6 +187,17 @@ public:
     void updateAnchor(ARAnchor *anchor);
     void removeAnchor(ARAnchor *anchor);
 
+    /*
+     World map capture for session resume.
+     Captures the current world map before backgrounding so it can be restored
+     when the app returns to foreground, preserving anchor positions.
+     */
+    void captureWorldMapForResume();
+    bool hasCapturedWorldMap() const;
+    ARWorldMap *getCapturedWorldMap() const;
+    void clearCapturedWorldMap();
+    ARConfiguration *getSessionConfiguration() const { return _sessionConfiguration; }
+
 private:
     
     /*
@@ -204,6 +215,14 @@ private:
      Whether or not the session has been paused.
      */
     bool _sessionPaused;
+
+    /*
+     World map captured before pause for session resume.
+     Stored in memory and used with initialWorldMap when resuming.
+     Note: __strong is required because this is a C++ class - ARC doesn't
+     automatically manage ObjC pointers in C++ classes without the attribute.
+     */
+    __strong ARWorldMap *_capturedWorldMap;
 
     /*
      The cloud anchor provider to use for hosting/resolving cloud anchors.
