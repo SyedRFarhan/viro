@@ -33,8 +33,10 @@ import com.facebook.react.bridge.WritableMap;
 import com.viro.core.ARAnchor;
 import com.viro.core.ARNode;
 import com.viro.core.ARScene;
+import com.viro.core.Vector;
 import com.viro.core.ViroViewARCore;
 import com.viro.core.ViroView;
+import com.viro.core.internal.CameraCallback;
 import com.viromedia.bridge.ReactViroPackage;
 import com.viromedia.bridge.component.node.VRTARScene;
 import com.viromedia.bridge.module.ARSceneNavigatorModule;
@@ -336,8 +338,21 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         arScene.hostCloudAnchorById(anchorId, ttlDays, new ARScene.CloudAnchorHostListener() {
             @Override
             public void onSuccess(ARAnchor cloudAnchor, ARNode arNode) {
-                // Get the cloud anchor ID from the returned anchor
-                callback.onSuccess(cloudAnchor.getCloudAnchorId());
+                // Get anchor's world-space pose for relocalization
+                Vector pos = cloudAnchor.getPosition();
+                Vector rot = cloudAnchor.getRotation();  // Returns radians
+
+                // Convert position to float array
+                float[] position = new float[] { pos.x, pos.y, pos.z };
+
+                // Convert rotation to degrees
+                float[] rotation = new float[] {
+                    (float) Math.toDegrees(rot.x),
+                    (float) Math.toDegrees(rot.y),
+                    (float) Math.toDegrees(rot.z)
+                };
+
+                callback.onSuccess(cloudAnchor.getCloudAnchorId(), position, rotation);
             }
 
             @Override
@@ -611,6 +626,120 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
             return;
         }
         arScene.removeGeospatialAnchor(anchorId);
+    }
+
+    // ========================================================================
+    // Manual Anchor Creation Support
+    // ========================================================================
+
+    /**
+     * Callback interface for anchor creation operations.
+     * Returns pose data: position [x,y,z] and cameraRotation as quaternion [x,y,z,w].
+     */
+    public interface AddAnchorCallback {
+        void onSuccess(String anchorId, float[] position, float[] cameraRotation);
+        void onFailure(String error);
+    }
+
+    /**
+     * Create an AR anchor at the specified world position.
+     * The anchor can be used with hostCloudAnchor for persistence.
+     *
+     * @param position World position as float array [x, y, z]
+     * @param callback Callback to receive result
+     */
+    public void addAnchor(float[] position, AddAnchorCallback callback) {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            callback.onFailure("AR scene not available");
+            return;
+        }
+
+        if (position == null || position.length != 3) {
+            callback.onFailure("Position must be an array of 3 numbers [x, y, z]");
+            return;
+        }
+
+        // Get camera rotation first (async), then create anchor
+        final float[] positionCopy = position.clone();
+        if (mViroView != null && mViroView.getViroContext() != null) {
+            mViroView.getViroContext().getCameraOrientation(new CameraCallback() {
+                @Override
+                public void onGetCameraOrientation(float posX, float posY, float posZ,
+                                                   float rotEulerX, float rotEulerY, float rotEulerZ,
+                                                   float forwardX, float forwardY, float forwardZ,
+                                                   float upX, float upY, float upZ) {
+                    // Convert Euler angles (radians) to quaternion [x, y, z, w]
+                    float[] cameraQuat = eulerToQuaternion(rotEulerX, rotEulerY, rotEulerZ);
+
+                    // Create anchor on UI thread
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        createAnchorWithCameraRotation(positionCopy, cameraQuat, callback);
+                    });
+                }
+            });
+        } else {
+            // Fallback: create anchor without camera rotation
+            createAnchorWithCameraRotation(positionCopy, null, callback);
+        }
+    }
+
+    /**
+     * Helper method to create anchor and call callback with result.
+     */
+    private void createAnchorWithCameraRotation(float[] position, float[] cameraRotation, AddAnchorCallback callback) {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) {
+            callback.onFailure("AR scene not available");
+            return;
+        }
+
+        // Create anchor at the specified position
+        Vector worldPosition = new Vector(position[0], position[1], position[2]);
+        ARNode anchorNode = arScene.createAnchoredNode(worldPosition);
+
+        if (anchorNode == null) {
+            callback.onFailure("Failed to create anchor at specified position");
+            return;
+        }
+
+        // Get the anchor ID from the created node's anchor
+        ARAnchor anchor = anchorNode.getAnchor();
+        if (anchor == null) {
+            callback.onFailure("Anchor was created but no anchor ID available");
+            return;
+        }
+
+        String anchorId = anchor.getAnchorId();
+        Log.i(TAG, "Anchor created at position [" + position[0] + ", " + position[1] + ", " + position[2] +
+                   "] with ID: " + anchorId);
+
+        // Return identity quaternion if camera rotation not available
+        if (cameraRotation == null) {
+            cameraRotation = new float[] { 0.0f, 0.0f, 0.0f, 1.0f };
+        }
+        callback.onSuccess(anchorId, position, cameraRotation);
+    }
+
+    /**
+     * Convert Euler angles (radians, XYZ order) to quaternion [x, y, z, w].
+     */
+    private float[] eulerToQuaternion(float pitch, float yaw, float roll) {
+        // Half angles
+        double cy = Math.cos(yaw * 0.5);
+        double sy = Math.sin(yaw * 0.5);
+        double cp = Math.cos(pitch * 0.5);
+        double sp = Math.sin(pitch * 0.5);
+        double cr = Math.cos(roll * 0.5);
+        double sr = Math.sin(roll * 0.5);
+
+        // Quaternion components
+        float w = (float)(cr * cp * cy + sr * sp * sy);
+        float x = (float)(sr * cp * cy - cr * sp * sy);
+        float y = (float)(cr * sp * cy + sr * cp * sy);
+        float z = (float)(cr * cp * sy - sr * sp * cy);
+
+        return new float[] { x, y, z, w };
     }
 
     // ========================================================================

@@ -27,6 +27,20 @@ export type ViroSaveWorldMapResult = {
      * Structured error code for programmatic handling.
      */
     code?: ViroWorldMapErrorCode;
+    /**
+     * Absolute path to the saved .arworldmap file.
+     * Only present when success is true.
+     *
+     * Use this to upload the world map to your own cloud storage:
+     * ```tsx
+     * const result = await arRef.current?.saveWorldMap("my-session");
+     * if (result?.success && result.filePath) {
+     *   const data = await RNFS.readFile(result.filePath, 'base64');
+     *   await uploadToCloud(data);
+     * }
+     * ```
+     */
+    filePath?: string;
 };
 /**
  * Result of a loadWorldMap() call.
@@ -149,30 +163,53 @@ export interface ViroARSceneNavigatorHandle {
      * Save the current world map to persistent storage.
      * [iOS Only]
      *
-     * @param sessionId - Unique identifier for the session (used as filename)
-     * @returns Promise resolving to save result with success/error/code
+     * @param sessionId - Unique identifier for the session (used as filename if filePath not provided)
+     * @param filePath - Optional custom path to save the world map. If omitted, saves to default cache location.
+     * @returns Promise resolving to save result with success/error/code and the filePath where saved
      *
      * Requirements:
      * - Tracking state must be `.normal`
      * - World mapping status must be `.mapped` or `.extending`
      *
+     * @example
+     * ```tsx
+     * // Save to default location
+     * const result = await ref.current?.saveWorldMap("my-session");
+     * console.log(result.filePath); // ~/Library/Caches/ViroARWorldMaps/my-session.arworldmap
+     *
+     * // Save to custom location
+     * await ref.current?.saveWorldMap("backup", RNFS.DocumentDirectoryPath + '/backup.arworldmap');
+     * ```
+     *
      * On Android, returns { success: false, code: "NOT_SUPPORTED" }
      */
-    saveWorldMap(sessionId: string): Promise<ViroSaveWorldMapResult>;
+    saveWorldMap(sessionId: string, filePath?: string): Promise<ViroSaveWorldMapResult>;
     /**
      * Load a previously saved world map and restart the AR session.
      * [iOS Only]
      *
      * @param sessionId - Unique identifier for the session to load
+     * @param filePath - Optional custom path to load from. If omitted, loads from default cache location.
      * @returns Promise resolving to load result with success/error/code
      *
      * Important: success: true means the session was restarted with the world map.
      * Relocalization happens asynchronously - monitor ARFrame.camera.trackingState
      * for `.normal` to know when relocalization completes.
      *
+     * @example
+     * ```tsx
+     * // Load from default location
+     * await ref.current?.loadWorldMap("my-session");
+     *
+     * // Load from custom path (e.g., downloaded from cloud)
+     * const tempPath = RNFS.TemporaryDirectoryPath + '/downloaded.arworldmap';
+     * await RNFS.writeFile(tempPath, base64Data, 'base64');
+     * await ref.current?.loadWorldMap("cloud-session", tempPath);
+     * ```
+     *
      * On Android, returns { success: false, code: "NOT_SUPPORTED" }
      */
-    loadWorldMap(sessionId: string): Promise<ViroLoadWorldMapResult>;
+    loadWorldMap(sessionId: string, filePath?: string): Promise<ViroLoadWorldMapResult>;
     /**
      * Delete a previously saved world map from storage.
      * [iOS Only]

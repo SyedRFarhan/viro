@@ -299,12 +299,17 @@ export type ViroCloudAnchor = {
 };
 /**
  * Result of a host cloud anchor operation.
+ * Includes anchor's world-space position and rotation for cross-device relocalization.
  */
 export type ViroHostCloudAnchorResult = {
     success: boolean;
     cloudAnchorId?: string;
     error?: string;
     state: ViroCloudAnchorState;
+    /** Anchor position in world space [x, y, z] */
+    position?: [number, number, number];
+    /** Anchor rotation in degrees [rx, ry, rz] - Euler angles */
+    rotation?: [number, number, number];
 };
 /**
  * Result of a resolve cloud anchor operation.
@@ -314,6 +319,20 @@ export type ViroResolveCloudAnchorResult = {
     anchor?: ViroCloudAnchor;
     error?: string;
     state: ViroCloudAnchorState;
+};
+/**
+ * Result of an add anchor operation.
+ * The anchorId can be used with hostCloudAnchor for cloud persistence.
+ * Includes pose data: position [x,y,z] and cameraRotation (user's viewing orientation at anchor creation).
+ */
+export type ViroAddAnchorResult = {
+    success: boolean;
+    anchorId?: string;
+    error?: string;
+    /** Position as [x, y, z] */
+    position?: [number, number, number];
+    /** Camera rotation at anchor creation time as quaternion [x, y, z, w] */
+    cameraRotation?: [number, number, number, number];
 };
 /**
  * Event fired when a cloud anchor state changes.

@@ -458,11 +458,26 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                 VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
                 sceneNavigator.hostCloudAnchor(anchorId, ttlDays, new CloudAnchorCallback() {
                     @Override
-                    public void onSuccess(String cloudAnchorId) {
+                    public void onSuccess(String cloudAnchorId, float[] position, float[] rotation) {
                         WritableMap result = Arguments.createMap();
                         result.putBoolean("success", true);
                         result.putString("cloudAnchorId", cloudAnchorId);
                         result.putString("state", "Success");
+
+                        // Add anchor position [x, y, z]
+                        WritableArray posArray = Arguments.createArray();
+                        posArray.pushDouble(position[0]);
+                        posArray.pushDouble(position[1]);
+                        posArray.pushDouble(position[2]);
+                        result.putArray("position", posArray);
+
+                        // Add anchor rotation [rx, ry, rz] in degrees
+                        WritableArray rotArray = Arguments.createArray();
+                        rotArray.pushDouble(rotation[0]);
+                        rotArray.pushDouble(rotation[1]);
+                        rotArray.pushDouble(rotation[2]);
+                        result.putArray("rotation", rotArray);
+
                         promise.resolve(result);
                     }
 
@@ -550,9 +565,10 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
 
     /**
      * Callback interface for cloud anchor hosting operations.
+     * Includes anchor position and rotation for relocalization support.
      */
     public interface CloudAnchorCallback {
-        void onSuccess(String cloudAnchorId);
+        void onSuccess(String cloudAnchorId, float[] position, float[] rotation);
         void onFailure(String error, String state);
     }
 
@@ -996,6 +1012,92 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                 if (view instanceof VRTARSceneNavigator) {
                     VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
                     sceneNavigator.removeGeospatialAnchor(anchorId);
+                }
+            }
+        });
+    }
+
+    // ========================================================================
+    // Manual Anchor Creation Methods
+    // ========================================================================
+
+    @ReactMethod
+    public void addAnchor(final int sceneNavTag, final ReadableArray position, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("error", "UIManager not available");
+            promise.resolve(result);
+            return;
+        }
+
+        // Parse position array upfront
+        final float[] posArray = new float[3];
+        if (position != null && position.size() >= 3) {
+            posArray[0] = (float) position.getDouble(0);
+            posArray[1] = (float) position.getDouble(1);
+            posArray[2] = (float) position.getDouble(2);
+        } else {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("success", false);
+            result.putString("error", "Position must be an array of 3 numbers [x, y, z]");
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("success", false);
+                        result.putString("error", "Invalid view type");
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.addAnchor(posArray, new VRTARSceneNavigator.AddAnchorCallback() {
+                        @Override
+                        public void onSuccess(String anchorId, float[] position, float[] cameraRotation) {
+                            WritableMap result = Arguments.createMap();
+                            result.putBoolean("success", true);
+                            result.putString("anchorId", anchorId);
+
+                            // Add position array [x, y, z]
+                            WritableArray posArray = Arguments.createArray();
+                            posArray.pushDouble(position[0]);
+                            posArray.pushDouble(position[1]);
+                            posArray.pushDouble(position[2]);
+                            result.putArray("position", posArray);
+
+                            // Add camera rotation quaternion [x, y, z, w]
+                            WritableArray camRotArray = Arguments.createArray();
+                            camRotArray.pushDouble(cameraRotation[0]);
+                            camRotArray.pushDouble(cameraRotation[1]);
+                            camRotArray.pushDouble(cameraRotation[2]);
+                            camRotArray.pushDouble(cameraRotation[3]);
+                            result.putArray("cameraRotation", camRotArray);
+
+                            promise.resolve(result);
+                        }
+
+                        @Override
+                        public void onFailure(String error) {
+                            WritableMap result = Arguments.createMap();
+                            result.putBoolean("success", false);
+                            result.putString("error", error);
+                            promise.resolve(result);
+                        }
+                    });
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putBoolean("success", false);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
                 }
             }
         });

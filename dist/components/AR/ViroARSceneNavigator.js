@@ -516,6 +516,31 @@ class ViroARSceneNavigatorClass extends React.Component {
     _cancelCloudAnchorOperations = () => {
         ViroARSceneNavigatorModule.cancelCloudAnchorOperations((0, react_native_1.findNodeHandle)(this));
     };
+    /**
+     * Create an AR anchor at the specified world position.
+     *
+     * The anchor can later be used with hostCloudAnchor() to persist it to the cloud
+     * for cross-device sharing. The returned anchorId is compatible with the
+     * anchorId parameter expected by hostCloudAnchor().
+     *
+     * @param position - World position [x, y, z] where the anchor should be created
+     * @returns Promise resolving to the creation result with anchorId
+     */
+    _addAnchor = async (position) => {
+        return await ViroARSceneNavigatorModule.addAnchor((0, react_native_1.findNodeHandle)(this), position);
+    };
+    /**
+     * Create an AR anchor at the specified world position and immediately host it to the cloud.
+     * This is an atomic operation that creates a native ARKit anchor and hosts it in one step,
+     * avoiding lookup issues that can occur when creating and hosting anchors separately.
+     *
+     * @param position - World position [x, y, z] in meters
+     * @param ttlDays - Time-to-live in days for the cloud anchor (1-365)
+     * @returns Promise resolving to the cloud hosting result with cloudAnchorId
+     */
+    _createAndHostCloudAnchor = async (position, ttlDays) => {
+        return await ViroARSceneNavigatorModule.createAndHostCloudAnchor((0, react_native_1.findNodeHandle)(this), position, ttlDays);
+    };
     // ===========================================================================
     // Geospatial API Methods
     // ===========================================================================
@@ -733,11 +758,12 @@ class ViroARSceneNavigatorClass extends React.Component {
      * Use this to ensure the world map is saved before navigating away,
      * or when you want to save at a specific point in time.
      *
-     * @param sessionId - Unique identifier for the session (used as filename)
-     * @returns Promise resolving to the save result with success/error/code
+     * @param sessionId - Unique identifier for the session (used as filename if filePath not provided)
+     * @param filePath - Optional custom path to save the world map
+     * @returns Promise resolving to the save result with success/error/code and filePath
      */
-    _saveWorldMap = async (sessionId) => {
-        return await ViroARSceneNavigatorModule.saveWorldMap((0, react_native_1.findNodeHandle)(this), sessionId);
+    _saveWorldMap = async (sessionId, filePath) => {
+        return await ViroARSceneNavigatorModule.saveWorldMap((0, react_native_1.findNodeHandle)(this), sessionId, filePath ?? null);
     };
     /**
      * [iOS Only] Load a previously saved world map and restart the AR session.
@@ -746,10 +772,11 @@ class ViroARSceneNavigatorClass extends React.Component {
      * Relocalization happens asynchronously - monitor trackingState for .normal.
      *
      * @param sessionId - Unique identifier for the session to load
+     * @param filePath - Optional custom path to load from (e.g., downloaded from cloud)
      * @returns Promise resolving to the load result with success/error/code
      */
-    _loadWorldMap = async (sessionId) => {
-        return await ViroARSceneNavigatorModule.loadWorldMap((0, react_native_1.findNodeHandle)(this), sessionId);
+    _loadWorldMap = async (sessionId, filePath) => {
+        return await ViroARSceneNavigatorModule.loadWorldMap((0, react_native_1.findNodeHandle)(this), sessionId, filePath ?? null);
     };
     /**
      * [iOS Only] Delete a previously saved world map from storage.
@@ -921,6 +948,8 @@ class ViroARSceneNavigatorClass extends React.Component {
         hostCloudAnchor: this._hostCloudAnchor,
         resolveCloudAnchor: this._resolveCloudAnchor,
         cancelCloudAnchorOperations: this._cancelCloudAnchorOperations,
+        addAnchor: this._addAnchor,
+        createAndHostCloudAnchor: this._createAndHostCloudAnchor,
         // Geospatial API
         isGeospatialModeSupported: this._isGeospatialModeSupported,
         setGeospatialModeEnabled: this._setGeospatialModeEnabled,
@@ -980,6 +1009,8 @@ class ViroARSceneNavigatorClass extends React.Component {
         hostCloudAnchor: this._hostCloudAnchor,
         resolveCloudAnchor: this._resolveCloudAnchor,
         cancelCloudAnchorOperations: this._cancelCloudAnchorOperations,
+        addAnchor: this._addAnchor,
+        createAndHostCloudAnchor: this._createAndHostCloudAnchor,
         // Geospatial API
         isGeospatialModeSupported: this._isGeospatialModeSupported,
         setGeospatialModeEnabled: this._setGeospatialModeEnabled,
@@ -1067,13 +1098,13 @@ class ViroARSceneNavigatorClass extends React.Component {
 exports.ViroARSceneNavigator = React.forwardRef((props, ref) => {
     const innerRef = React.useRef(null);
     React.useImperativeHandle(ref, () => ({
-        saveWorldMap: (sessionId) => innerRef.current?._saveWorldMap(sessionId) ??
+        saveWorldMap: (sessionId, filePath) => innerRef.current?._saveWorldMap(sessionId, filePath) ??
             Promise.resolve({
                 success: false,
                 error: "Component not mounted",
                 code: "SESSION_UNAVAILABLE",
             }),
-        loadWorldMap: (sessionId) => innerRef.current?._loadWorldMap(sessionId) ??
+        loadWorldMap: (sessionId, filePath) => innerRef.current?._loadWorldMap(sessionId, filePath) ??
             Promise.resolve({
                 success: false,
                 error: "Component not mounted",

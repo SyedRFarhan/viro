@@ -413,6 +413,8 @@ RCT_EXPORT_METHOD(hostCloudAnchor:(nonnull NSNumber *)reactTag
                                ttlDays:ttlDays
                      completionHandler:^(BOOL success,
                                         NSString *cloudAnchorId,
+                                        NSArray<NSNumber *> *position,
+                                        NSArray<NSNumber *> *rotation,
                                         NSString *error,
                                         NSString *state) {
                 NSMutableDictionary *result = [NSMutableDictionary new];
@@ -420,6 +422,12 @@ RCT_EXPORT_METHOD(hostCloudAnchor:(nonnull NSNumber *)reactTag
                 [result setObject:state forKey:@"state"];
                 if (cloudAnchorId) {
                     [result setObject:cloudAnchorId forKey:@"cloudAnchorId"];
+                }
+                if (position) {
+                    [result setObject:position forKey:@"position"];
+                }
+                if (rotation) {
+                    [result setObject:rotation forKey:@"rotation"];
                 }
                 if (error) {
                     [result setObject:error forKey:@"error"];
@@ -501,6 +509,137 @@ RCT_EXPORT_METHOD(cancelCloudAnchorOperations:(nonnull NSNumber *)reactTag) {
         if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
             VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
             [component cancelCloudAnchorOperations];
+        }
+    }];
+}
+
+#pragma mark - Manual Anchor Creation Methods
+
+RCT_EXPORT_METHOD(addAnchor:(nonnull NSNumber *)reactTag
+                   position:(NSArray<NSNumber *> *)position
+                    resolve:(RCTPromiseResolveBlock)resolve
+                     reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                NSDictionary *result = @{
+                    @"success": @NO,
+                    @"error": @"Invalid view type"
+                };
+                resolve(result);
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                NSDictionary *result = @{
+                    @"success": @NO,
+                    @"error": @"AR view has been unmounted"
+                };
+                resolve(result);
+                return;
+            }
+
+            [component addAnchorAtPosition:position
+                         completionHandler:^(BOOL success,
+                                            NSString *anchorId,
+                                            NSArray<NSNumber *> *pos,
+                                            NSArray<NSNumber *> *camRot,
+                                            NSString *error) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (anchorId) {
+                    [result setObject:anchorId forKey:@"anchorId"];
+                }
+                if (pos) {
+                    [result setObject:pos forKey:@"position"];
+                }
+                if (camRot) {
+                    [result setObject:camRot forKey:@"cameraRotation"];
+                }
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            NSDictionary *result = @{
+                @"success": @NO,
+                @"error": [NSString stringWithFormat:@"Exception: %@", exception.reason]
+            };
+            resolve(result);
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(createAndHostCloudAnchor:(nonnull NSNumber *)reactTag
+                                  position:(NSArray<NSNumber *> *)position
+                                   ttlDays:(nonnull NSNumber *)ttlDays
+                                   resolve:(RCTPromiseResolveBlock)resolve
+                                    reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                NSDictionary *result = @{
+                    @"success": @NO,
+                    @"error": @"Invalid view type",
+                    @"state": @"ErrorInternal"
+                };
+                resolve(result);
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                NSDictionary *result = @{
+                    @"success": @NO,
+                    @"error": @"AR view has been unmounted",
+                    @"state": @"ErrorInternal"
+                };
+                resolve(result);
+                return;
+            }
+
+            [component createAndHostCloudAnchorAtPosition:position
+                                                  ttlDays:[ttlDays integerValue]
+                                        completionHandler:^(BOOL success,
+                                                           NSString *cloudAnchorId,
+                                                           NSArray<NSNumber *> *positionResult,
+                                                           NSArray<NSNumber *> *rotation,
+                                                           NSString *error,
+                                                           NSString *state) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (cloudAnchorId) {
+                    [result setObject:cloudAnchorId forKey:@"cloudAnchorId"];
+                }
+                if (positionResult) {
+                    [result setObject:positionResult forKey:@"position"];
+                }
+                if (rotation) {
+                    [result setObject:rotation forKey:@"rotation"];
+                }
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                if (state) {
+                    [result setObject:state forKey:@"state"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            NSDictionary *result = @{
+                @"success": @NO,
+                @"error": [NSString stringWithFormat:@"Exception: %@", exception.reason],
+                @"state": @"ErrorInternal"
+            };
+            resolve(result);
         }
     }];
 }
@@ -1033,6 +1172,7 @@ RCT_EXPORT_METHOD(isPreferMonocularDepth:(nonnull NSNumber *)reactTag
 
 RCT_EXPORT_METHOD(saveWorldMap:(nonnull NSNumber *)reactTag
                      sessionId:(nonnull NSString *)sessionId
+                      filePath:(NSString *)filePath
                        resolve:(RCTPromiseResolveBlock)resolve
                         reject:(RCTPromiseRejectBlock)reject) {
     [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
@@ -1051,7 +1191,7 @@ RCT_EXPORT_METHOD(saveWorldMap:(nonnull NSNumber *)reactTag
                 return;
             }
 
-            [component saveWorldMapForSession:sessionId completionHandler:^(BOOL success, NSString *errorCode, NSString *errorMessage) {
+            [component saveWorldMapForSession:sessionId filePath:filePath completionHandler:^(BOOL success, NSString *errorCode, NSString *errorMessage, NSString *resultFilePath) {
                 NSMutableDictionary *result = [NSMutableDictionary new];
                 [result setObject:@(success) forKey:@"success"];
                 if (errorCode) {
@@ -1059,6 +1199,9 @@ RCT_EXPORT_METHOD(saveWorldMap:(nonnull NSNumber *)reactTag
                 }
                 if (errorMessage) {
                     [result setObject:errorMessage forKey:@"error"];
+                }
+                if (resultFilePath) {
+                    [result setObject:resultFilePath forKey:@"filePath"];
                 }
                 resolve(result);
             }];
@@ -1070,6 +1213,7 @@ RCT_EXPORT_METHOD(saveWorldMap:(nonnull NSNumber *)reactTag
 
 RCT_EXPORT_METHOD(loadWorldMap:(nonnull NSNumber *)reactTag
                      sessionId:(nonnull NSString *)sessionId
+                      filePath:(NSString *)filePath
                        resolve:(RCTPromiseResolveBlock)resolve
                         reject:(RCTPromiseRejectBlock)reject) {
     [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
@@ -1088,7 +1232,7 @@ RCT_EXPORT_METHOD(loadWorldMap:(nonnull NSNumber *)reactTag
                 return;
             }
 
-            [component loadWorldMapForSession:sessionId completionHandler:^(BOOL success, NSString *errorCode, NSString *errorMessage) {
+            [component loadWorldMapForSession:sessionId filePath:filePath completionHandler:^(BOOL success, NSString *errorCode, NSString *errorMessage, NSString *unusedFilePath) {
                 NSMutableDictionary *result = [NSMutableDictionary new];
                 [result setObject:@(success) forKey:@"success"];
                 if (errorCode) {
@@ -1097,6 +1241,7 @@ RCT_EXPORT_METHOD(loadWorldMap:(nonnull NSNumber *)reactTag
                 if (errorMessage) {
                     [result setObject:errorMessage forKey:@"error"];
                 }
+                // filePath is only returned for save operations, not load
                 resolve(result);
             }];
         } @catch (NSException *exception) {
@@ -1125,7 +1270,7 @@ RCT_EXPORT_METHOD(deleteWorldMap:(nonnull NSNumber *)reactTag
                 return;
             }
 
-            [component deleteWorldMapForSession:sessionId completionHandler:^(BOOL success, NSString *errorCode, NSString *errorMessage) {
+            [component deleteWorldMapForSession:sessionId completionHandler:^(BOOL success, NSString *errorCode, NSString *errorMessage, NSString *filePath) {
                 NSMutableDictionary *result = [NSMutableDictionary new];
                 [result setObject:@(success) forKey:@"success"];
                 if (errorCode) {
@@ -1134,6 +1279,7 @@ RCT_EXPORT_METHOD(deleteWorldMap:(nonnull NSNumber *)reactTag
                 if (errorMessage) {
                     [result setObject:errorMessage forKey:@"error"];
                 }
+                // filePath is only returned for save operations, not delete
                 resolve(result);
             }];
         } @catch (NSException *exception) {

@@ -79,15 +79,18 @@
 #pragma mark - World Map Persistence Methods (Imperative API)
 
 // Completion handler for world map operations - includes error code for structured handling
+// filePath is provided on successful save operations (nil for load/delete or on error)
 typedef void (^WorldMapCompletionHandler)(BOOL success,
                                            NSString * _Nullable errorCode,
-                                           NSString * _Nullable errorMessage);
+                                           NSString * _Nullable errorMessage,
+                                           NSString * _Nullable filePath);
 
 /**
  * Save the current world map to persistent storage.
  *
- * @param sessionId Unique identifier for the session (used for filename)
- * @param completionHandler Called with success/errorCode/errorMessage
+ * @param sessionId Unique identifier for the session (used for filename if filePath is nil)
+ * @param filePath Optional custom path to save the world map. If nil, saves to default cache location.
+ * @param completionHandler Called with success/errorCode/errorMessage/filePath
  *
  * Error codes:
  * - BUSY: Another world map operation is in progress
@@ -95,12 +98,14 @@ typedef void (^WorldMapCompletionHandler)(BOOL success,
  * - WORLD_MAP_NOT_READY: Tracking state not normal or mapping status not mapped/extending
  */
 - (void)saveWorldMapForSession:(NSString *)sessionId
+                      filePath:(NSString * _Nullable)filePath
              completionHandler:(WorldMapCompletionHandler)completionHandler;
 
 /**
  * Load a previously saved world map and restart the AR session.
  *
  * @param sessionId Unique identifier for the session to load
+ * @param filePath Optional custom path to load from. If nil, loads from default cache location.
  * @param completionHandler Called with success/errorCode/errorMessage
  *
  * Note: success=YES means the session was restarted with initialWorldMap set.
@@ -113,6 +118,7 @@ typedef void (^WorldMapCompletionHandler)(BOOL success,
  * - SESSION_UNAVAILABLE: AR session not available
  */
 - (void)loadWorldMapForSession:(NSString *)sessionId
+                      filePath:(NSString * _Nullable)filePath
              completionHandler:(WorldMapCompletionHandler)completionHandler;
 
 /**
@@ -165,8 +171,11 @@ typedef void (^WorldMapCompletionHandler)(BOOL success,
 #pragma mark - Cloud Anchor Methods
 
 // Cloud Anchor completion handler types
+// Host callback now includes anchor's world-space position and rotation for relocalization
 typedef void (^CloudAnchorHostCompletionHandler)(BOOL success,
                                                   NSString * _Nullable cloudAnchorId,
+                                                  NSArray<NSNumber *> * _Nullable position,   // [x, y, z]
+                                                  NSArray<NSNumber *> * _Nullable rotation,   // [rx, ry, rz] degrees
                                                   NSString * _Nullable error,
                                                   NSString * _Nonnull state);
 
@@ -183,6 +192,36 @@ typedef void (^CloudAnchorResolveCompletionHandler)(BOOL success,
          completionHandler:(CloudAnchorResolveCompletionHandler)completionHandler;
 
 - (void)cancelCloudAnchorOperations;
+
+#pragma mark - Manual Anchor Creation Methods
+
+// Add anchor completion handler type - includes pose data (position + camera rotation quaternion)
+typedef void (^AddAnchorCompletionHandler)(BOOL success,
+                                           NSString * _Nullable anchorId,
+                                           NSArray<NSNumber *> * _Nullable position,
+                                           NSArray<NSNumber *> * _Nullable cameraRotation,  // camera quaternion [x,y,z,w]
+                                           NSString * _Nullable error);
+
+/**
+ * Create an AR anchor at the specified world position.
+ *
+ * @param position Array of 3 floats [x, y, z] specifying world position
+ * @param completionHandler Called with success/anchorId/error
+ */
+- (void)addAnchorAtPosition:(NSArray<NSNumber *> *)position
+          completionHandler:(AddAnchorCompletionHandler)completionHandler;
+
+/**
+ * Create a native ARKit anchor at the specified world position and immediately host it to the cloud.
+ * This is an atomic operation that avoids the lookup issue when hosting manually-created anchors.
+ *
+ * @param position Array of 3 floats [x, y, z] specifying world position
+ * @param ttlDays Time-to-live in days for the cloud anchor (1-365)
+ * @param completionHandler Called with success/cloudAnchorId/error/state
+ */
+- (void)createAndHostCloudAnchorAtPosition:(NSArray<NSNumber *> *)position
+                                   ttlDays:(NSInteger)ttlDays
+                         completionHandler:(CloudAnchorHostCompletionHandler)completionHandler;
 
 #pragma mark - Geospatial API Methods
 

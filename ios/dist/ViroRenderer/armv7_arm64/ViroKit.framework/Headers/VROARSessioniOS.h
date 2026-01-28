@@ -81,6 +81,17 @@ public:
                          int ttlDays,
                          std::function<void(std::shared_ptr<VROARAnchor>)> onSuccess,
                          std::function<void(std::string error)> onFailure);
+
+    /**
+     * Host a cloud anchor using a native ARKit anchor directly.
+     * This bypasses the frame anchor lookup and is useful when hosting
+     * an anchor immediately after creating it (before it appears in a frame).
+     */
+    void hostCloudAnchorWithNativeAnchor(ARAnchor *nativeAnchor,
+                                         int ttlDays,
+                                         std::function<void(std::shared_ptr<VROARAnchor>)> onSuccess,
+                                         std::function<void(std::string error)> onFailure);
+
     void resolveCloudAnchor(std::string anchorId,
                             std::function<void(std::shared_ptr<VROARAnchor> anchor)> onSuccess,
                             std::function<void(std::string error)> onFailure);

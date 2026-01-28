@@ -41,6 +41,7 @@
 #import <ViroKit/VROSemantics.h>
 #import <ViroKit/VROARScene.h>
 #import <ViroKit/VROARWorldMesh.h>
+#import <ViroKit/VROPlatformUtil.h>
 #import "VROFrameCaptureService.h"
 #import "VRODetectionResolver.h"
 #import "VROFrameRingBuffer.h"
@@ -677,7 +678,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
       completionHandler:(CloudAnchorHostCompletionHandler)completionHandler {
     if (!_vroView) {
         if (completionHandler) {
-            completionHandler(NO, nil, @"AR view not initialized", @"ErrorInternal");
+            completionHandler(NO, nil, nil, nil, @"AR view not initialized", @"ErrorInternal");
         }
         return;
     }
@@ -686,16 +687,15 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
     if (!arSession) {
         if (completionHandler) {
-            completionHandler(NO, nil, @"AR session not available", @"ErrorInternal");
+            completionHandler(NO, nil, nil, nil, @"AR session not available", @"ErrorInternal");
         }
         return;
     }
 
-    // Find the anchor by ID
+    // Find the anchor by ID in frame anchors
     std::string anchorIdStr = std::string([anchorId UTF8String]);
     std::shared_ptr<VROARAnchor> anchor = nullptr;
 
-    // Search through frame anchors
     std::unique_ptr<VROARFrame> &frame = arSession->getLastFrame();
     if (frame) {
         const std::vector<std::shared_ptr<VROARAnchor>> &anchors = frame->getAnchors();
@@ -709,7 +709,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
 
     if (!anchor) {
         if (completionHandler) {
-            completionHandler(NO, nil, @"Anchor not found in session", @"ErrorCloudIdNotFound");
+            completionHandler(NO, nil, nil, nil, @"Anchor not found in session", @"ErrorCloudIdNotFound");
         }
         return;
     }
@@ -718,17 +718,29 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     arSession->hostCloudAnchor(anchor,
         (int)ttlDays,
         [completionHandler](std::shared_ptr<VROARAnchor> hostedAnchor) {
-            // Success callback
+            // Success callback - extract anchor's world-space position and rotation
             if (completionHandler) {
                 NSString *cloudId = [NSString stringWithUTF8String:hostedAnchor->getCloudAnchorId().c_str()];
-                completionHandler(YES, cloudId, nil, @"Success");
+
+                // Extract position and rotation from anchor transform
+                VROMatrix4f transform = hostedAnchor->getTransform();
+                VROVector3f position = transform.extractTranslation();
+                VROVector3f scale = transform.extractScale();
+                VROVector3f rotation = transform.extractRotation(scale).toEuler();
+
+                NSArray<NSNumber *> *posArray = @[@(position.x), @(position.y), @(position.z)];
+                NSArray<NSNumber *> *rotArray = @[@(toDegrees(rotation.x)),
+                                                   @(toDegrees(rotation.y)),
+                                                   @(toDegrees(rotation.z))];
+
+                completionHandler(YES, cloudId, posArray, rotArray, nil, @"Success");
             }
         },
         [completionHandler](std::string error) {
             // Failure callback
             if (completionHandler) {
                 NSString *errorStr = [NSString stringWithUTF8String:error.c_str()];
-                completionHandler(NO, nil, errorStr, @"ErrorInternal");
+                completionHandler(NO, nil, nil, nil, errorStr, @"ErrorInternal");
             }
         }
     );
@@ -788,6 +800,171 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
 - (void)cancelCloudAnchorOperations {
     // Currently a no-op - cloud operations are fire-and-forget
     // Future implementation could track and cancel pending operations
+}
+
+#pragma mark - Manual Anchor Creation Methods
+
+- (void)addAnchorAtPosition:(NSArray<NSNumber *> *)position
+          completionHandler:(AddAnchorCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(NO, nil, nil, nil, @"AR view not initialized");
+        }
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    std::shared_ptr<VROARSession> arSession = [viewAR getARSession];
+    if (!arSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, nil, nil, @"AR session not available");
+        }
+        return;
+    }
+
+    std::shared_ptr<VROARSessioniOS> arSessioniOS = std::dynamic_pointer_cast<VROARSessioniOS>(arSession);
+    if (!arSessioniOS) {
+        if (completionHandler) {
+            completionHandler(NO, nil, nil, nil, @"Invalid AR session type");
+        }
+        return;
+    }
+
+    ARSession *nativeSession = arSessioniOS->getNativeARSession();
+    if (!nativeSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, nil, nil, @"Native AR session not available");
+        }
+        return;
+    }
+
+    // Validate position array
+    if (!position || position.count != 3) {
+        if (completionHandler) {
+            completionHandler(NO, nil, nil, nil, @"Position must be an array of 3 numbers [x, y, z]");
+        }
+        return;
+    }
+
+    // Extract position values
+    float x = [[position objectAtIndex:0] floatValue];
+    float y = [[position objectAtIndex:1] floatValue];
+    float z = [[position objectAtIndex:2] floatValue];
+
+    // Create native ARKit anchor with transform at the specified position
+    simd_float4x4 transform = matrix_identity_float4x4;
+    transform.columns[3] = simd_make_float4(x, y, z, 1.0);
+    ARAnchor *nativeAnchor = [[ARAnchor alloc] initWithTransform:transform];
+    NSString *anchorId = nativeAnchor.identifier.UUIDString;
+    std::string anchorIdStr = std::string([anchorId UTF8String]);
+
+    // Extract camera rotation as quaternion from current AR frame
+    // This captures the user's viewing orientation at anchor creation time
+    NSArray<NSNumber *> *cameraRotationArray = nil;
+    ARFrame *currentFrame = nativeSession.currentFrame;
+    if (currentFrame && currentFrame.camera) {
+        simd_quatf cameraQuat = simd_quaternion(currentFrame.camera.transform);
+        cameraRotationArray = @[
+            @(cameraQuat.vector.x),
+            @(cameraQuat.vector.y),
+            @(cameraQuat.vector.z),
+            @(cameraQuat.vector.w)
+        ];
+    }
+
+    // Create VROARAnchor wrapper MANUALLY (bypasses buggy delegate path)
+    // This pattern is from upstream createAnchoredNodeAtHitLocation()
+    std::shared_ptr<VROARAnchor> viroAnchor = std::make_shared<VROARAnchor>();
+    viroAnchor->setId(anchorIdStr);
+
+    VROMatrix4f vTransform;
+    vTransform.toIdentity();
+    vTransform.translate(VROVector3f(x, y, z));
+    viroAnchor->setTransform(vTransform);
+
+    // Capture weak references for async blocks
+    std::weak_ptr<VROARSessioniOS> session_w = arSessioniOS;
+    std::weak_ptr<VROARAnchor> anchor_w = viroAnchor;
+
+    // Add native anchor to ARKit on main thread, then register with Viro on renderer thread
+    // This pre-registers the anchor before the delegate fires, preventing the null pointer crash
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [nativeSession addAnchor:nativeAnchor];
+
+        // Add VROARAnchor to Viro's tracking on renderer thread
+        VROPlatformDispatchAsyncRenderer([session_w, anchor_w] {
+            std::shared_ptr<VROARSessioniOS> session_s = session_w.lock();
+            std::shared_ptr<VROARAnchor> anchor_s = anchor_w.lock();
+
+            if (session_s && anchor_s) {
+                session_s->addAnchor(anchor_s);
+            }
+        });
+    });
+
+    RCTLogInfo(@"[ViroAR] Created anchor at position [%.2f, %.2f, %.2f] with ID: %@", x, y, z, anchorId);
+
+    if (completionHandler) {
+        completionHandler(YES, anchorId, position, cameraRotationArray, nil);
+    }
+}
+
+- (void)createAndHostCloudAnchorAtPosition:(NSArray<NSNumber *> *)position
+                                   ttlDays:(NSInteger)ttlDays
+                         completionHandler:(CloudAnchorHostCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(NO, nil, nil, nil, @"AR view not initialized", @"ErrorInternal");
+        }
+        return;
+    }
+
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    ARSession *nativeSession = [viewAR getNativeARSession];
+    if (!nativeSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, nil, nil, @"ARKit session not available", @"ErrorInternal");
+        }
+        return;
+    }
+
+    std::shared_ptr<VROARSession> vroSession = [viewAR getARSession];
+    if (!vroSession) {
+        if (completionHandler) {
+            completionHandler(NO, nil, nil, nil, @"VRO AR session not available", @"ErrorInternal");
+        }
+        return;
+    }
+
+    // Validate position
+    if (!position || position.count != 3) {
+        if (completionHandler) {
+            completionHandler(NO, nil, nil, nil, @"Position must be an array of 3 numbers [x, y, z]", @"ErrorInternal");
+        }
+        return;
+    }
+
+    float x = [[position objectAtIndex:0] floatValue];
+    float y = [[position objectAtIndex:1] floatValue];
+    float z = [[position objectAtIndex:2] floatValue];
+
+    // Create native ARKit anchor with transform
+    simd_float4x4 transform = matrix_identity_float4x4;
+    transform.columns[3] = simd_make_float4(x, y, z, 1.0);
+    ARAnchor *nativeAnchor = [[ARAnchor alloc] initWithTransform:transform];
+
+    // Add to ARKit session - this will trigger session:didAddAnchors: delegate
+    // which creates the VROARAnchor wrapper and stores it in _nativeAnchorMap
+    [nativeSession addAnchor:nativeAnchor];
+
+    NSString *anchorId = nativeAnchor.identifier.UUIDString;
+    RCTLogInfo(@"[ViroAR] Created native ARKit anchor at [%.2f, %.2f, %.2f] with ID: %@", x, y, z, anchorId);
+
+    // Wait for ARKit to process the anchor into a frame (needs a few frame updates, ~150ms at 60fps)
+    // before calling hostCloudAnchor which searches arFrame.anchors
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(150 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+        [self hostCloudAnchor:anchorId ttlDays:ttlDays completionHandler:completionHandler];
+    });
 }
 
 #pragma mark - Geospatial API Methods
@@ -1810,11 +1987,12 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
 }
 
 - (void)saveWorldMapForSession:(NSString *)sessionId
+                      filePath:(NSString * _Nullable)customFilePath
              completionHandler:(WorldMapCompletionHandler)completionHandler {
     // Concurrency check
     if (_worldMapOpInFlight != VRTWorldMapOpNone) {
         if (completionHandler) {
-            completionHandler(NO, @"BUSY", @"Another world map operation is in progress");
+            completionHandler(NO, @"BUSY", @"Another world map operation is in progress", nil);
         }
         return;
     }
@@ -1822,7 +2000,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     ARSession *session = [self getNativeARSession];
     if (!session) {
         if (completionHandler) {
-            completionHandler(NO, @"SESSION_UNAVAILABLE", @"AR session not available");
+            completionHandler(NO, @"SESSION_UNAVAILABLE", @"AR session not available", nil);
         }
         return;
     }
@@ -1858,12 +2036,15 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
             NSString *errorMsg = [NSString stringWithFormat:
                 @"Cannot save: frame=%s trackingState=%@ mappingStatus=%@ (need trackingState=normal AND mappingStatus=mapped or extending)",
                 frame ? "valid" : "nil", trackingStr, mappingStr];
-            completionHandler(NO, @"WORLD_MAP_NOT_READY", errorMsg);
+            completionHandler(NO, @"WORLD_MAP_NOT_READY", errorMsg, nil);
         }
         return;
     }
 
     _worldMapOpInFlight = VRTWorldMapOpSaving;
+
+    // Use custom path if provided, otherwise compute from sessionId
+    NSString *targetFilePath = customFilePath;
 
     __weak VRTARSceneNavigator *weakSelf = self;
     [session getCurrentWorldMapWithCompletionHandler:^(ARWorldMap *worldMap, NSError *error) {
@@ -1876,16 +2057,17 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
             strongSelf->_worldMapOpInFlight = VRTWorldMapOpNone;
             NSString *errorMsg = error.localizedDescription ?: @"World map not available";
             if (completionHandler) {
-                completionHandler(NO, @"WORLD_MAP_NOT_READY", errorMsg);
+                completionHandler(NO, @"WORLD_MAP_NOT_READY", errorMsg, nil);
             }
             return;
         }
 
-        NSString *filePath = [strongSelf worldMapFilePathForSession:sessionId];
+        // Determine file path: use custom path or compute from sessionId
+        NSString *filePath = targetFilePath ?: [strongSelf worldMapFilePathForSession:sessionId];
         if (!filePath) {
             strongSelf->_worldMapOpInFlight = VRTWorldMapOpNone;
             if (completionHandler) {
-                completionHandler(NO, @"SESSION_UNAVAILABLE", @"Failed to get file path");
+                completionHandler(NO, @"SESSION_UNAVAILABLE", @"Failed to get file path", nil);
             }
             return;
         }
@@ -1898,7 +2080,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
             strongSelf->_worldMapOpInFlight = VRTWorldMapOpNone;
             NSString *errorMsg = archiveError.localizedDescription ?: @"Failed to archive world map";
             if (completionHandler) {
-                completionHandler(NO, @"DECODE_FAILED", errorMsg);
+                completionHandler(NO, @"DECODE_FAILED", errorMsg, nil);
             }
             return;
         }
@@ -1910,32 +2092,38 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
         if (!success) {
             NSString *errorMsg = writeError.localizedDescription ?: @"Failed to write world map file";
             if (completionHandler) {
-                completionHandler(NO, @"SESSION_UNAVAILABLE", errorMsg);
+                completionHandler(NO, @"SESSION_UNAVAILABLE", errorMsg, nil);
             }
             return;
         }
 
-        RCTLogInfo(@"[ViroAR] World map saved for session: %@", sessionId);
+        RCTLogInfo(@"[ViroAR] World map saved for session: %@ at path: %@", sessionId, filePath);
         if (completionHandler) {
-            completionHandler(YES, nil, nil);
+            completionHandler(YES, nil, nil, filePath);
         }
     }];
 }
 
 - (void)loadWorldMapForSession:(NSString *)sessionId
+                      filePath:(NSString * _Nullable)customFilePath
              completionHandler:(WorldMapCompletionHandler)completionHandler {
     // Concurrency check
     if (_worldMapOpInFlight != VRTWorldMapOpNone) {
         if (completionHandler) {
-            completionHandler(NO, @"BUSY", @"Another world map operation is in progress");
+            completionHandler(NO, @"BUSY", @"Another world map operation is in progress", nil);
         }
         return;
     }
 
-    NSString *filePath = [self worldMapFilePathForSession:sessionId];
+    // Determine file path: use custom path or compute from sessionId
+    NSString *filePath = customFilePath;
+    if (!filePath || filePath.length == 0) {
+        filePath = [self worldMapFilePathForSession:sessionId];
+    }
+
     if (!filePath) {
         if (completionHandler) {
-            completionHandler(NO, @"SESSION_UNAVAILABLE", @"Failed to get file path");
+            completionHandler(NO, @"SESSION_UNAVAILABLE", @"Failed to get file path", nil);
         }
         return;
     }
@@ -1943,7 +2131,10 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     if (![fileManager fileExistsAtPath:filePath]) {
         if (completionHandler) {
-            completionHandler(NO, @"NOT_FOUND", @"No saved world map found for this session");
+            NSString *errorMsg = customFilePath
+                ? @"No file found at the specified path"
+                : @"No saved world map found for this session";
+            completionHandler(NO, @"NOT_FOUND", errorMsg, nil);
         }
         return;
     }
@@ -1951,7 +2142,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     ARSession *session = [self getNativeARSession];
     if (!session) {
         if (completionHandler) {
-            completionHandler(NO, @"SESSION_UNAVAILABLE", @"AR session not available");
+            completionHandler(NO, @"SESSION_UNAVAILABLE", @"AR session not available", nil);
         }
         return;
     }
@@ -1964,7 +2155,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
         _worldMapOpInFlight = VRTWorldMapOpNone;
         if (completionHandler) {
             completionHandler(NO, @"DECODE_FAILED",
-                readError.localizedDescription ?: @"Failed to read world map file");
+                readError.localizedDescription ?: @"Failed to read world map file", nil);
         }
         return;
     }
@@ -1977,7 +2168,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
         _worldMapOpInFlight = VRTWorldMapOpNone;
         if (completionHandler) {
             completionHandler(NO, @"DECODE_FAILED",
-                decodeError.localizedDescription ?: @"Failed to decode world map");
+                decodeError.localizedDescription ?: @"Failed to decode world map", nil);
         }
         return;
     }
@@ -2011,9 +2202,9 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
 
     _worldMapOpInFlight = VRTWorldMapOpNone;
 
-    RCTLogInfo(@"[ViroAR] World map loaded for session: %@", sessionId);
+    RCTLogInfo(@"[ViroAR] World map loaded for session: %@ from path: %@", sessionId, filePath);
     if (completionHandler) {
-        completionHandler(YES, nil, nil);
+        completionHandler(YES, nil, nil, nil);
     }
 }
 
@@ -2022,7 +2213,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     // Concurrency check
     if (_worldMapOpInFlight != VRTWorldMapOpNone) {
         if (completionHandler) {
-            completionHandler(NO, @"BUSY", @"Another world map operation is in progress");
+            completionHandler(NO, @"BUSY", @"Another world map operation is in progress", nil);
         }
         return;
     }
@@ -2030,7 +2221,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     NSString *filePath = [self worldMapFilePathForSession:sessionId];
     if (!filePath) {
         if (completionHandler) {
-            completionHandler(NO, @"SESSION_UNAVAILABLE", @"Failed to get file path");
+            completionHandler(NO, @"SESSION_UNAVAILABLE", @"Failed to get file path", nil);
         }
         return;
     }
@@ -2038,7 +2229,7 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     if (![fileManager fileExistsAtPath:filePath]) {
         if (completionHandler) {
-            completionHandler(NO, @"NOT_FOUND", @"No saved world map found for this session");
+            completionHandler(NO, @"NOT_FOUND", @"No saved world map found for this session", nil);
         }
         return;
     }
@@ -2053,14 +2244,14 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     if (!success) {
         if (completionHandler) {
             completionHandler(NO, @"SESSION_UNAVAILABLE",
-                deleteError.localizedDescription ?: @"Failed to delete world map file");
+                deleteError.localizedDescription ?: @"Failed to delete world map file", nil);
         }
         return;
     }
 
     RCTLogInfo(@"[ViroAR] World map deleted for session: %@", sessionId);
     if (completionHandler) {
-        completionHandler(YES, nil, nil);
+        completionHandler(YES, nil, nil, nil);
     }
 }
 
