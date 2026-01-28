@@ -1355,6 +1355,208 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
     }
 
     // ========================================================================
+    // Render Zoom API Methods
+    // ========================================================================
+
+    /**
+     * Set the render zoom factor. This applies a zoom effect by modifying the
+     * projection matrix and camera background texture coordinates. The zoom
+     * affects both the preview and any captured screenshots/videos.
+     *
+     * @param sceneNavTag The tag of the scene navigator
+     * @param zoomFactor 1.0 = no zoom, 2.0 = 2x zoom, etc.
+     */
+    @ReactMethod
+    public void setRenderZoom(final int sceneNavTag, final float zoomFactor) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                View view = viewResolver.resolveView(sceneNavTag);
+                if (view instanceof VRTARSceneNavigator) {
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.setRenderZoom(zoomFactor);
+                }
+            }
+        });
+    }
+
+    /**
+     * Get the current render zoom factor.
+     */
+    @ReactMethod
+    public void getRenderZoom(final int sceneNavTag, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putDouble("zoomFactor", 1.0);
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putDouble("zoomFactor", 1.0);
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    WritableMap result = Arguments.createMap();
+                    result.putDouble("zoomFactor", sceneNavigator.getRenderZoom());
+                    promise.resolve(result);
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putDouble("zoomFactor", 1.0);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    /**
+     * Get the maximum supported render zoom factor.
+     */
+    @ReactMethod
+    public void getMaxRenderZoom(final int sceneNavTag, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putDouble("maxZoom", 5.0);
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putDouble("maxZoom", 5.0);
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    WritableMap result = Arguments.createMap();
+                    result.putDouble("maxZoom", sceneNavigator.getMaxRenderZoom());
+                    promise.resolve(result);
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putDouble("maxZoom", 5.0);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    /**
+     * Set the maximum render zoom factor.
+     */
+    @ReactMethod
+    public void setMaxRenderZoom(final int sceneNavTag, final float maxZoom) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                View view = viewResolver.resolveView(sceneNavTag);
+                if (view instanceof VRTARSceneNavigator) {
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.setMaxRenderZoom(maxZoom);
+                }
+            }
+        });
+    }
+
+    // ========================================================================
+    // View Zoom API Methods
+    // ========================================================================
+
+    /**
+     * Set the view zoom factor. This applies a zoom effect by scaling the view
+     * using Android's View transform system. Unlike render zoom, view zoom is
+     * NOT captured in screenshots or video recordings - it's a purely visual
+     * presentation effect.
+     *
+     * @param sceneNavTag The tag of the scene navigator
+     * @param zoomFactor 1.0 = no zoom, 2.0 = 2x zoom, etc.
+     */
+    @ReactMethod
+    public void setViewZoom(final int sceneNavTag, final float zoomFactor) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                View view = viewResolver.resolveView(sceneNavTag);
+                if (view instanceof VRTARSceneNavigator) {
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    sceneNavigator.setViewZoom(zoomFactor);
+                }
+            }
+        });
+    }
+
+    /**
+     * Get the current view zoom factor.
+     */
+    @ReactMethod
+    public void getViewZoom(final int sceneNavTag, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) {
+            WritableMap result = Arguments.createMap();
+            result.putDouble("zoomFactor", 1.0);
+            promise.resolve(result);
+            return;
+        }
+
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override
+            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) {
+                        WritableMap result = Arguments.createMap();
+                        result.putDouble("zoomFactor", 1.0);
+                        promise.resolve(result);
+                        return;
+                    }
+
+                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
+                    WritableMap result = Arguments.createMap();
+                    result.putDouble("zoomFactor", sceneNavigator.getViewZoom());
+                    promise.resolve(result);
+                } catch (Exception e) {
+                    WritableMap result = Arguments.createMap();
+                    result.putDouble("zoomFactor", 1.0);
+                    result.putString("error", e.getMessage());
+                    promise.resolve(result);
+                }
+            }
+        });
+    }
+
+    // ========================================================================
     // Cleanup Methods
     // ========================================================================
 

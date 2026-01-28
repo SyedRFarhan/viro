@@ -62,6 +62,15 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
     private boolean mGeospatialModeEnabled = false;
     private boolean mNeedsGeospatialModeToggle = false;
 
+    // Render zoom configuration
+    private float mRenderZoom = 1.0f;
+    private float mMaxRenderZoom = 5.0f;
+    private boolean mNeedsRenderZoomToggle = false;
+
+    // View zoom configuration
+    private float mViewZoom = 1.0f;
+    private boolean mNeedsViewZoomToggle = false;
+
     private static class StartupListenerARCore implements ViroViewARCore.StartupListener {
 
         private WeakReference<VRTARSceneNavigator> mNavigator;
@@ -119,6 +128,18 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
             if (navigator.mNeedsWorldMeshToggle) {
                 navigator.applyWorldMeshEnabled();
                 navigator.mNeedsWorldMeshToggle = false;
+            }
+
+            // Apply pending render zoom configuration
+            if (navigator.mNeedsRenderZoomToggle) {
+                navigator.applyRenderZoom();
+                navigator.mNeedsRenderZoomToggle = false;
+            }
+
+            // Apply pending view zoom configuration
+            if (navigator.mNeedsViewZoomToggle) {
+                navigator.applyViewZoom();
+                navigator.mNeedsViewZoomToggle = false;
             }
         }
 
@@ -218,6 +239,102 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
             ((ViroViewARCore)mViroView).setCameraAutoFocusEnabled(mAutoFocusEnabled);
         } else {
             mNeedsAutoFocusToggle = true;
+        }
+    }
+
+    // ========================================================================
+    // Render Zoom API Support
+    // ========================================================================
+
+    /**
+     * Set the render zoom factor. This applies a zoom effect by modifying the
+     * projection matrix and camera background texture coordinates.
+     */
+    public void setRenderZoom(float zoomFactor) {
+        mRenderZoom = zoomFactor;
+        if (mGLInitialized && mViroView != null) {
+            ((ViroViewARCore) mViroView).setRenderZoom(zoomFactor);
+        } else {
+            mNeedsRenderZoomToggle = true;
+        }
+    }
+
+    /**
+     * Get the current render zoom factor.
+     */
+    public float getRenderZoom() {
+        if (mGLInitialized && mViroView != null) {
+            return ((ViroViewARCore) mViroView).getRenderZoom();
+        }
+        return mRenderZoom;
+    }
+
+    /**
+     * Get the maximum supported render zoom factor.
+     */
+    public float getMaxRenderZoom() {
+        if (mGLInitialized && mViroView != null) {
+            return ((ViroViewARCore) mViroView).getMaxRenderZoom();
+        }
+        return mMaxRenderZoom;
+    }
+
+    /**
+     * Set the maximum render zoom factor.
+     */
+    public void setMaxRenderZoom(float maxZoom) {
+        mMaxRenderZoom = maxZoom;
+        if (mGLInitialized && mViroView != null) {
+            ((ViroViewARCore) mViroView).setMaxRenderZoom(maxZoom);
+        }
+    }
+
+    /**
+     * Apply the stored render zoom configuration to the native view.
+     */
+    private void applyRenderZoom() {
+        if (mViroView != null) {
+            ViroViewARCore arView = (ViroViewARCore) mViroView;
+            arView.setMaxRenderZoom(mMaxRenderZoom);
+            arView.setRenderZoom(mRenderZoom);
+        }
+    }
+
+    // ========================================================================
+    // View Zoom API Support
+    // ========================================================================
+
+    /**
+     * Set the view zoom factor. This applies a zoom effect by scaling the view
+     * using Android's View transform system. Unlike render zoom, view zoom is
+     * NOT captured in screenshots or video recordings.
+     */
+    public void setViewZoom(float zoomFactor) {
+        mViewZoom = zoomFactor;
+        if (mGLInitialized && mViroView != null) {
+            ((ViroViewARCore) mViroView).setViewZoom(zoomFactor);
+        } else {
+            mNeedsViewZoomToggle = true;
+        }
+    }
+
+    /**
+     * Get the current view zoom factor.
+     */
+    public float getViewZoom() {
+        if (mGLInitialized && mViroView != null) {
+            return ((ViroViewARCore) mViroView).getViewZoom();
+        }
+        return mViewZoom;
+    }
+
+    /**
+     * Apply the stored view zoom configuration to the native view.
+     */
+    private void applyViewZoom() {
+        if (mViroView != null) {
+            ViroViewARCore arView = (ViroViewARCore) mViroView;
+            arView.setViewZoom(mViewZoom);
         }
     }
 
