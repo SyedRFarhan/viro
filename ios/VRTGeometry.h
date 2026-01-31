@@ -35,5 +35,6 @@
 @property (nonatomic, copy, nullable) NSArray<NSArray<NSNumber *> *> *normals;
 @property (nonatomic, copy, nullable) NSArray<NSArray<NSNumber *> *> *texcoords;
 @property (nonatomic, copy, nullable) NSArray<NSArray<NSNumber *> *> *triangleIndices;
+@property (nonatomic, copy, nullable) NSArray<NSArray<NSNumber *> *> *vertexColors;
 
 @end

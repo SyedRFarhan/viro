@@ -38,6 +38,7 @@ public class VRTGeometry extends VRTControl {
     private List<Vector> mTexcoords = new ArrayList<>();
     private List<Vector> mNormals = new ArrayList<>();
     private List<List<Integer>> mTriangleIndices = new ArrayList<>();
+    private float[] mVertexColors = null;
     private boolean mGeometryNeedsUpdate = true;
 
     public VRTGeometry(ReactContext reactContext) {
@@ -67,6 +68,11 @@ public class VRTGeometry extends VRTControl {
         mGeometryNeedsUpdate = true;
     }
 
+    public void setVertexColors(float[] colors) {
+        mVertexColors = colors;
+        mGeometryNeedsUpdate = true;
+    }
+
     @Override
     public void onPropsSet() {
         super.onPropsSet();
@@ -80,6 +86,9 @@ public class VRTGeometry extends VRTControl {
         mGeometry.setVertices(mVertices);
         mGeometry.setTextureCoordinates(mTexcoords);
         mGeometry.setNormals(mNormals);
+        if (mVertexColors != null) {
+            mGeometry.setVertexColors(mVertexColors);
+        }
 
         List<Submesh> submeshes = new ArrayList<>();
         for (List<Integer> triangles : mTriangleIndices) {

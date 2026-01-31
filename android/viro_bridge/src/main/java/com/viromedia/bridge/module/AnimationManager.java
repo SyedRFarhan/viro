@@ -200,6 +200,10 @@ public class AnimationManager extends ReactContextBaseJavaModule {
         String rotateZ = getFloatPropertyAsString(propertyMap, "rotateZ");
         String opacity = getFloatPropertyAsString(propertyMap, "opacity");
         String color = getIntPropertyAsString(propertyMap, "color");
+        String texcoordTranslateX = getFloatPropertyAsString(propertyMap, "texcoordTranslateX");
+        String texcoordTranslateY = getFloatPropertyAsString(propertyMap, "texcoordTranslateY");
+        String texcoordScaleX = getFloatPropertyAsString(propertyMap, "texcoordScaleX");
+        String texcoordScaleY = getFloatPropertyAsString(propertyMap, "texcoordScaleY");
 
         LazyMaterial lazyMaterial = null;
 
@@ -222,7 +226,9 @@ public class AnimationManager extends ReactContextBaseJavaModule {
         }
         return new AnimationGroup(positionX, positionY, positionZ,
                 scaleX, scaleY, scaleZ, rotateX, rotateY, rotateZ,
-                opacity, color, lazyMaterial, durationSeconds, delaySeconds, functionType);
+                opacity, color,
+                texcoordTranslateX, texcoordTranslateY, texcoordScaleX, texcoordScaleY,
+                lazyMaterial, durationSeconds, delaySeconds, functionType);
     }
 
     /**

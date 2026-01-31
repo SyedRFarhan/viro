@@ -50,6 +50,8 @@
 @property (nonatomic, readwrite) BOOL multisamplingEnabled;
 @property (nonatomic, copy) NSString *occlusionMode;
 @property (nonatomic, assign) BOOL depthDebugEnabled;
+@property (nonatomic, assign) BOOL scanWaveEnabled;
+@property (nonatomic, copy, nullable) NSDictionary *scanWaveConfig;
 @property (nonatomic, copy) NSString *cloudAnchorProvider;
 @property (nonatomic, copy) NSString *geospatialAnchorProvider;
 

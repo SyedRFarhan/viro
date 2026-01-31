@@ -110,6 +110,62 @@ RCT_EXPORT_METHOD(isARSupported:(RCTResponseSenderBlock)callback)
         [dict setObject:classificationString forKey:@"classification"];
     }
 
+    // Mesh anchor (ARMeshAnchor from LiDAR scene reconstruction)
+    std::shared_ptr<VROARMeshAnchor> meshAnchor = std::dynamic_pointer_cast<VROARMeshAnchor>(anchor);
+    if (meshAnchor) {
+        [dict setObject:@"mesh" forKey:@"type"];
+
+        const std::vector<VROVector3f> &vertices = meshAnchor->getVertices();
+        const std::vector<int> &faceIndices = meshAnchor->getFaceIndices();
+        const std::vector<VROVector3f> &normals = meshAnchor->getNormals();
+        const std::vector<int> &classifications = meshAnchor->getClassifications();
+
+        [dict setObject:@((int)vertices.size()) forKey:@"vertexCount"];
+        [dict setObject:@((int)(faceIndices.size() / 3)) forKey:@"faceCount"];
+
+        // Encode vertices as base64 (float32 x 3 per vertex)
+        {
+            std::vector<float> flat;
+            flat.reserve(vertices.size() * 3);
+            for (const auto &v : vertices) {
+                flat.push_back(v.x);
+                flat.push_back(v.y);
+                flat.push_back(v.z);
+            }
+            NSData *data = [NSData dataWithBytes:flat.data()
+                                          length:flat.size() * sizeof(float)];
+            [dict setObject:[data base64EncodedStringWithOptions:0] forKey:@"verticesBase64"];
+        }
+
+        // Encode face indices as base64 (int32 x 3 per face)
+        {
+            NSData *data = [NSData dataWithBytes:faceIndices.data()
+                                          length:faceIndices.size() * sizeof(int)];
+            [dict setObject:[data base64EncodedStringWithOptions:0] forKey:@"indicesBase64"];
+        }
+
+        // Encode normals as base64 (float32 x 3 per vertex)
+        {
+            std::vector<float> flat;
+            flat.reserve(normals.size() * 3);
+            for (const auto &n : normals) {
+                flat.push_back(n.x);
+                flat.push_back(n.y);
+                flat.push_back(n.z);
+            }
+            NSData *data = [NSData dataWithBytes:flat.data()
+                                          length:flat.size() * sizeof(float)];
+            [dict setObject:[data base64EncodedStringWithOptions:0] forKey:@"normalsBase64"];
+        }
+
+        // Encode classifications as base64 (int32 per face)
+        {
+            NSData *data = [NSData dataWithBytes:classifications.data()
+                                          length:classifications.size() * sizeof(int)];
+            [dict setObject:[data base64EncodedStringWithOptions:0] forKey:@"classificationsBase64"];
+        }
+    }
+
     return dict;
 }
 

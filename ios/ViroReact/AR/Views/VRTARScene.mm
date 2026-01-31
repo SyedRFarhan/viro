@@ -85,21 +85,29 @@ static NSString *const kPointCloudKey = @"pointCloud";
 }
 
 - (void)setAnchorDetectionTypes:(NSArray<NSString *> *)types {
+    NSLog(@"[VRTARScene] setAnchorDetectionTypes called with: %@", types);
     _anchorDetectionTypes = types;
-    
+
     std::set<VROAnchorDetection> detectionTypes;
     for (NSString *type in _anchorDetectionTypes) {
         if ([type caseInsensitiveCompare:@"planesHorizontal"] == NSOrderedSame) {
             detectionTypes.insert(VROAnchorDetection::PlanesHorizontal);
         } else if ([type caseInsensitiveCompare:@"planesVertical"] == NSOrderedSame) {
             detectionTypes.insert(VROAnchorDetection::PlanesVertical);
+        } else if ([type caseInsensitiveCompare:@"mesh"] == NSOrderedSame) {
+            NSLog(@"[VRTARScene] 'mesh' detection type found — inserting VROAnchorDetection::Mesh");
+            detectionTypes.insert(VROAnchorDetection::Mesh);
         }
     }
-    
+
+    NSLog(@"[VRTARScene] Total detection types: %lu", (unsigned long)detectionTypes.size());
     _nativeDetectionTypes = detectionTypes;
 
     if (_vroArScene) {
+        NSLog(@"[VRTARScene] Applying detection types to VROARScene");
         _vroArScene->setAnchorDetectionTypes(detectionTypes);
+    } else {
+        NSLog(@"[VRTARScene] WARNING: _vroArScene is nil — detection types NOT applied");
     }
 }
 
@@ -169,20 +177,29 @@ static NSString *const kPointCloudKey = @"pointCloud";
 }
 
 - (void)onAnchorFound:(std::shared_ptr<VROARAnchor>)anchor {
+    NSDictionary *dict = [VRTARUtils createDictionaryFromAnchor:anchor];
+    NSLog(@"[VRTARScene] onAnchorFound type=%@ id=%@", dict[@"type"], dict[@"anchorId"]);
     if (self.onAnchorFoundViro) {
-        self.onAnchorFoundViro(@{@"anchor" : [VRTARUtils createDictionaryFromAnchor:anchor]});
+        self.onAnchorFoundViro(@{@"anchor" : dict});
     }
 }
 
 - (void)onAnchorUpdated:(std::shared_ptr<VROARAnchor>)anchor {
+    NSDictionary *dict = [VRTARUtils createDictionaryFromAnchor:anchor];
+    // Only log mesh updates (planes update too frequently)
+    if ([dict[@"type"] isEqualToString:@"mesh"]) {
+        NSLog(@"[VRTARScene] onAnchorUpdated type=mesh id=%@ vertices=%@", dict[@"anchorId"], dict[@"vertexCount"]);
+    }
     if (self.onAnchorUpdatedViro) {
-        self.onAnchorUpdatedViro(@{@"anchor" : [VRTARUtils createDictionaryFromAnchor:anchor]});
+        self.onAnchorUpdatedViro(@{@"anchor" : dict});
     }
 }
 
 - (void)onAnchorRemoved:(std::shared_ptr<VROARAnchor>)anchor {
+    NSDictionary *dict = [VRTARUtils createDictionaryFromAnchor:anchor];
+    NSLog(@"[VRTARScene] onAnchorRemoved type=%@ id=%@", dict[@"type"], dict[@"anchorId"]);
     if (self.onAnchorRemovedViro) {
-        self.onAnchorRemovedViro(@{@"anchor" : [VRTARUtils createDictionaryFromAnchor:anchor]});
+        self.onAnchorRemovedViro(@{@"anchor" : dict});
     }
 }
 

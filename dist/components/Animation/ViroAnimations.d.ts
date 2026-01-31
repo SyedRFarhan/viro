@@ -30,6 +30,11 @@ export type ViroRegisterableAnimation = {
         opacity?: number | string;
         color?: ColorValue | ProcessedColorValue;
         material?: string;
+        texcoordTranslateX?: number | string;
+        texcoordTranslateY?: number | string;
+        texcoordScaleX?: number | string;
+        texcoordScaleY?: number | string;
+        [key: `uniform:${string}`]: number | string;
     };
 };
 export type ViroAnimationDict = {

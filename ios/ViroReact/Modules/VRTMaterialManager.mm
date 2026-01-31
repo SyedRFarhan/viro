@@ -31,6 +31,7 @@
 #import "VRTUIImageWrapper.h"
 #import <React/RCTUtils.h>
 #import <React/RCTImageSource.h>
+#import <ViroKit/VROShaderModifier.h>
 
 @implementation RCTBridge (VRTMaterialManager)
 
@@ -366,6 +367,34 @@ RCT_EXPORT_METHOD(deleteMaterials:(NSArray *)materials) {
                 vroMaterial->getMetalness().setColor({ [material[key] floatValue], 1.0, 1.0, 1.0 });
             } else if ([@"roughness" caseInsensitiveCompare:materialPropertyName]  == NSOrderedSame){
                 vroMaterial->getRoughness().setColor({ [material[key] floatValue], 1.0, 1.0, 1.0 });
+            } else if ([@"shaderModifiers" caseInsensitiveCompare:materialPropertyName] == NSOrderedSame) {
+                NSDictionary *shaderModifiers = material[key];
+                for (NSString *entryPointName in shaderModifiers) {
+                    VROShaderEntryPoint entryPoint = [self parseShaderEntryPoint:entryPointName];
+                    NSArray<NSString *> *codeLines = shaderModifiers[entryPointName];
+
+                    std::vector<std::string> code;
+                    for (NSString *line in codeLines) {
+                        code.push_back(std::string([line UTF8String]));
+                    }
+
+                    auto modifier = std::make_shared<VROShaderModifier>(entryPoint, code);
+                    modifier->setName(std::string([entryPointName UTF8String]) + "_modifier");
+
+                    // Set up uniform binders for any uniform declarations in the code.
+                    // The modifier automatically parses uniform lines; we register
+                    // float binders with a default value of 0.
+                    std::vector<std::string> uniforms = modifier->getUniforms();
+                    for (const std::string &uniformName : uniforms) {
+                        modifier->setUniformBinder(uniformName, VROShaderProperty::Float,
+                            [uniformName](VROUniform *uniform, const VROGeometry *geometry, const VROMaterial *material) {
+                                // Default binding — animated values will override via the material's
+                                // shader modifier uniform storage (set by animation system)
+                            });
+                    }
+
+                    vroMaterial->addShaderModifier(modifier);
+                }
             }
         }
     }
@@ -605,6 +634,15 @@ RCT_EXPORT_METHOD(deleteMaterials:(NSArray *)materials) {
         // Default if nothing else matches
         return VROCullMode::Back;
     }
+}
+
+- (VROShaderEntryPoint)parseShaderEntryPoint:(NSString *)name {
+    if ([name isEqualToString:@"geometry"]) return VROShaderEntryPoint::Geometry;
+    if ([name isEqualToString:@"vertex"])   return VROShaderEntryPoint::Vertex;
+    if ([name isEqualToString:@"surface"])  return VROShaderEntryPoint::Surface;
+    if ([name isEqualToString:@"lighting"]) return VROShaderEntryPoint::LightingModel;
+    if ([name isEqualToString:@"fragment"]) return VROShaderEntryPoint::Fragment;
+    return VROShaderEntryPoint::Surface; // default
 }
 
 - (std::shared_ptr<VROMaterial>)getMaterialByName:(NSString *)name {

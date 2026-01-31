@@ -182,7 +182,7 @@ export type ViroARPlaneAlignment = "Horizontal" | "HorizontalUpward" | "Horizont
  */
 export type ViroAnchor = {
     anchorId: string;
-    type: "anchor" | "plane" | "image";
+    type: "anchor" | "plane" | "image" | "mesh";
     position: [number, number, number];
     rotation: [number, number, number];
     scale: [number, number, number];

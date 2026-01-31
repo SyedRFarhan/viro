@@ -136,6 +136,23 @@ enum class VROCameraPosition;
  */
 - (void)setDepthDebugEnabled:(BOOL)enabled opacity:(float)opacity;
 
+/*
+ Trigger a depth-based scan wave effect on the camera background.
+ A bright wave front sweeps outward from the camera (near → far), revealing
+ surface contour edges as it passes, then fades out.
+
+ @param enabled Set to YES to trigger the animation. The native side auto-completes
+ the animation and removes the modifier. Set back to NO to allow re-triggering.
+ */
+- (void)setScanWaveEnabled:(BOOL)enabled;
+
+/*
+ Configure the scan wave effect parameters. All fields are optional with
+ sensible defaults — the effect works with zero configuration.
+ Changes take effect immediately, even mid-animation.
+ */
+- (void)setScanWaveConfig:(NSDictionary *)config;
+
 #pragma mark - Monocular Depth Estimation
 
 /*

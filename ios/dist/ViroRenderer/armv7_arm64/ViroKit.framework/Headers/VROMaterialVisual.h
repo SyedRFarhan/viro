@@ -110,7 +110,12 @@ public:
     float getIntensity() const {
         return _intensity;
     }
-    
+
+    void setContentsTransform(VROMatrix4f transform);
+    VROMatrix4f getContentsTransform() const {
+        return _contentsTransform;
+    }
+
 private:
     
     /*

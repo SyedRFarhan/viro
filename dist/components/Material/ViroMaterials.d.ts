@@ -27,6 +27,8 @@ export type ViroResolvedCubeMap = {
     nz: ImageResolvedAssetSource;
     pz: ImageResolvedAssetSource;
 };
+export type ViroShaderEntryPoint = "geometry" | "vertex" | "surface" | "lighting" | "fragment";
+export type ViroShaderModifiers = Partial<Record<ViroShaderEntryPoint, string[]>>;
 export type ViroMaterial = {
     shininess?: number;
     fresnelExponent?: number;
@@ -54,6 +56,7 @@ export type ViroMaterial = {
     metalness?: number;
     metalnessTexture?: any;
     ambientOcclusionTexture?: any;
+    shaderModifiers?: ViroShaderModifiers;
 };
 export type ViroMaterialDict = {
     [key: string]: ViroMaterial;

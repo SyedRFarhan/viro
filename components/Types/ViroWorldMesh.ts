@@ -111,3 +111,124 @@ export type ViroWorldMeshUpdatedEvent = {
    */
   stats: ViroWorldMeshStats;
 };
+
+/**
+ * On-demand snapshot of the current world mesh data.
+ * [iOS Only]
+ *
+ * Note: With ARMeshAnchor integration, mesh data is delivered incrementally
+ * through onAnchorFound/Updated/Removed events. This snapshot type is retained
+ * for the imperative API but currently returns success: false.
+ * Use ARMeshAnchor events for real-time mesh access.
+ */
+export type ViroWorldMeshSnapshot = {
+  /**
+   * Whether the snapshot was successfully captured.
+   */
+  success: boolean;
+
+  /**
+   * Number of vertices in the snapshot.
+   */
+  vertexCount?: number;
+
+  /**
+   * Number of triangles in the snapshot.
+   */
+  triangleCount?: number;
+
+  /**
+   * Base64-encoded Float32 array of vertex positions.
+   * Layout: [x0, y0, z0, x1, y1, z1, ...]
+   */
+  verticesBase64?: string;
+
+  /**
+   * Base64-encoded Int32 array of triangle face indices.
+   * Layout: [i0, i1, i2, ...] (3 per triangle)
+   */
+  indicesBase64?: string;
+
+  /**
+   * Base64-encoded Float32 array of per-vertex confidence values (0.0-1.0).
+   */
+  confidenceBase64?: string;
+
+  /**
+   * Error message if success is false.
+   */
+  error?: string;
+};
+
+/**
+ * ARMeshClassification values from ARKit (iOS 13.4+).
+ * These map to per-face classifications provided by LiDAR scene reconstruction.
+ */
+export enum ViroMeshClassification {
+  None = 0,
+  Wall = 1,
+  Floor = 2,
+  Ceiling = 3,
+  Table = 4,
+  Seat = 5,
+  Window = 6,
+  Door = 7,
+}
+
+/**
+ * Represents a mesh chunk from ARKit's ARMeshAnchor (iOS 13.4+, LiDAR devices).
+ * Delivered through onAnchorFound/Updated/Removed with type="mesh".
+ *
+ * Geometry data is base64-encoded for efficient transfer across the bridge:
+ * - verticesBase64: Float32Array (3 floats per vertex, anchor-local coords)
+ * - indicesBase64: Int32Array (3 ints per triangle)
+ * - normalsBase64: Float32Array (3 floats per vertex)
+ * - classificationsBase64: Int32Array (1 int per face, ViroMeshClassification)
+ */
+export type ViroMeshAnchor = {
+  /** Anchor type identifier - always "mesh" for mesh anchors. */
+  type: 'mesh';
+
+  /** Unique anchor identifier (UUID string). */
+  anchorId: string;
+
+  /** Anchor position in world coordinates. */
+  position: [number, number, number];
+
+  /** Anchor rotation in degrees (Euler angles). */
+  rotation: [number, number, number];
+
+  /** Anchor scale. */
+  scale: [number, number, number];
+
+  /** Number of vertices in this mesh chunk. */
+  vertexCount: number;
+
+  /** Number of triangular faces in this mesh chunk. */
+  faceCount: number;
+
+  /**
+   * Base64-encoded Float32 array of vertex positions.
+   * Layout: [x0, y0, z0, x1, y1, z1, ...] in anchor-local coordinates.
+   * Decode with: new Float32Array(base64ToArrayBuffer(verticesBase64))
+   */
+  verticesBase64: string;
+
+  /**
+   * Base64-encoded Int32 array of triangle face indices.
+   * Layout: [i0, i1, i2, i3, i4, i5, ...] (3 indices per triangle).
+   */
+  indicesBase64: string;
+
+  /**
+   * Base64-encoded Float32 array of per-vertex normals.
+   * Layout: [nx0, ny0, nz0, nx1, ny1, nz1, ...].
+   */
+  normalsBase64: string;
+
+  /**
+   * Base64-encoded Int32 array of per-face classifications.
+   * One ViroMeshClassification value per triangle.
+   */
+  classificationsBase64: string;
+};

@@ -13,11 +13,14 @@ import { Viro2DPoint, Viro3DPoint, ViroNativeRef } from "./Types/ViroUtils";
 import { checkMisnamedProps } from "./Utilities/ViroProps";
 import { ViroBase } from "./ViroBase";
 
+type Viro4DPoint = [number, number, number, number];
+
 type Props = {
   vertices?: Viro3DPoint[];
   normals?: Viro3DPoint[];
   texcoords?: Viro2DPoint[];
   triangleIndices?: Viro3DPoint[];
+  vertexColors?: Viro4DPoint[];
 };
 
 export class ViroGeometry extends ViroBase<Props> {

@@ -19,6 +19,56 @@ import { ViroARSceneNavigatorHandle, ViroWorldMappingStatusChangedEvent } from "
  */
 export type ViroOcclusionMode = "disabled" | "depthBased" | "peopleOnly";
 /**
+ * Configuration for the depth-based scan wave effect.
+ * All fields are optional with sensible defaults — the effect works with zero configuration.
+ * Default palette: "Vision Pro cool pearl white" (near-white with slight blue tint).
+ */
+export type ViroScanWaveConfig = {
+    /** Total animation duration in ms. Default: 1000 */
+    duration?: number;
+    /** Fraction of duration for sweep (rest is fade). Default: 0.7 */
+    sweepFraction?: number;
+    /** Max depth in meters. Default: 5.0 */
+    maxDepth?: number;
+    /** Core wavefront band width in meters. Default: 0.25 */
+    coreBandWidth?: number;
+    /** Core brightness (0-1). Default: 0.6 */
+    coreIntensity?: number;
+    /** Core color [r,g,b] (0-1). Default: [0.92, 0.97, 1.0] (cool pearl) */
+    waveCoreColor?: [number, number, number];
+    /** Halo width in meters (trails behind core). Default: 0.5 */
+    haloWidth?: number;
+    /** Halo brightness (0-1). Default: 0.25 */
+    haloIntensity?: number;
+    /** Halo color [r,g,b] (0-1). Default: [0.85, 0.93, 1.0] */
+    waveHaloColor?: [number, number, number];
+    /** Rim glow color [r,g,b] (0-1). Default: [0.8, 0.9, 1.0] */
+    rimColor?: [number, number, number];
+    /** Rim glow brightness (0-1). Default: 0.4 */
+    rimIntensity?: number;
+    /** Rim glow spread (0.5-8, higher = softer). Default: 3.0 */
+    rimPower?: number;
+    /** Depth edge sensitivity. Default: 0.03 */
+    edgeThreshold?: number;
+    /** Noise shimmer tint [r,g,b] (0-1). Default: [0.9, 0.95, 1.0] */
+    noiseTint?: [number, number, number];
+    /** Noise shimmer intensity (0-1). Default: 0.1 */
+    noiseIntensity?: number;
+    /** Noise spatial scale. Default: 80.0 */
+    noiseScale?: number;
+    /** Noise animation speed. Default: 3.0 */
+    noiseSpeed?: number;
+};
+/** Pre-built scan wave configurations. */
+export declare const SCAN_WAVE_PRESETS: {
+    /** Default — luminous cool pearl white (Vision Pro style). Native defaults ARE this preset. */
+    readonly visionProCoolPearl: ViroScanWaveConfig;
+    /** Warm pearl — same structure, warm-shifted palette */
+    readonly visionProWarmPearl: ViroScanWaveConfig;
+    /** Minimal — reduced intensities for subtlety */
+    readonly subtleMinimal: ViroScanWaveConfig;
+};
+/**
  * ViroARSceneNavigator with ref support for imperative world map persistence API.
  *
  * @example
@@ -86,6 +136,18 @@ export declare const ViroARSceneNavigator: React.ForwardRefExoticComponent<ViewP
      * @default false
      */
     depthDebugEnabled?: boolean;
+    /**
+     * Trigger a depth-based scan wave effect on the camera background.
+     * Set to true to trigger; the native side auto-completes the animation.
+     * Set back to false after completion to allow re-triggering.
+     * Requires depth data (LiDAR or monocular depth).
+     * @default false
+     */
+    scanWaveEnabled?: boolean;
+    /**
+     * Configuration for the scan wave effect. All fields optional with sensible defaults.
+     */
+    scanWaveConfig?: ViroScanWaveConfig;
     /**
      * Enable cloud anchors for cross-platform anchor sharing.
      * When set to 'arcore', the ARCore Cloud Anchors SDK will be used.

@@ -67,6 +67,11 @@
     _geometryNeedsUpdate = YES;
 }
 
+- (void)setVertexColors:(NSArray<NSArray<NSNumber *> *> *)vertexColors {
+    _vertexColors = vertexColors;
+    _geometryNeedsUpdate = YES;
+}
+
 - (void)didSetProps:(NSArray<NSString *> *)changedProps {
     if (_geometryNeedsUpdate) {
         [self updateGeometry];
@@ -86,14 +91,8 @@
                        type, coordsPerPoint, (int) [pointArray count]);
         }
         
-        if (coordsPerPoint > 0) {
-            nativePoints.push_back([[pointArray objectAtIndex:0] floatValue]);
-        }
-        if (coordsPerPoint > 1) {
-            nativePoints.push_back([[pointArray objectAtIndex:1] floatValue]);
-        }
-        if (coordsPerPoint > 2) {
-            nativePoints.push_back([[pointArray objectAtIndex:2] floatValue]);
+        for (int c = 0; c < coordsPerPoint && c < (int)[pointArray count]; c++) {
+            nativePoints.push_back([[pointArray objectAtIndex:c] floatValue]);
         }
     }
     return nativePoints;
@@ -149,6 +148,24 @@
                                                           sizeof(float),
                                                           0,
                                                           sizeof(float) * 2));
+
+    if (_vertexColors && [_vertexColors count] > 0) {
+        std::vector<float> colors = [self convertFloatArray:_vertexColors
+                                     numCoordinatesPerPoint:4
+                                                      type:@"vertexColors"];
+        int numColors = (int) colors.size() / 4;
+        std::shared_ptr<VROData> colorData = std::make_shared<VROData>(
+            (void *) colors.data(), colors.size() * sizeof(float));
+        sources.push_back(std::make_shared<VROGeometrySource>(
+            colorData,
+            VROGeometrySourceSemantic::Color,
+            numColors,
+            true, 4,
+            sizeof(float),
+            0,
+            sizeof(float) * 4));
+    }
+
     _geometry->setSources(sources);
     
     std::vector<std::shared_ptr<VROGeometryElement>> elements;

@@ -39,6 +39,15 @@ export type ViroRegisterableAnimation = {
     opacity?: number | string;
     color?: ColorValue | ProcessedColorValue;
     material?: string;
+
+    // UV texcoord transform animation properties
+    texcoordTranslateX?: number | string;
+    texcoordTranslateY?: number | string;
+    texcoordScaleX?: number | string;
+    texcoordScaleY?: number | string;
+
+    // Shader uniform animation properties (prefix "uniform:" + uniform name)
+    [key: `uniform:${string}`]: number | string;
   };
 };
 

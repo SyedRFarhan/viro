@@ -5,6 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+import { ViroWorldMeshSnapshot } from "./ViroWorldMesh";
 /**
  * Error codes for world map persistence operations.
  * [iOS Only]
@@ -233,6 +234,24 @@ export interface ViroARSceneNavigatorHandle {
      * On Android, returns { mappingStatus: "notAvailable", trackingState: "notAvailable", canSave: false }
      */
     getWorldMappingStatus(): Promise<ViroWorldMappingStatusResult>;
+    /**
+     * Capture an on-demand snapshot of the current world mesh data.
+     * Returns base64-encoded binary arrays for compact serialization.
+     * [iOS Only]
+     *
+     * @returns Promise resolving to mesh snapshot with base64-encoded vertex/index/confidence data
+     *
+     * @example
+     * ```tsx
+     * const snapshot = await ref.current?.getWorldMeshSnapshot();
+     * if (snapshot?.success) {
+     *   // Decode vertices: Float32Array with xyz per vertex
+     *   const vertices = decodeBase64ToFloat32(snapshot.verticesBase64!);
+     *   console.log(`${snapshot.vertexCount} vertices, ${snapshot.triangleCount} triangles`);
+     * }
+     * ```
+     */
+    getWorldMeshSnapshot(): Promise<ViroWorldMeshSnapshot>;
 }
 /**
  * @deprecated Use the imperative ref API instead (saveWorldMap/loadWorldMap).

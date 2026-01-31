@@ -32,8 +32,11 @@
 #include "VROLog.h"
 #include "VROMatrix4f.h"
 #include "VROARImageDatabase.h"
+#include "VROGeospatial.h"
+#include "VROSemantics.h"
 
 class VROARAnchor;
+class VROGeospatialAnchor;
 class VROARFrame;
 class VROTexture;
 class VROViewport;
@@ -63,7 +66,8 @@ enum class VROTrackingType {
  */
 enum class VROAnchorDetection {
     PlanesHorizontal,
-    PlanesVertical
+    PlanesVertical,
+    Mesh
 };
 
 /*
@@ -89,12 +93,26 @@ enum class VROVideoQuality {
 enum class VROImageTrackingImpl {
     ARCore,
     ARKit,
-    Viro
 };
 
 enum class VROCloudAnchorProvider {
     None,
     ARCore,
+};
+
+enum class VROGeospatialAnchorProvider {
+    None,
+    ARCoreGeospatial,
+};
+
+/*
+ The occlusion mode determines how virtual content is occluded
+ by real-world objects.
+ */
+enum class VROOcclusionMode {
+    Disabled,       // No occlusion - virtual objects always render on top
+    DepthBased,     // Use depth data to occlude virtual objects behind real-world surfaces
+    PeopleOnly      // Only occlude virtual objects behind detected people (iOS 13+/Android with ARCore)
 };
 
 /*
@@ -106,9 +124,7 @@ public:
     VROARSession(VROTrackingType trackingType, VROWorldAlignment worldAlignment) :
         _trackingType(trackingType),
         _worldAlignment(worldAlignment) {
-#if ENABLE_OPENCV
-        _imageTrackingImpl = VROImageTrackingImpl::Viro;
-#elif VRO_PLATFORM_IOS
+#if VRO_PLATFORM_IOS
         _imageTrackingImpl = VROImageTrackingImpl::ARKit;
 #elif VRO_PLATFORM_ANDROID
         _imageTrackingImpl = VROImageTrackingImpl::ARCore;
@@ -189,6 +205,17 @@ public:
     virtual void setCloudAnchorProvider(VROCloudAnchorProvider provider) = 0;
 
     /*
+     Set the provider to use for geospatial anchors.
+     */
+    virtual void setGeospatialAnchorProvider(VROGeospatialAnchorProvider provider) {
+        _geospatialAnchorProvider = provider;
+    }
+
+    VROGeospatialAnchorProvider getGeospatialAnchorProvider() const {
+        return _geospatialAnchorProvider;
+    }
+
+    /*
      * Set camera's ArFocusMode as AUTO_FOCUS if enabled is true, else set to FIXED_FOCUS
      */
     virtual void setAutofocus(bool enabled) = 0;
@@ -256,8 +283,12 @@ public:
      Host an anchor on the cloud anchor provider we're using. Hosting an anchor is an
      asynchronous process that will eventually return the hosted anchor to the
      given callback.
+
+     The ttlDays parameter specifies how long the cloud anchor should be stored
+     on the cloud anchor service. Valid values range from 1 to 365 days.
      */
     virtual void hostCloudAnchor(std::shared_ptr<VROARAnchor> anchor,
+                                 int ttlDays,
                                  std::function<void(std::shared_ptr<VROARAnchor>)> onSuccess,
                                  std::function<void(std::string error)> onFailure) = 0;
     
@@ -314,17 +345,236 @@ public:
      each frame.
      */
     virtual void setVisionModel(std::shared_ptr<VROVisionModel> visionModel) = 0;
-    
+
+    /*
+     Set the occlusion mode for AR rendering. When enabled, virtual objects
+     will be properly occluded by real-world surfaces or people.
+     */
+    virtual void setOcclusionMode(VROOcclusionMode mode) {
+        _occlusionMode = mode;
+    }
+
+    /*
+     Get the current occlusion mode.
+     */
+    VROOcclusionMode getOcclusionMode() const {
+        return _occlusionMode;
+    }
+
+    /*
+     Returns true if occlusion is supported on this device.
+     */
+    virtual bool isOcclusionSupported() const {
+        return false;
+    }
+
+    /*
+     Returns true if the specified occlusion mode is supported on this device.
+     */
+    virtual bool isOcclusionModeSupported(VROOcclusionMode mode) const {
+        return mode == VROOcclusionMode::Disabled;
+    }
+
+    // ========================================================================
+    // Geospatial API
+    // ========================================================================
+
+    /*
+     Set the delegate to receive geospatial tracking updates.
+     */
+    virtual void setGeospatialDelegate(std::shared_ptr<VROGeospatialDelegate> delegate) {
+        _geospatialDelegate = delegate;
+    }
+
+    std::shared_ptr<VROGeospatialDelegate> getGeospatialDelegate() {
+        return _geospatialDelegate.lock();
+    }
+
+    /*
+     Returns true if geospatial mode is supported on this device.
+     */
+    virtual bool isGeospatialModeSupported() const {
+        return false;
+    }
+
+    /*
+     Enable or disable geospatial mode. When enabled, the session will track
+     the device's position relative to the Earth using GPS and VPS.
+     */
+    virtual void setGeospatialModeEnabled(bool enabled) {
+        // Default implementation does nothing
+    }
+
+    /*
+     Get the current Earth tracking state.
+     */
+    virtual VROEarthTrackingState getEarthTrackingState() const {
+        return VROEarthTrackingState::Stopped;
+    }
+
+    /*
+     Get the current camera geospatial pose. Returns an invalid pose if
+     geospatial tracking is not available.
+     */
+    virtual VROGeospatialPose getCameraGeospatialPose() const {
+        return VROGeospatialPose();
+    }
+
+    /*
+     Check VPS availability at the specified location.
+     The callback will be called with the availability status.
+     */
+    virtual void checkVPSAvailability(double latitude, double longitude,
+                                      std::function<void(VROVPSAvailability)> callback) {
+        if (callback) {
+            callback(VROVPSAvailability::Unknown);
+        }
+    }
+
+    /*
+     Create a WGS84 geospatial anchor at the specified location.
+     WGS84 anchors are positioned using absolute coordinates on the WGS84 ellipsoid.
+     */
+    virtual void createGeospatialAnchor(double latitude, double longitude, double altitude,
+                                        VROQuaternion quaternion,
+                                        std::function<void(std::shared_ptr<VROGeospatialAnchor>)> onSuccess,
+                                        std::function<void(std::string error)> onFailure) {
+        if (onFailure) {
+            onFailure("Geospatial anchors not supported");
+        }
+    }
+
+    /*
+     Create a terrain anchor at the specified location.
+     Terrain anchors are positioned relative to the terrain surface.
+     The altitude parameter specifies meters above the terrain.
+     */
+    virtual void createTerrainAnchor(double latitude, double longitude, double altitudeAboveTerrain,
+                                     VROQuaternion quaternion,
+                                     std::function<void(std::shared_ptr<VROGeospatialAnchor>)> onSuccess,
+                                     std::function<void(std::string error)> onFailure) {
+        if (onFailure) {
+            onFailure("Terrain anchors not supported");
+        }
+    }
+
+    /*
+     Create a rooftop anchor at the specified location.
+     Rooftop anchors are positioned relative to a building rooftop.
+     The altitude parameter specifies meters above the rooftop.
+     */
+    virtual void createRooftopAnchor(double latitude, double longitude, double altitudeAboveRooftop,
+                                     VROQuaternion quaternion,
+                                     std::function<void(std::shared_ptr<VROGeospatialAnchor>)> onSuccess,
+                                     std::function<void(std::string error)> onFailure) {
+        if (onFailure) {
+            onFailure("Rooftop anchors not supported");
+        }
+    }
+
+    /*
+     Remove a geospatial anchor from the session.
+     */
+    virtual void removeGeospatialAnchor(std::shared_ptr<VROGeospatialAnchor> anchor) {
+        // Default implementation does nothing
+    }
+
+    // ========================================================================
+    // Scene Semantics API
+    // ========================================================================
+
+    /*
+     * Set the delegate to receive semantic updates each frame.
+     */
+    virtual void setSemanticsDelegate(std::shared_ptr<VROSemanticsDelegate> delegate) {
+        _semanticsDelegate = delegate;
+    }
+
+    std::shared_ptr<VROSemanticsDelegate> getSemanticsDelegate() {
+        return _semanticsDelegate.lock();
+    }
+
+    /*
+     * Returns true if semantic mode is supported on this device.
+     * Scene semantics requires ARCore 1.40+ and specific device capabilities.
+     */
+    virtual bool isSemanticModeSupported() const {
+        return false;
+    }
+
+    /*
+     * Enable or disable semantic mode. When enabled, the session will
+     * provide semantic segmentation data for each frame.
+     *
+     * Note: Scene semantics is designed for outdoor scenes only and
+     * works best in portrait orientation.
+     */
+    virtual void setSemanticModeEnabled(bool enabled) {
+        _semanticModeEnabled = enabled;
+    }
+
+    /*
+     * Get whether semantic mode is currently enabled.
+     */
+    virtual bool isSemanticModeEnabled() const {
+        return _semanticModeEnabled;
+    }
+
+    // ===========================================================================
+    // Render Zoom (Projection-based zoom)
+    // ===========================================================================
+
+    /*
+     * Set the render zoom factor. This applies a zoom effect by modifying the
+     * projection matrix and camera background texture coordinates. The zoom
+     * affects both the preview and any captured screenshots/videos.
+     *
+     * @param zoomFactor 1.0 = no zoom, 2.0 = 2x zoom, etc.
+     *                   Values are clamped to [1.0, maxRenderZoom]
+     */
+    virtual void setRenderZoom(float zoomFactor) {
+        _renderZoomFactor = std::max(1.0f, std::min(zoomFactor, _maxRenderZoom));
+    }
+
+    /*
+     * Get the current render zoom factor.
+     */
+    virtual float getRenderZoom() const {
+        return _renderZoomFactor;
+    }
+
+    /*
+     * Get the maximum supported render zoom factor.
+     * Higher values may cause edge distortion artifacts.
+     */
+    virtual float getMaxRenderZoom() const {
+        return _maxRenderZoom;
+    }
+
+    /*
+     * Set the maximum render zoom factor (default 5.0).
+     */
+    virtual void setMaxRenderZoom(float maxZoom) {
+        _maxRenderZoom = std::max(1.0f, maxZoom);
+    }
+
 protected:
-    
+
     VROTrackingType _trackingType;
+    bool _semanticModeEnabled = false;
+    float _renderZoomFactor = 1.0f;
+    float _maxRenderZoom = 5.0f;
 
 private:
-    
+
     VROWorldAlignment _worldAlignment;
     VROImageTrackingImpl _imageTrackingImpl;
+    VROOcclusionMode _occlusionMode = VROOcclusionMode::Disabled;
+    VROGeospatialAnchorProvider _geospatialAnchorProvider = VROGeospatialAnchorProvider::None;
     std::shared_ptr<VROScene> _scene;
     std::weak_ptr<VROARSessionDelegate> _delegate;
+    std::weak_ptr<VROGeospatialDelegate> _geospatialDelegate;
+    std::weak_ptr<VROSemanticsDelegate> _semanticsDelegate;
 
 };
 

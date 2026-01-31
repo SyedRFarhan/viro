@@ -92,6 +92,7 @@ private:
     void animateOpacity(std::shared_ptr<VRONode> &node);
     void animateRotation(std::shared_ptr<VRONode> &node);
     void animateMaterial(std::shared_ptr<VRONode> &node);
+    void animateTexcoordTransform(std::shared_ptr<VRONode> &node);
     
     std::map<std::string, std::shared_ptr<VROPropertyAnimation>> _propertyAnimations;
     std::vector<std::shared_ptr<VROMaterialAnimation>> _materialAnimations;

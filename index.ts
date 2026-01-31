@@ -16,7 +16,7 @@ import { ViroARTrackingTargets } from "./components/AR/ViroARTrackingTargets";
 import { ViroARPlane } from "./components/AR/ViroARPlane";
 import { ViroARPlaneSelector } from "./components/AR/ViroARPlaneSelector";
 import { ViroARScene } from "./components/AR/ViroARScene";
-import { ViroARSceneNavigator } from "./components/AR/ViroARSceneNavigator";
+import { ViroARSceneNavigator, SCAN_WAVE_PRESETS, type ViroScanWaveConfig } from "./components/AR/ViroARSceneNavigator";
 import { ViroBox } from "./components/ViroBox";
 import { ViroButton } from "./components/ViroButton";
 import { ViroCamera } from "./components/ViroCamera";
@@ -172,6 +172,7 @@ export {
   ViroARPlaneSelector,
   ViroARScene,
   ViroARSceneNavigator,
+  SCAN_WAVE_PRESETS,
   ViroBox,
   ViroButton,
   ViroCamera,
@@ -305,6 +306,8 @@ export {
   ViroGeospatialPoseResult,
   ViroVPSAvailabilityResult,
   ViroCreateGeospatialAnchorResult,
+  // Scan Wave Types
+  ViroScanWaveConfig,
   // Monocular Depth Estimation Types
   ViroMonocularDepthSupportResult,
   ViroMonocularDepthModelDownloadedResult,

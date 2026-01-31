@@ -44,11 +44,31 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ViroARSceneNavigator = void 0;
+exports.ViroARSceneNavigator = exports.SCAN_WAVE_PRESETS = void 0;
 const React = __importStar(require("react"));
 const react_native_1 = require("react-native");
 const ViroARSceneNavigatorModule = react_native_1.NativeModules.VRTARSceneNavigatorModule;
 let mathRandomOffset = 0;
+/** Pre-built scan wave configurations. */
+exports.SCAN_WAVE_PRESETS = {
+    /** Default — luminous cool pearl white (Vision Pro style). Native defaults ARE this preset. */
+    visionProCoolPearl: {},
+    /** Warm pearl — same structure, warm-shifted palette */
+    visionProWarmPearl: {
+        waveCoreColor: [1.0, 0.97, 0.92],
+        waveHaloColor: [1.0, 0.93, 0.85],
+        rimColor: [1.0, 0.9, 0.8],
+        noiseTint: [1.0, 0.95, 0.9],
+    },
+    /** Minimal — reduced intensities for subtlety */
+    subtleMinimal: {
+        coreIntensity: 0.5,
+        haloIntensity: 0.15,
+        rimIntensity: 0.3,
+        noiseIntensity: 0.05,
+        duration: 800,
+    },
+};
 /**
  * ViroARSceneNavigator is used to transition between multiple AR Scenes.
  * Internal class component - use ViroARSceneNavigator (the forwardRef wrapper) for ref access.
@@ -1122,6 +1142,10 @@ exports.ViroARSceneNavigator = React.forwardRef((props, ref) => {
                 trackingState: "notAvailable",
                 canSave: false,
             }),
+        getWorldMeshSnapshot: () => Promise.resolve({
+            success: false,
+            error: "On-demand mesh snapshots are not available. Use ARMeshAnchor events via onAnchorFound/Updated instead.",
+        }),
     }));
     return <ViroARSceneNavigatorClass ref={innerRef} {...props}/>;
 });

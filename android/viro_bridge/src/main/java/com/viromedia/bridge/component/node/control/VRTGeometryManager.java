@@ -98,6 +98,27 @@ public class VRTGeometryManager extends VRTControlManager<VRTGeometry> {
         view.setNormals(convertVectorArray(normals, 3, "normals"));
     }
 
+    @ReactProp(name = "vertexColors")
+    public void setVertexColors(VRTGeometry view, ReadableArray vertexColors) {
+        if (vertexColors == null || vertexColors.size() == 0) {
+            return;
+        }
+        float[] colorData = new float[vertexColors.size() * 4];
+        for (int i = 0; i < vertexColors.size(); i++) {
+            ReadableArray rgba = vertexColors.getArray(i);
+            if (rgba == null || rgba.size() < 4) {
+                throw new IllegalArgumentException(
+                    "[ViroGeometry] vertexColors requires 4 components (RGBA) per vertex, but vertex " + i +
+                    " has " + (rgba == null ? 0 : rgba.size()) + " components");
+            }
+            colorData[i * 4 + 0] = (float) rgba.getDouble(0);
+            colorData[i * 4 + 1] = (float) rgba.getDouble(1);
+            colorData[i * 4 + 2] = (float) rgba.getDouble(2);
+            colorData[i * 4 + 3] = (float) rgba.getDouble(3);
+        }
+        view.setVertexColors(colorData);
+    }
+
     @ReactProp(name = "triangleIndices")
     public void setTriangleIndices(VRTGeometry view, ReadableArray triangleIndicesArray) {
         List<List<Integer>> triangleIndices = new ArrayList<>();

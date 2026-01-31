@@ -299,6 +299,14 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
             [viewAR setDepthDebugEnabled:_depthDebugEnabled opacity:0.7f];
         }
 
+        // Apply initial scan wave config and enabled state if set before view was ready
+        if (_scanWaveConfig) {
+            [viewAR setScanWaveConfig:_scanWaveConfig];
+        }
+        if (_scanWaveEnabled) {
+            [viewAR setScanWaveEnabled:_scanWaveEnabled];
+        }
+
         // Apply cloud anchor provider if it was set before view was ready
         if (_cloudAnchorProvider) {
             [self setCloudAnchorProvider:_cloudAnchorProvider];
@@ -603,6 +611,22 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     if (_vroView) {
         VROViewAR *viewAR = (VROViewAR *) _vroView;
         [viewAR setDepthDebugEnabled:depthDebugEnabled opacity:0.7f];
+    }
+}
+
+- (void)setScanWaveEnabled:(BOOL)scanWaveEnabled {
+    _scanWaveEnabled = scanWaveEnabled;
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        [viewAR setScanWaveEnabled:scanWaveEnabled];
+    }
+}
+
+- (void)setScanWaveConfig:(NSDictionary *)scanWaveConfig {
+    _scanWaveConfig = scanWaveConfig;
+    if (_vroView) {
+        VROViewAR *viewAR = (VROViewAR *) _vroView;
+        [viewAR setScanWaveConfig:scanWaveConfig];
     }
 }
 
