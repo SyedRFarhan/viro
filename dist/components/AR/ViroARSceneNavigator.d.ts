@@ -153,6 +153,17 @@ export declare const ViroARSceneNavigator: React.ForwardRefExoticComponent<ViewP
      */
     scanWaveConfig?: ViroScanWaveConfig;
     /**
+     * [iOS Only] Prefer monocular depth estimation over LiDAR.
+     * When true, monocular depth will be used even on devices with LiDAR.
+     *
+     * Monocular depth is automatically used on non-LiDAR devices when depth-based
+     * occlusion is enabled. This prop allows forcing monocular depth on LiDAR devices.
+     *
+     * @default false
+     * @platform ios
+     */
+    preferMonocularDepth?: boolean;
+    /**
      * Callback fired when the scan wave animation completes all loops.
      * Useful for re-enabling UI or chaining actions after the effect finishes.
      */

@@ -402,9 +402,8 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
      completionHandler:(VROViewWriteMediaFinishBlock)completionHandler {
     VROViewAR *viewAR = (VROViewAR *) _vroView;
     [viewAR takeScreenshot:fileName saveToCameraRoll:saveToCameraRoll withCompletionHandler:completionHandler];
-
+    
 }
-
 - (void)takeHighResolutionPhoto:(NSString *)fileName
                saveToCameraRoll:(BOOL)saveToCameraRoll
               completionHandler:(VROViewWriteMediaFinishBlock)completionHandler {
@@ -1728,76 +1727,6 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
 }
 
 #pragma mark - Monocular Depth Estimation API Methods
-
-- (BOOL)isMonocularDepthSupported {
-    if (!_vroView) {
-        // Check static support without needing the view
-        if (@available(iOS 14.0, *)) {
-            return [VROViewAR isARSupported];
-        }
-        return NO;
-    }
-
-    VROViewAR *viewAR = (VROViewAR *) _vroView;
-    return [viewAR isMonocularDepthSupported];
-}
-
-- (BOOL)isMonocularDepthModelDownloaded {
-    if (!_vroView) {
-        return NO;
-    }
-
-    VROViewAR *viewAR = (VROViewAR *) _vroView;
-    return [viewAR isMonocularDepthModelDownloaded];
-}
-
-- (void)setMonocularDepthEnabled:(BOOL)enabled {
-    if (!_vroView) {
-        RCTLogWarn(@"[ViroAR] Cannot set monocular depth: AR view not initialized");
-        return;
-    }
-
-    VROViewAR *viewAR = (VROViewAR *) _vroView;
-    [viewAR setMonocularDepthEnabled:enabled];
-    RCTLogInfo(@"[ViroAR] Monocular depth estimation %@", enabled ? @"enabled" : @"disabled");
-}
-
-- (void)setMonocularDepthModelURL:(NSString *)baseURL {
-    if (!_vroView) {
-        RCTLogWarn(@"[ViroAR] Cannot set monocular depth model URL: AR view not initialized");
-        return;
-    }
-
-    VROViewAR *viewAR = (VROViewAR *) _vroView;
-    NSURL *url = [NSURL URLWithString:baseURL];
-    [viewAR setMonocularDepthModelURL:url];
-    RCTLogInfo(@"[ViroAR] Monocular depth model URL set to: %@", baseURL);
-}
-
-- (void)downloadMonocularDepthModelWithProgress:(MonocularDepthDownloadProgressHandler)progressHandler
-                              completionHandler:(MonocularDepthDownloadCompletionHandler)completionHandler {
-    if (!_vroView) {
-        if (completionHandler) {
-            completionHandler(NO, @"AR view not initialized");
-        }
-        return;
-    }
-
-    VROViewAR *viewAR = (VROViewAR *) _vroView;
-    [viewAR downloadMonocularDepthModelWithProgress:^(float progress) {
-        if (progressHandler) {
-            progressHandler(progress);
-        }
-    } completion:^(BOOL success, NSError *error) {
-        if (completionHandler) {
-            if (success) {
-                completionHandler(YES, nil);
-            } else {
-                completionHandler(NO, error.localizedDescription ?: @"Download failed");
-            }
-        }
-    }];
-}
 
 - (void)setPreferMonocularDepth:(BOOL)prefer {
     if (!_vroView) {

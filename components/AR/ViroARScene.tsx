@@ -33,6 +33,8 @@ import {
   ViroTrackingReason,
   ViroTrackingState,
   ViroTrackingUpdatedEvent,
+  ViroARHitTestResult,
+  ViroARNodeReference,
 } from "../Types/ViroEvents";
 import {
   Viro3DPoint,
@@ -319,6 +321,37 @@ export class ViroARScene extends ViroBase<Props> {
       x,
       y
     );
+  };
+
+  /**
+   * Create a persistent AR anchor from a hit test result.
+   * The hit result must come from one of the performARHitTest methods above.
+   *
+   * @param hitResult - A hit test result with a valid _hitResultId
+   * @returns Promise resolving to an AR node reference, or null if failed
+   */
+  createAnchoredNode = async (
+    hitResult: ViroARHitTestResult
+  ): Promise<ViroARNodeReference | null> => {
+    if (!hitResult._hitResultId) {
+      throw new Error(
+        "Hit result does not have an ID. " +
+          "Make sure you use a hit result from performARHitTest methods."
+      );
+    }
+
+    try {
+      const nodeRef =
+        await NativeModules.VRTARSceneModule.createAnchoredNodeFromHitResult(
+          hitResult._hitResultId,
+          findNodeHandle(this)
+        );
+
+      return nodeRef;
+    } catch (error) {
+      console.error("Failed to create anchored node:", error);
+      return null;
+    }
   };
 
   /**

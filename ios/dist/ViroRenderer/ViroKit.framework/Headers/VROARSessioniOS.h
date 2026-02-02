@@ -30,7 +30,9 @@
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000
 #include "VROARSession.h"
 #include "VROViewport.h"
+#include "VROARMeshAnchor.h"
 #include <ARKit/ARKit.h>
+#include <AVFoundation/AVFoundation.h>
 #include <map>
 #include <vector>
 
@@ -81,17 +83,11 @@ public:
                          int ttlDays,
                          std::function<void(std::shared_ptr<VROARAnchor>)> onSuccess,
                          std::function<void(std::string error)> onFailure);
-
-    /**
-     * Host a cloud anchor using a native ARKit anchor directly.
-     * This bypasses the frame anchor lookup and is useful when hosting
-     * an anchor immediately after creating it (before it appears in a frame).
-     */
-    void hostCloudAnchorWithNativeAnchor(ARAnchor *nativeAnchor,
-                                         int ttlDays,
-                                         std::function<void(std::shared_ptr<VROARAnchor>)> onSuccess,
-                                         std::function<void(std::string error)> onFailure);
-
+    void hostCloudAnchorWithNativeAnchor(
+        ARAnchor *nativeAnchor,
+        int ttlDays,
+        std::function<void(std::shared_ptr<VROARAnchor>)> onSuccess,
+        std::function<void(std::string error)> onFailure);
     void resolveCloudAnchor(std::string anchorId,
                             std::function<void(std::shared_ptr<VROARAnchor> anchor)> onSuccess,
                             std::function<void(std::string error)> onFailure);
@@ -114,9 +110,8 @@ public:
     void setVisionModel(std::shared_ptr<VROVisionModel> visionModel);
 
     /*
-     Capture a high-resolution photo using ARKit's captureHighResolutionFrame (iOS 16+).
-     The completion handler is called with the captured image, camera transform, and any error.
-     Returns false immediately if the feature is not supported (iOS < 16).
+     Capture a high-resolution frame using ARKit's captureHighResolutionFrame (iOS 16+).
+     Returns true if the capture was initiated, false if not supported.
      */
     bool captureHighResolutionFrame(
         std::function<void(CVPixelBufferRef image, VROMatrix4f cameraTransform, NSError *error)> completion);
@@ -140,12 +135,6 @@ public:
      */
     void setPreferMonocularDepth(bool prefer);
     bool isPreferMonocularDepth() const;
-
-    /*
-     Set the base URL from which to download the depth model.
-     The full URL will be: baseURL/DepthPro.mlmodelc.zip
-     */
-    void setMonocularDepthModelURL(NSURL *baseURL);
 
     // Geospatial API
     void setGeospatialAnchorProvider(VROGeospatialAnchorProvider provider) override;
@@ -178,8 +167,6 @@ public:
      Internal methods.
      */
     void setFrame(ARFrame *frame);
-    std::shared_ptr<VROARSessioniOS> getNativeARSessioniOS() { return shared_from_this(); }
-    ARSession *getNativeARSession() { return _session; }
     std::shared_ptr<VROARAnchor> getAnchorForNative(ARAnchor *anchor);
     void updateAnchor(std::shared_ptr<VROARAnchor> anchor);
 
@@ -188,15 +175,18 @@ public:
     void removeAnchor(ARAnchor *anchor);
 
     /*
-     World map capture for session resume.
-     Captures the current world map before backgrounding so it can be restored
-     when the app returns to foreground, preserving anchor positions.
+     Get the native ARSession object for anchor creation.
      */
+    ARSession *getARSession() const { return _session; }
+    ARSession *getNativeARSession() const { return _session; }
+    ARSession *getNativeARSessioniOS() const { return _session; }
+    ARConfiguration *getSessionConfiguration() const { return _sessionConfiguration; }
+
+    #pragma mark - World Map Capture for Session Resume
     void captureWorldMapForResume();
     bool hasCapturedWorldMap() const;
     ARWorldMap *getCapturedWorldMap() const;
     void clearCapturedWorldMap();
-    ARConfiguration *getSessionConfiguration() const { return _sessionConfiguration; }
 
 private:
     
@@ -215,14 +205,6 @@ private:
      Whether or not the session has been paused.
      */
     bool _sessionPaused;
-
-    /*
-     World map captured before pause for session resume.
-     Stored in memory and used with initialWorldMap when resuming.
-     Note: __strong is required because this is a C++ class - ARC doesn't
-     automatically manage ObjC pointers in C++ classes without the attribute.
-     */
-    __strong ARWorldMap *_capturedWorldMap;
 
     /*
      The cloud anchor provider to use for hosting/resolving cloud anchors.
@@ -302,8 +284,13 @@ private:
     std::shared_ptr<VROMonocularDepthEstimator> _monocularDepthEstimator;
     bool _monocularDepthEnabled;
     bool _preferMonocularDepth;  // When true, use monocular even on LiDAR devices
-    NSURL *_monocularDepthModelURL;
+    bool _monocularDepthLoading;
     std::shared_ptr<VRODriver> _driver;
+
+    /*
+     Captured world map for session resume after backgrounding.
+     */
+    ARWorldMap *_capturedWorldMap;
 
     void updateTrackingType(VROTrackingType trackingType);
     void initializeMonocularDepthEstimator(NSString *modelPath);

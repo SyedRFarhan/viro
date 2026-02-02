@@ -31,7 +31,6 @@
 #import "VROARHitTestResult.h"
 
 @class ARSession;
-
 class VROARSessionDelegate;
 class VRORendererConfiguration;
 class VROViewport;
@@ -107,7 +106,7 @@ enum class VROCameraPosition;
 - (std::shared_ptr<VROARSession>)getARSession;
 
 /*
- Returns the native ARKit ARSession.
+ Returns the native ARKit ARSession object.
  */
 - (ARSession *)getNativeARSession;
 
@@ -136,36 +135,6 @@ enum class VROCameraPosition;
  */
 - (void)setDepthDebugEnabled:(BOOL)enabled opacity:(float)opacity;
 
-/*
- Trigger a depth-based scan wave effect on the camera background.
- A bright wave front sweeps outward from the camera (near → far), revealing
- surface contour edges as it passes, then fades out.
-
- Config dictionary supports all visual parameters (coreBandWidth, coreIntensity, etc.)
- plus looping controls:
-   - repeatCount (int): Number of sweep loops. 0 = use totalDuration only. Default: 1
-   - totalDuration (float, ms): Max total animation time. 0 = use repeatCount only.
-
- When both repeatCount and totalDuration are set, whichever limit hits first wins.
- Intermediate loops skip the fade — only the final loop plays sweep + fade.
- The effect auto-disables when complete.
-
- @param config Optional config dictionary. Pass nil for all defaults (single sweep).
- */
-- (void)triggerScanWave:(NSDictionary * _Nullable)config;
-
-/*
- Stop the scan wave effect immediately, mid-animation.
- */
-- (void)stopScanWave;
-
-/*
- Configure the scan wave effect default parameters. All fields are optional with
- sensible defaults — the effect works with zero configuration.
- This sets defaults that triggerScanWave will use if the same keys aren't overridden.
- */
-- (void)setScanWaveConfig:(NSDictionary *)config;
-
 #pragma mark - Monocular Depth Estimation
 
 /*
@@ -173,9 +142,7 @@ enum class VROCameraPosition;
  When enabled, the system will use a neural network to estimate depth from
  the camera image. This provides depth-based occlusion on older devices.
 
- Note: The depth model must be either bundled with the app or downloaded
- using downloadMonocularDepthModel. Call setMonocularDepthModelURL first
- if using on-demand download.
+ Note: The depth model must be bundled with the app as DepthPro.mlmodelc.
 
  @param enabled Whether to enable monocular depth estimation
  */
@@ -190,29 +157,11 @@ enum class VROCameraPosition;
 - (BOOL)isMonocularDepthSupported;
 
 /*
- Check if the monocular depth model has been downloaded.
+ Check if the monocular depth model is available (bundled in framework or app).
 
- @return YES if the model is available locally, NO otherwise
+ @return YES if the model is available, NO otherwise
  */
-- (BOOL)isMonocularDepthModelDownloaded;
-
-/*
- Set the base URL for downloading the depth model.
- The full URL will be: baseURL/DepthPro.mlmodelc.zip
-
- @param baseURL The base URL where the model is hosted
- */
-- (void)setMonocularDepthModelURL:(NSURL *)baseURL;
-
-/*
- Download the monocular depth model if not already downloaded.
- This is an asynchronous operation.
-
- @param progressBlock Called periodically with download progress (0.0-1.0)
- @param completionBlock Called when download completes or fails
- */
-- (void)downloadMonocularDepthModelWithProgress:(void (^)(float progress))progressBlock
-                                     completion:(void (^)(BOOL success, NSError *error))completionBlock;
+- (BOOL)isMonocularDepthModelAvailable;
 
 /*
  When enabled, monocular depth estimation will be used even on devices with LiDAR.
@@ -234,22 +183,38 @@ enum class VROCameraPosition;
  */
 - (BOOL)isPreferMonocularDepth;
 
-#pragma mark - High Resolution Photo Capture
+#pragma mark - Scan Wave Effect
 
 /*
- Capture a high-resolution photo using ARKit's captureHighResolutionFrame (iOS 16+).
- This captures the camera image at full sensor resolution (up to 12MP) and renders
- the 3D scene at matching resolution for compositing.
+ Trigger the scan wave effect with optional configuration overrides.
+ The scan wave is a luminous sweep effect that uses the depth texture
+ to create a Vision Pro-style scanning visualization.
 
- @param fileName The base filename (without extension) for the saved image
- @param saveToCamera If YES, saves to the device's camera roll
- @param completionHandler Called with (success, url, nil, errorCode) where errorCode:
-        0 = success
-        1 = no permissions
-        5 = write failed
-        10 = iOS version not supported (< 16)
-        11 = capture failed
-        15 = session not ready
+ @param config NSDictionary with optional configuration overrides (can be nil)
+ */
+- (void)triggerScanWave:(NSDictionary * _Nullable)config;
+
+/*
+ Stop the scan wave effect immediately.
+ */
+- (void)stopScanWave;
+
+/*
+ Update the scan wave configuration without triggering a new wave.
+
+ @param config NSDictionary with configuration values to override
+ */
+- (void)setScanWaveConfig:(NSDictionary *)config;
+
+#pragma mark - High Resolution Photo
+
+/*
+ Capture a high-resolution photo by compositing the AR scene with a high-res
+ camera frame captured via ARKit's captureHighResolutionFrame (iOS 16+).
+
+ @param fileName The base filename (without extension)
+ @param saveToCamera Whether to also save to the camera roll
+ @param completionHandler Callback with success, file URL, error info
  */
 - (void)takeHighResolutionPhoto:(NSString *)fileName
                saveToCameraRoll:(BOOL)saveToCamera

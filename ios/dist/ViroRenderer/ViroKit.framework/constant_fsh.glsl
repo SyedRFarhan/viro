@@ -19,7 +19,7 @@ layout (location = 0) out highp vec4 frag_color;
 
 void main() {
     _surface.diffuse_color = material_diffuse_surface_color;
-    _surface.diffuse_texcoord = (material_diffuse_contents_transform * vec4(v_texcoord, 0.0, 1.0)).xy;
+    _surface.diffuse_texcoord = v_texcoord;
     _surface.diffuse_intensity = material_diffuse_intensity;
     _surface.alpha = material_alpha;
     _surface.normal = v_tbn[2];

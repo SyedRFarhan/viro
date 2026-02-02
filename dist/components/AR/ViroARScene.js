@@ -209,6 +209,27 @@ class ViroARScene extends ViroBase_1.ViroBase {
         return await react_native_1.NativeModules.VRTARSceneModule.performARHitTestWithPoint((0, react_native_1.findNodeHandle)(this), x, y);
     };
     /**
+     * Create a persistent AR anchor from a hit test result.
+     * The hit result must come from one of the performARHitTest methods above.
+     *
+     * @param hitResult - A hit test result with a valid _hitResultId
+     * @returns Promise resolving to an AR node reference, or null if failed
+     */
+    createAnchoredNode = async (hitResult) => {
+        if (!hitResult._hitResultId) {
+            throw new Error("Hit result does not have an ID. " +
+                "Make sure you use a hit result from performARHitTest methods.");
+        }
+        try {
+            const nodeRef = await react_native_1.NativeModules.VRTARSceneModule.createAnchoredNodeFromHitResult(hitResult._hitResultId, (0, react_native_1.findNodeHandle)(this));
+            return nodeRef;
+        }
+        catch (error) {
+            console.error("Failed to create anchored node:", error);
+            return null;
+        }
+    };
+    /**
      * ##### DEPRECATION WARNING - this prop may be removed in future releases #####
      * @deprecated
      */

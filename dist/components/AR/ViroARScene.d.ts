@@ -1,6 +1,6 @@
 import * as React from "react";
 import { NativeSyntheticEvent } from "react-native";
-import { ViroAmbientLightInfo, ViroAmbientLightUpdateEvent, ViroARAnchorFoundEvent, ViroARAnchorRemovedEvent, ViroARAnchorUpdatedEvent, ViroARPointCloud, ViroARPointCloudUpdateEvent, ViroCameraARHitTest, ViroCameraARHitTestEvent, ViroCameraTransform, ViroCameraTransformEvent, ViroPlatformInfo, ViroPlatformUpdateEvent, ViroTrackingReason, ViroTrackingState, ViroTrackingUpdatedEvent } from "../Types/ViroEvents";
+import { ViroAmbientLightInfo, ViroAmbientLightUpdateEvent, ViroARAnchorFoundEvent, ViroARAnchorRemovedEvent, ViroARAnchorUpdatedEvent, ViroARPointCloud, ViroARPointCloudUpdateEvent, ViroCameraARHitTest, ViroCameraARHitTestEvent, ViroCameraTransform, ViroCameraTransformEvent, ViroPlatformInfo, ViroPlatformUpdateEvent, ViroTrackingReason, ViroTrackingState, ViroTrackingUpdatedEvent, ViroARHitTestResult, ViroARNodeReference } from "../Types/ViroEvents";
 import { Viro3DPoint, ViroPhysicsWorld, ViroRay, ViroScale, ViroSoundRoom, ViroSource } from "../Types/ViroUtils";
 import { ViroBase } from "../ViroBase";
 import { ViroCommonProps } from "./ViroCommonProps";
@@ -56,6 +56,14 @@ export declare class ViroARScene extends ViroBase<Props> {
     performARHitTestWithWorldPoints: (origin: Viro3DPoint, destination: Viro3DPoint) => Promise<any>;
     performARHitTestWithPosition: (position: Viro3DPoint) => Promise<any>;
     performARHitTestWithPoint: (x: number, y: number) => Promise<any>;
+    /**
+     * Create a persistent AR anchor from a hit test result.
+     * The hit result must come from one of the performARHitTest methods above.
+     *
+     * @param hitResult - A hit test result with a valid _hitResultId
+     * @returns Promise resolving to an AR node reference, or null if failed
+     */
+    createAnchoredNode: (hitResult: ViroARHitTestResult) => Promise<ViroARNodeReference | null>;
     /**
      * ##### DEPRECATION WARNING - this prop may be removed in future releases #####
      * @deprecated

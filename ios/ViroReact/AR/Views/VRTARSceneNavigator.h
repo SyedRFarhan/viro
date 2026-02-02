@@ -327,28 +327,6 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
 
 #pragma mark - Monocular Depth Estimation API Methods
 
-// Monocular depth download progress handler
-typedef void (^MonocularDepthDownloadProgressHandler)(float progress);
-typedef void (^MonocularDepthDownloadCompletionHandler)(BOOL success, NSString * _Nullable error);
-
-// Check if monocular depth estimation is supported on this device (iOS 14.0+)
-- (BOOL)isMonocularDepthSupported;
-
-// Check if the monocular depth model has been downloaded
-- (BOOL)isMonocularDepthModelDownloaded;
-
-// Enable or disable monocular depth estimation for non-LiDAR devices
-// Note: Model must be downloaded first using downloadMonocularDepthModel
-- (void)setMonocularDepthEnabled:(BOOL)enabled;
-
-// Set the base URL for downloading the depth model
-// The full URL will be: baseURL/DepthPro.mlmodelc.zip
-- (void)setMonocularDepthModelURL:(NSString *)baseURL;
-
-// Download the monocular depth model if not already downloaded
-- (void)downloadMonocularDepthModelWithProgress:(MonocularDepthDownloadProgressHandler)progressHandler
-                              completionHandler:(MonocularDepthDownloadCompletionHandler)completionHandler;
-
 // When enabled, monocular depth will be used even on devices with LiDAR
 // This allows consistency across device types, testing, or depth beyond LiDAR's ~5m range
 - (void)setPreferMonocularDepth:(BOOL)prefer;

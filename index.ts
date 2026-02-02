@@ -145,9 +145,13 @@ import {
   ViroCreateGeospatialAnchorResult,
   // Monocular Depth Estimation Types
   ViroMonocularDepthSupportResult,
-  ViroMonocularDepthModelDownloadedResult,
-  ViroMonocularDepthDownloadResult,
+  ViroMonocularDepthModelAvailableResult,
   ViroMonocularDepthPreferenceResult,
+  // Debugging & Validation Types
+  ViroDepthOcclusionSupportResult,
+  ViroGeospatialSetupStatusResult,
+  // AR Anchor Types
+  ViroARNodeReference,
 } from "./components/Types/ViroEvents";
 import { ViroSurface } from "./components/ViroSurface";
 import { ViroSceneNavigator } from "./components/ViroSceneNavigator";
@@ -310,9 +314,13 @@ export {
   ViroScanWaveConfig,
   // Monocular Depth Estimation Types
   ViroMonocularDepthSupportResult,
-  ViroMonocularDepthModelDownloadedResult,
-  ViroMonocularDepthDownloadResult,
+  ViroMonocularDepthModelAvailableResult,
   ViroMonocularDepthPreferenceResult,
+  // Debugging & Validation Types
+  ViroDepthOcclusionSupportResult,
+  ViroGeospatialSetupStatusResult,
+  // AR Anchor Types
+  ViroARNodeReference,
   // World Map Persistence Types
   ViroARSceneNavigatorHandle,
   ViroWorldMapErrorCode,

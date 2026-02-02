@@ -29,6 +29,8 @@ import com.viro.core.ARHitTestResult;
 import com.viro.core.ARImageAnchor;
 import com.viro.core.ARPlaneAnchor;
 import com.viro.core.ARPointCloud;
+import com.viro.core.Matrix;
+import com.viro.core.Quaternion;
 import com.viro.core.Vector;
 
 public class ARUtils {
@@ -72,6 +74,27 @@ public class ARUtils {
         // rotation values come as radians, we need to convert to degrees
         transformMap.putArray("rotation", ARUtils.arrayFromRotationArray(result.getRotation().toArray()));
         returnMap.putMap("transform", transformMap);
+
+        // Add depth data if available (uses reflection for ViroCore compatibility)
+        try {
+            java.lang.reflect.Method hasDepthMethod = result.getClass().getMethod("hasDepthData");
+            boolean hasDepth = (boolean) hasDepthMethod.invoke(result);
+            returnMap.putBoolean("hasDepthData", hasDepth);
+            if (hasDepth) {
+                returnMap.putDouble("depthValue", (double) result.getClass().getMethod("getDepthValue").invoke(result));
+                double confidence = (double) result.getClass().getMethod("getDepthConfidence").invoke(result);
+                if (confidence >= 0) {
+                    returnMap.putDouble("depthConfidence", confidence);
+                }
+                returnMap.putString("depthSource", (String) result.getClass().getMethod("getDepthSource").invoke(result));
+            }
+        } catch (NoSuchMethodException e) {
+            // ViroCore build does not include depth API
+            returnMap.putBoolean("hasDepthData", false);
+        } catch (Exception e) {
+            returnMap.putBoolean("hasDepthData", false);
+        }
+
         return returnMap;
     }
 
@@ -98,6 +121,32 @@ public class ARUtils {
         returnMap.putArray("points", pointsArray);
         returnMap.putArray("identifiers", idsArray);
         return returnMap;
+    }
+
+    /**
+     * Convert a Matrix to a WritableMap with position, rotation, and scale.
+     * Used for returning transform data from anchored nodes.
+     */
+    public static WritableMap mapFromMatrix(Matrix matrix) {
+        WritableMap transformMap = Arguments.createMap();
+
+        Vector position = matrix.extractTranslation();
+        Vector scale = matrix.extractScale();
+        Quaternion rotation = matrix.extractRotation(scale);
+
+        transformMap.putArray("position", arrayFromVector(position));
+
+        // Quaternion rotation (x, y, z, w)
+        WritableArray rotationArray = Arguments.createArray();
+        rotationArray.pushDouble(rotation.x);
+        rotationArray.pushDouble(rotation.y);
+        rotationArray.pushDouble(rotation.z);
+        rotationArray.pushDouble(rotation.w);
+        transformMap.putArray("rotation", rotationArray);
+
+        transformMap.putArray("scale", arrayFromVector(scale));
+
+        return transformMap;
     }
 
     /*
