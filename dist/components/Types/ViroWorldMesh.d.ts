@@ -101,41 +101,48 @@ export type ViroWorldMeshUpdatedEvent = {
  * [iOS Only]
  *
  * Note: With ARMeshAnchor integration, mesh data is delivered incrementally
- * through onAnchorFound/Updated/Removed events. This snapshot type is retained
- * for the imperative API but currently returns success: false.
- * Use ARMeshAnchor events for real-time mesh access.
+ * through onAnchorFound/Updated/Removed events. This snapshot type provides
+ * on-demand access to the current ARKit mesh state via the imperative API.
+ *
+ * @example
+ * ```tsx
+ * const snapshot = await ref.current?.getWorldMeshSnapshot({ includeGeometry: true });
+ * if (snapshot?.success && snapshot.anchors) {
+ *   for (const anchor of snapshot.anchors) {
+ *     console.log(`Anchor ${anchor.anchorId}: ${anchor.vertexCount} verts`);
+ *   }
+ * }
+ * ```
  */
 export type ViroWorldMeshSnapshot = {
-    /**
-     * Whether the snapshot was successfully captured.
-     */
+    /** Whether the snapshot was successfully captured. */
     success: boolean;
-    /**
-     * Number of vertices in the snapshot.
-     */
-    vertexCount?: number;
-    /**
-     * Number of triangles in the snapshot.
-     */
-    triangleCount?: number;
-    /**
-     * Base64-encoded Float32 array of vertex positions.
-     * Layout: [x0, y0, z0, x1, y1, z1, ...]
-     */
-    verticesBase64?: string;
-    /**
-     * Base64-encoded Int32 array of triangle face indices.
-     * Layout: [i0, i1, i2, ...] (3 per triangle)
-     */
-    indicesBase64?: string;
-    /**
-     * Base64-encoded Float32 array of per-vertex confidence values (0.0-1.0).
-     */
-    confidenceBase64?: string;
-    /**
-     * Error message if success is false.
-     */
+    /** Error message if success is false. */
     error?: string;
+    /** Aggregate stats across all mesh anchors. */
+    stats?: {
+        anchorCount: number;
+        totalVertexCount: number;
+        totalFaceCount: number;
+    };
+    /**
+     * Per-anchor mesh data. Only present when `includeGeometry: true` is passed.
+     * Each anchor corresponds to an ARMeshAnchor from ARKit.
+     */
+    anchors?: Array<{
+        anchorId: string;
+        position: [number, number, number];
+        vertexCount: number;
+        faceCount: number;
+        /** Base64-encoded Float32 array of vertex positions. */
+        verticesBase64: string;
+        /** Base64-encoded Int32 array of triangle face indices. */
+        indicesBase64: string;
+        /** Base64-encoded Float32 array of per-vertex normals. */
+        normalsBase64: string;
+        /** Base64-encoded Int32 array of per-face classification values. */
+        classificationsBase64: string;
+    }>;
 };
 /**
  * ARMeshClassification values from ARKit (iOS 13.4+).

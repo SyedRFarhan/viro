@@ -1513,6 +1513,85 @@ RCT_EXPORT_METHOD(resolveDetections:(nonnull NSNumber *)reactTag
     }];
 }
 
+#pragma mark - Scan Wave Methods (Imperative API)
+
+RCT_EXPORT_METHOD(triggerScanWave:(nonnull NSNumber *)reactTag
+                           config:(NSDictionary *)config
+                          resolve:(RCTPromiseResolveBlock)resolve
+                           reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted"});
+                return;
+            }
+
+            [component triggerScanWave:config completionHandler:^(BOOL success, NSString *error) {
+                NSMutableDictionary *result = [NSMutableDictionary new];
+                [result setObject:@(success) forKey:@"success"];
+                if (error) {
+                    [result setObject:error forKey:@"error"];
+                }
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(stopScanWave:(nonnull NSNumber *)reactTag) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+            [component stopScanWave];
+        }
+    }];
+}
+
+#pragma mark - World Mesh Snapshot Methods
+
+RCT_EXPORT_METHOD(getWorldMeshSnapshot:(nonnull NSNumber *)reactTag
+                               options:(NSDictionary *)options
+                               resolve:(RCTPromiseResolveBlock)resolve
+                                reject:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                resolve(@{@"success": @NO, @"error": @"Invalid view type"});
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{@"success": @NO, @"error": @"AR view has been unmounted"});
+                return;
+            }
+
+            [component getWorldMeshSnapshotWithOptions:options
+                                     completionHandler:^(NSDictionary *result) {
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            resolve(@{@"success": @NO, @"error": exception.reason});
+        }
+    }];
+}
+
 #pragma mark - Cleanup Methods
 
 RCT_EXPORT_METHOD(cleanup:(nonnull NSNumber *)reactTag) {

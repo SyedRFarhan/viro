@@ -50,8 +50,8 @@
 @property (nonatomic, readwrite) BOOL multisamplingEnabled;
 @property (nonatomic, copy) NSString *occlusionMode;
 @property (nonatomic, assign) BOOL depthDebugEnabled;
-@property (nonatomic, assign) BOOL scanWaveEnabled;
 @property (nonatomic, copy, nullable) NSDictionary *scanWaveConfig;
+@property (nonatomic, copy, nullable) RCTDirectEventBlock onScanWaveComplete;
 @property (nonatomic, copy) NSString *cloudAnchorProvider;
 @property (nonatomic, copy) NSString *geospatialAnchorProvider;
 
@@ -145,6 +145,39 @@ typedef void (^WorldMapCompletionHandler)(BOOL success,
  *   - canSave: BOOL (true if ready to save world map)
  */
 - (void)getWorldMappingStatusWithCompletionHandler:(void (^)(NSDictionary *result))completionHandler;
+
+#pragma mark - Scan Wave Methods (Imperative API)
+
+typedef void (^ScanWaveCompletionHandler)(BOOL success, NSString * _Nullable error);
+
+/**
+ * Trigger a scan wave effect with optional config overrides and looping.
+ * Config supports all visual parameters plus:
+ *   - repeatCount (int): Number of sweep loops. Default: 1
+ *   - totalDuration (float, ms): Max total animation time. Default: 0 (use repeatCount)
+ */
+- (void)triggerScanWave:(NSDictionary * _Nullable)config
+      completionHandler:(ScanWaveCompletionHandler)completionHandler;
+
+/**
+ * Stop the scan wave effect immediately.
+ */
+- (void)stopScanWave;
+
+#pragma mark - World Mesh Snapshot (Imperative API)
+
+/**
+ * Get a snapshot of the current world mesh from ARKit.
+ * Options:
+ *   - includeGeometry (BOOL): If YES, includes base64-encoded vertex/index/normal/classification data
+ *
+ * @param options Optional configuration dictionary
+ * @param completionHandler Called with result dictionary containing success, stats, and optionally anchors
+ */
+- (void)getWorldMeshSnapshotWithOptions:(NSDictionary * _Nullable)options
+                      completionHandler:(void (^)(NSDictionary *result))completionHandler;
+
+#pragma mark - Media Capture Methods
 
 - (void)startVideoRecording:(NSString *)fileName
            saveToCameraRoll:(BOOL)saveToCameraRoll

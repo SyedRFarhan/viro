@@ -121,6 +121,17 @@ export type ViroScanWaveConfig = {
   noiseScale?: number;
   /** Noise animation speed. Default: 3.0 */
   noiseSpeed?: number;
+
+  /** How far behind the wavefront the rim afterglow persists (meters). Default: 0.5 */
+  trailLength?: number;
+  /** Minimum brightness multiplier on flat surfaces (0-1). 0 = edges only, 1 = no attenuation. Default: 0.15 */
+  detailMin?: number;
+  /** Tonemap exposure for additive contribution. Higher = brighter effect. Default: 1.5 */
+  tonemapExposure?: number;
+  /** Accent tint color at the leading edge [r,g,b] (0-1). Default: [0.55, 0.70, 1.0] */
+  accentColor?: [number, number, number];
+  /** Accent tint intensity (0-1). 0 = off. Default: 0.0 */
+  accentIntensity?: number;
 };
 
 /** Pre-built scan wave configurations. */
@@ -201,18 +212,17 @@ type Props = ViewProps & {
   depthDebugEnabled?: boolean;
 
   /**
-   * Trigger a depth-based scan wave effect on the camera background.
-   * Set to true to trigger; the native side auto-completes the animation.
-   * Set back to false after completion to allow re-triggering.
-   * Requires depth data (LiDAR or monocular depth).
-   * @default false
-   */
-  scanWaveEnabled?: boolean;
-
-  /**
-   * Configuration for the scan wave effect. All fields optional with sensible defaults.
+   * Default configuration for the scan wave effect. All fields optional.
+   * These defaults are applied when triggerScanWave() is called without config,
+   * or merged under any config overrides passed to triggerScanWave().
    */
   scanWaveConfig?: ViroScanWaveConfig;
+
+  /**
+   * Callback fired when the scan wave animation completes all loops.
+   * Useful for re-enabling UI or chaining actions after the effect finishes.
+   */
+  onScanWaveComplete?: () => void;
 
   /**
    * Enable cloud anchors for cross-platform anchor sharing.
@@ -1314,6 +1324,54 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
   };
 
   // ===========================================================================
+  // World Mesh Snapshot (Imperative API)
+  // ===========================================================================
+
+  /**
+   * [iOS Only] Get a snapshot of the current world mesh from ARKit.
+   *
+   * @param options - Optional config. Pass `{ includeGeometry: true }` for full geometry.
+   * @returns Promise resolving to mesh snapshot with stats and optionally anchors
+   */
+  _getWorldMeshSnapshot = async (
+    options?: { includeGeometry?: boolean }
+  ): Promise<ViroWorldMeshSnapshot> => {
+    return await ViroARSceneNavigatorModule.getWorldMeshSnapshot(
+      findNodeHandle(this),
+      options ?? {}
+    );
+  };
+
+  // ===========================================================================
+  // Scan Wave (Imperative API)
+  // ===========================================================================
+
+  /**
+   * [iOS Only] Trigger a scan wave effect with optional config overrides and looping.
+   *
+   * @param config - Optional visual config + repeatCount/totalDuration
+   * @returns Promise resolving when the trigger is accepted (not when animation completes)
+   */
+  _triggerScanWave = async (
+    config?: ViroScanWaveConfig & {
+      repeatCount?: number;
+      totalDuration?: number;
+    }
+  ): Promise<{ success: boolean; error?: string }> => {
+    return await ViroARSceneNavigatorModule.triggerScanWave(
+      findNodeHandle(this),
+      config ?? {}
+    );
+  };
+
+  /**
+   * [iOS Only] Stop the scan wave effect immediately.
+   */
+  _stopScanWave = () => {
+    ViroARSceneNavigatorModule.stopScanWave(findNodeHandle(this));
+  };
+
+  // ===========================================================================
   // Frame Streaming API Methods (for Gemini Vision integration)
   // ===========================================================================
 
@@ -1688,12 +1746,18 @@ export const ViroARSceneNavigator = React.forwardRef<
         trackingState: "notAvailable" as const,
         canSave: false,
       }),
-    getWorldMeshSnapshot: () =>
+    getWorldMeshSnapshot: (options?: { includeGeometry?: boolean }) =>
+      innerRef.current?._getWorldMeshSnapshot(options) ??
       Promise.resolve({
         success: false,
-        error:
-          "On-demand mesh snapshots are not available. Use ARMeshAnchor events via onAnchorFound/Updated instead.",
+        error: "Component not mounted",
       } as ViroWorldMeshSnapshot),
+    triggerScanWave: (config?) =>
+      innerRef.current?._triggerScanWave(config) ??
+      Promise.resolve({ success: false, error: "Component not mounted" }),
+    stopScanWave: () => {
+      innerRef.current?._stopScanWave();
+    },
   }));
 
   return <ViroARSceneNavigatorClass ref={innerRef} {...props} />;

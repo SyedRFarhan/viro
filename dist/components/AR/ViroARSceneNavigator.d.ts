@@ -58,6 +58,16 @@ export type ViroScanWaveConfig = {
     noiseScale?: number;
     /** Noise animation speed. Default: 3.0 */
     noiseSpeed?: number;
+    /** How far behind the wavefront the rim afterglow persists (meters). Default: 0.5 */
+    trailLength?: number;
+    /** Minimum brightness multiplier on flat surfaces (0-1). 0 = edges only, 1 = no attenuation. Default: 0.15 */
+    detailMin?: number;
+    /** Tonemap exposure for additive contribution. Higher = brighter effect. Default: 1.5 */
+    tonemapExposure?: number;
+    /** Accent tint color at the leading edge [r,g,b] (0-1). Default: [0.55, 0.70, 1.0] */
+    accentColor?: [number, number, number];
+    /** Accent tint intensity (0-1). 0 = off. Default: 0.0 */
+    accentIntensity?: number;
 };
 /** Pre-built scan wave configurations. */
 export declare const SCAN_WAVE_PRESETS: {
@@ -137,17 +147,16 @@ export declare const ViroARSceneNavigator: React.ForwardRefExoticComponent<ViewP
      */
     depthDebugEnabled?: boolean;
     /**
-     * Trigger a depth-based scan wave effect on the camera background.
-     * Set to true to trigger; the native side auto-completes the animation.
-     * Set back to false after completion to allow re-triggering.
-     * Requires depth data (LiDAR or monocular depth).
-     * @default false
-     */
-    scanWaveEnabled?: boolean;
-    /**
-     * Configuration for the scan wave effect. All fields optional with sensible defaults.
+     * Default configuration for the scan wave effect. All fields optional.
+     * These defaults are applied when triggerScanWave() is called without config,
+     * or merged under any config overrides passed to triggerScanWave().
      */
     scanWaveConfig?: ViroScanWaveConfig;
+    /**
+     * Callback fired when the scan wave animation completes all loops.
+     * Useful for re-enabling UI or chaining actions after the effect finishes.
+     */
+    onScanWaveComplete?: () => void;
     /**
      * Enable cloud anchors for cross-platform anchor sharing.
      * When set to 'arcore', the ARCore Cloud Anchors SDK will be used.

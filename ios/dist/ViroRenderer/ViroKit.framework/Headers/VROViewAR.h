@@ -141,15 +141,28 @@ enum class VROCameraPosition;
  A bright wave front sweeps outward from the camera (near → far), revealing
  surface contour edges as it passes, then fades out.
 
- @param enabled Set to YES to trigger the animation. The native side auto-completes
- the animation and removes the modifier. Set back to NO to allow re-triggering.
+ Config dictionary supports all visual parameters (coreBandWidth, coreIntensity, etc.)
+ plus looping controls:
+   - repeatCount (int): Number of sweep loops. 0 = use totalDuration only. Default: 1
+   - totalDuration (float, ms): Max total animation time. 0 = use repeatCount only.
+
+ When both repeatCount and totalDuration are set, whichever limit hits first wins.
+ Intermediate loops skip the fade — only the final loop plays sweep + fade.
+ The effect auto-disables when complete.
+
+ @param config Optional config dictionary. Pass nil for all defaults (single sweep).
  */
-- (void)setScanWaveEnabled:(BOOL)enabled;
+- (void)triggerScanWave:(NSDictionary * _Nullable)config;
 
 /*
- Configure the scan wave effect parameters. All fields are optional with
+ Stop the scan wave effect immediately, mid-animation.
+ */
+- (void)stopScanWave;
+
+/*
+ Configure the scan wave effect default parameters. All fields are optional with
  sensible defaults — the effect works with zero configuration.
- Changes take effect immediately, even mid-animation.
+ This sets defaults that triggerScanWave will use if the same keys aren't overridden.
  */
 - (void)setScanWaveConfig:(NSDictionary *)config;
 

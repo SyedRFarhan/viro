@@ -820,6 +820,36 @@ class ViroARSceneNavigatorClass extends React.Component {
         return await ViroARSceneNavigatorModule.getWorldMappingStatus((0, react_native_1.findNodeHandle)(this));
     };
     // ===========================================================================
+    // World Mesh Snapshot (Imperative API)
+    // ===========================================================================
+    /**
+     * [iOS Only] Get a snapshot of the current world mesh from ARKit.
+     *
+     * @param options - Optional config. Pass `{ includeGeometry: true }` for full geometry.
+     * @returns Promise resolving to mesh snapshot with stats and optionally anchors
+     */
+    _getWorldMeshSnapshot = async (options) => {
+        return await ViroARSceneNavigatorModule.getWorldMeshSnapshot((0, react_native_1.findNodeHandle)(this), options ?? {});
+    };
+    // ===========================================================================
+    // Scan Wave (Imperative API)
+    // ===========================================================================
+    /**
+     * [iOS Only] Trigger a scan wave effect with optional config overrides and looping.
+     *
+     * @param config - Optional visual config + repeatCount/totalDuration
+     * @returns Promise resolving when the trigger is accepted (not when animation completes)
+     */
+    _triggerScanWave = async (config) => {
+        return await ViroARSceneNavigatorModule.triggerScanWave((0, react_native_1.findNodeHandle)(this), config ?? {});
+    };
+    /**
+     * [iOS Only] Stop the scan wave effect immediately.
+     */
+    _stopScanWave = () => {
+        ViroARSceneNavigatorModule.stopScanWave((0, react_native_1.findNodeHandle)(this));
+    };
+    // ===========================================================================
     // Frame Streaming API Methods (for Gemini Vision integration)
     // ===========================================================================
     /**
@@ -1142,10 +1172,16 @@ exports.ViroARSceneNavigator = React.forwardRef((props, ref) => {
                 trackingState: "notAvailable",
                 canSave: false,
             }),
-        getWorldMeshSnapshot: () => Promise.resolve({
-            success: false,
-            error: "On-demand mesh snapshots are not available. Use ARMeshAnchor events via onAnchorFound/Updated instead.",
-        }),
+        getWorldMeshSnapshot: (options) => innerRef.current?._getWorldMeshSnapshot(options) ??
+            Promise.resolve({
+                success: false,
+                error: "Component not mounted",
+            }),
+        triggerScanWave: (config) => innerRef.current?._triggerScanWave(config) ??
+            Promise.resolve({ success: false, error: "Component not mounted" }),
+        stopScanWave: () => {
+            innerRef.current?._stopScanWave();
+        },
     }));
     return <ViroARSceneNavigatorClass ref={innerRef} {...props}/>;
 });

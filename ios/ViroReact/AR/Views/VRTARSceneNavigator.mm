@@ -299,12 +299,9 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
             [viewAR setDepthDebugEnabled:_depthDebugEnabled opacity:0.7f];
         }
 
-        // Apply initial scan wave config and enabled state if set before view was ready
+        // Apply initial scan wave default config if set before view was ready
         if (_scanWaveConfig) {
             [viewAR setScanWaveConfig:_scanWaveConfig];
-        }
-        if (_scanWaveEnabled) {
-            [viewAR setScanWaveEnabled:_scanWaveEnabled];
         }
 
         // Apply cloud anchor provider if it was set before view was ready
@@ -614,11 +611,26 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     }
 }
 
-- (void)setScanWaveEnabled:(BOOL)scanWaveEnabled {
-    _scanWaveEnabled = scanWaveEnabled;
+- (void)triggerScanWave:(NSDictionary * _Nullable)config
+      completionHandler:(ScanWaveCompletionHandler)completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(NO, @"AR view not ready");
+        }
+        return;
+    }
+    VROViewAR *viewAR = (VROViewAR *) _vroView;
+    [viewAR triggerScanWave:config];
+    // Resolve immediately — the native side auto-completes and fires onScanWaveComplete
+    if (completionHandler) {
+        completionHandler(YES, nil);
+    }
+}
+
+- (void)stopScanWave {
     if (_vroView) {
         VROViewAR *viewAR = (VROViewAR *) _vroView;
-        [viewAR setScanWaveEnabled:scanWaveEnabled];
+        [viewAR stopScanWave];
     }
 }
 
@@ -627,6 +639,104 @@ typedef NS_ENUM(NSInteger, VRTWorldMapOp) {
     if (_vroView) {
         VROViewAR *viewAR = (VROViewAR *) _vroView;
         [viewAR setScanWaveConfig:scanWaveConfig];
+    }
+}
+
+- (void)getWorldMeshSnapshotWithOptions:(NSDictionary * _Nullable)options
+                      completionHandler:(void (^)(NSDictionary *result))completionHandler {
+    if (!_vroView) {
+        if (completionHandler) {
+            completionHandler(@{@"success": @NO, @"error": @"AR view not ready"});
+        }
+        return;
+    }
+
+    ARSession *session = [self getNativeARSession];
+    if (!session || !session.currentFrame) {
+        if (completionHandler) {
+            completionHandler(@{@"success": @NO, @"error": @"AR session not available"});
+        }
+        return;
+    }
+
+    BOOL includeGeometry = [options[@"includeGeometry"] boolValue];
+
+    NSArray<ARAnchor *> *anchors = session.currentFrame.anchors;
+    NSMutableArray *meshAnchorDicts = [NSMutableArray new];
+    int totalVerts = 0;
+    int totalFaces = 0;
+    int anchorCount = 0;
+
+    for (ARAnchor *anchor in anchors) {
+        if (@available(iOS 13.4, *)) {
+            if ([anchor isKindOfClass:[ARMeshAnchor class]]) {
+                ARMeshAnchor *meshAnchor = (ARMeshAnchor *)anchor;
+                ARMeshGeometry *geometry = meshAnchor.geometry;
+
+                int vertCount = (int)geometry.vertices.count;
+                int faceCount = (int)geometry.faces.count;
+                totalVerts += vertCount;
+                totalFaces += faceCount;
+                anchorCount++;
+
+                if (includeGeometry) {
+                    // Extract transform position
+                    simd_float4x4 transform = meshAnchor.transform;
+                    NSArray *position = @[@(transform.columns[3][0]),
+                                          @(transform.columns[3][1]),
+                                          @(transform.columns[3][2])];
+
+                    // Encode vertices as base64
+                    NSData *vertexData = [NSData dataWithBytes:geometry.vertices.buffer.contents
+                                                       length:geometry.vertices.buffer.length];
+                    NSString *verticesBase64 = [vertexData base64EncodedStringWithOptions:0];
+
+                    // Encode face indices as base64
+                    NSData *indexData = [NSData dataWithBytes:geometry.faces.buffer.contents
+                                                      length:geometry.faces.buffer.length];
+                    NSString *indicesBase64 = [indexData base64EncodedStringWithOptions:0];
+
+                    // Encode normals as base64
+                    NSData *normalData = [NSData dataWithBytes:geometry.normals.buffer.contents
+                                                       length:geometry.normals.buffer.length];
+                    NSString *normalsBase64 = [normalData base64EncodedStringWithOptions:0];
+
+                    // Encode classifications as base64
+                    NSString *classificationsBase64 = @"";
+                    if (geometry.classification) {
+                        NSData *classData = [NSData dataWithBytes:geometry.classification.buffer.contents
+                                                           length:geometry.classification.buffer.length];
+                        classificationsBase64 = [classData base64EncodedStringWithOptions:0];
+                    }
+
+                    [meshAnchorDicts addObject:@{
+                        @"anchorId": meshAnchor.identifier.UUIDString,
+                        @"position": position,
+                        @"vertexCount": @(vertCount),
+                        @"faceCount": @(faceCount),
+                        @"verticesBase64": verticesBase64,
+                        @"indicesBase64": indicesBase64,
+                        @"normalsBase64": normalsBase64,
+                        @"classificationsBase64": classificationsBase64,
+                    }];
+                }
+            }
+        }
+    }
+
+    NSMutableDictionary *result = [NSMutableDictionary new];
+    [result setObject:@YES forKey:@"success"];
+    [result setObject:@{
+        @"anchorCount": @(anchorCount),
+        @"totalVertexCount": @(totalVerts),
+        @"totalFaceCount": @(totalFaces),
+    } forKey:@"stats"];
+    if (includeGeometry) {
+        [result setObject:meshAnchorDicts forKey:@"anchors"];
+    }
+
+    if (completionHandler) {
+        completionHandler(result);
     }
 }
 

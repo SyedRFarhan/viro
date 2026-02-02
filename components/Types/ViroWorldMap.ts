@@ -274,23 +274,68 @@ export interface ViroARSceneNavigatorHandle {
   getWorldMappingStatus(): Promise<ViroWorldMappingStatusResult>;
 
   /**
-   * Capture an on-demand snapshot of the current world mesh data.
-   * Returns base64-encoded binary arrays for compact serialization.
+   * Capture an on-demand snapshot of the current world mesh from ARKit.
    * [iOS Only]
    *
-   * @returns Promise resolving to mesh snapshot with base64-encoded vertex/index/confidence data
+   * @param options - Optional config. Pass `{ includeGeometry: true }` to include
+   *   base64-encoded vertex/index/normal/classification data per anchor.
+   *   Without this, only aggregate stats (anchor count, vertex count, face count) are returned.
    *
    * @example
    * ```tsx
-   * const snapshot = await ref.current?.getWorldMeshSnapshot();
-   * if (snapshot?.success) {
-   *   // Decode vertices: Float32Array with xyz per vertex
-   *   const vertices = decodeBase64ToFloat32(snapshot.verticesBase64!);
-   *   console.log(`${snapshot.vertexCount} vertices, ${snapshot.triangleCount} triangles`);
+   * // Stats only (lightweight)
+   * const stats = await ref.current?.getWorldMeshSnapshot();
+   *
+   * // Full geometry
+   * const full = await ref.current?.getWorldMeshSnapshot({ includeGeometry: true });
+   * if (full?.anchors) {
+   *   console.log(`${full.anchors.length} mesh anchors`);
    * }
    * ```
    */
-  getWorldMeshSnapshot(): Promise<ViroWorldMeshSnapshot>;
+  getWorldMeshSnapshot(options?: {
+    includeGeometry?: boolean;
+  }): Promise<ViroWorldMeshSnapshot>;
+
+  /**
+   * Trigger a depth-based scan wave effect on the camera background.
+   * The wave sweeps outward from the camera (near → far), revealing surface
+   * contour edges as it passes.
+   * [iOS Only]
+   *
+   * @param config - Optional visual config + looping parameters:
+   *   - All ViroScanWaveConfig keys (duration, colors, intensities, etc.)
+   *   - `repeatCount` (number): Number of sweep loops. Default: 1
+   *   - `totalDuration` (number, ms): Max total animation time. Default: 0 (use repeatCount)
+   *
+   * When both repeatCount and totalDuration are set, whichever limit hits first wins.
+   * Intermediate loops skip the fade; only the final loop plays sweep + fade.
+   *
+   * @example
+   * ```tsx
+   * // Single sweep with defaults
+   * await ref.current?.triggerScanWave();
+   *
+   * // 3 sweeps with custom config
+   * await ref.current?.triggerScanWave({
+   *   duration: 3000,
+   *   repeatCount: 3,
+   *   waveCoreColor: [0.4, 0.7, 1.0],
+   * });
+   * ```
+   */
+  triggerScanWave(
+    config?: import("../AR/ViroARSceneNavigator").ViroScanWaveConfig & {
+      repeatCount?: number;
+      totalDuration?: number;
+    }
+  ): Promise<{ success: boolean; error?: string }>;
+
+  /**
+   * Stop the scan wave effect immediately, mid-animation.
+   * [iOS Only]
+   */
+  stopScanWave(): void;
 }
 
 // =============================================================================
