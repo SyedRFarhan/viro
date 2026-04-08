@@ -182,7 +182,7 @@ export type ViroARPlaneAlignment = "Horizontal" | "HorizontalUpward" | "Horizont
  */
 export type ViroAnchor = {
     anchorId: string;
-    type: "anchor" | "plane" | "image" | "mesh";
+    type: "anchor" | "plane" | "image";
     position: [number, number, number];
     rotation: [number, number, number];
     scale: [number, number, number];
@@ -252,6 +252,14 @@ export type ViroARNodeReference = {
     nodeId: string;
     /** React tag for the native view */
     reactTag: number;
+    /** ID of the associated AR anchor */
+    anchorId?: string;
+    /** Current transform of the anchored node */
+    transform?: {
+        position: Viro3DPoint;
+        rotation: ViroRotation;
+        scale: Viro3DPoint;
+    };
 };
 export type ViroARPointCloudUpdateEvent = {
     pointCloud: ViroARPointCloud;
@@ -262,7 +270,7 @@ export type ViroTrackingUpdatedEvent = {
     reason: ViroTrackingReason;
 };
 export type ViroTrackingState = ViroTrackingStateConstants.TRACKING_NORMAL | ViroTrackingStateConstants.TRACKING_LIMITED | ViroTrackingStateConstants.TRACKING_UNAVAILABLE;
-export type ViroTrackingReason = ViroARTrackingReasonConstants.TRACKING_REASON_NONE | ViroARTrackingReasonConstants.TRACKING_REASON_EXCESSIVE_MOTION | ViroARTrackingReasonConstants.TRACKING_REASON_INSUFFICIENT_FEATURES | ViroARTrackingReasonConstants.TRACKING_REASON_INSUFFICIENT_LIGHT | ViroARTrackingReasonConstants.TRACKING_REASON_RELOCALIZING;
+export type ViroTrackingReason = ViroARTrackingReasonConstants.TRACKING_REASON_NONE | ViroARTrackingReasonConstants.TRACKING_REASON_EXCESSIVE_MOTION | ViroARTrackingReasonConstants.TRACKING_REASON_INSUFFICIENT_FEATURES;
 export type ViroAmbientLightUpdateEvent = {
     ambientLightInfo: ViroAmbientLightInfo;
 };
@@ -300,9 +308,11 @@ export type ViroSoundFinishEvent = any;
  */
 export type ViroCloudAnchorState = "None" | "Success" | "ErrorInternal" | "TaskInProgress" | "ErrorNotAuthorized" | "ErrorResourceExhausted" | "ErrorHostingDatasetProcessingFailed" | "ErrorCloudIdNotFound" | "ErrorResolvingSdkVersionTooOld" | "ErrorResolvingSdkVersionTooNew" | "ErrorHostingServiceUnavailable";
 /**
- * Cloud anchor provider type.
+ * Unified AR provider — controls both cloud anchors and geospatial anchors.
  */
-export type ViroCloudAnchorProvider = "none" | "arcore";
+export type ViroProvider = "none" | "arcore" | "reactvision";
+/** @deprecated Use ViroProvider */
+export type ViroCloudAnchorProvider = ViroProvider;
 /**
  * Represents a cloud-hosted AR anchor.
  */
@@ -322,17 +332,12 @@ export type ViroCloudAnchor = {
 };
 /**
  * Result of a host cloud anchor operation.
- * Includes anchor's world-space position and rotation for cross-device relocalization.
  */
 export type ViroHostCloudAnchorResult = {
     success: boolean;
     cloudAnchorId?: string;
     error?: string;
     state: ViroCloudAnchorState;
-    /** Anchor position in world space [x, y, z] */
-    position?: [number, number, number];
-    /** Anchor rotation in degrees [rx, ry, rz] - Euler angles */
-    rotation?: [number, number, number];
 };
 /**
  * Result of a resolve cloud anchor operation.
@@ -342,20 +347,6 @@ export type ViroResolveCloudAnchorResult = {
     anchor?: ViroCloudAnchor;
     error?: string;
     state: ViroCloudAnchorState;
-};
-/**
- * Result of an add anchor operation.
- * The anchorId can be used with hostCloudAnchor for cloud persistence.
- * Includes pose data: position [x,y,z] and cameraRotation (user's viewing orientation at anchor creation).
- */
-export type ViroAddAnchorResult = {
-    success: boolean;
-    anchorId?: string;
-    error?: string;
-    /** Position as [x, y, z] */
-    position?: [number, number, number];
-    /** Camera rotation at anchor creation time as quaternion [x, y, z, w] */
-    cameraRotation?: [number, number, number, number];
 };
 /**
  * Event fired when a cloud anchor state changes.
@@ -369,10 +360,8 @@ export type ViroCloudAnchorStateChangeEvent = {
 /** ===========================================================================
  * Viro Geospatial API Events and Types
  * ============================================================================ */
-/**
- * Geospatial anchor provider type.
- */
-export type ViroGeospatialAnchorProvider = "none" | "arcore";
+/** @deprecated Use ViroProvider */
+export type ViroGeospatialAnchorProvider = ViroProvider;
 /**
  * Earth tracking state.
  * Maps to GARSessionEarthState (iOS) and Earth.EarthState (Android)
@@ -556,118 +545,5 @@ export type ViroGeospatialSetupStatusResult = {
     locationServicesAvailable: boolean;
     apiKeyConfigured: boolean;
     arCoreVersion?: string;
-    error?: string;
-};
-/**
- * Result of getting the current render zoom factor.
- */
-export type ViroRenderZoomResult = {
-    zoomFactor: number;
-    error?: string;
-};
-/**
- * Result of getting the maximum render zoom factor.
- */
-export type ViroMaxRenderZoomResult = {
-    maxZoomFactor: number;
-    error?: string;
-};
-/**
- * Configuration for AR frame streaming.
- */
-export type ViroFrameStreamConfig = {
-    /** Enable/disable frame streaming */
-    enabled: boolean;
-    /** Target output width in pixels (e.g., 640) */
-    width: number;
-    /** Target output height in pixels (e.g., 480) */
-    height: number;
-    /** Target frames per second (1-5, default: 5) */
-    fps: number;
-    /** JPEG compression quality (0.0-1.0, default: 0.7) */
-    quality: number;
-};
-/**
- * AR tracking state for frame events.
- */
-export type ViroFrameTrackingState = "normal" | "limited" | "notAvailable";
-/**
- * Camera intrinsics for the JPEG image.
- * Includes crop offsets applied during scale+crop encoding.
- */
-export type ViroFrameIntrinsics = {
-    /** Focal length X (in JPEG pixels) */
-    fx: number;
-    /** Focal length Y (in JPEG pixels) */
-    fy: number;
-    /** Principal point X (in JPEG pixels, crop-adjusted) */
-    cx: number;
-    /** Principal point Y (in JPEG pixels, crop-adjusted) */
-    cy: number;
-};
-/**
- * Event payload for AR frame updates.
- * Contains the JPEG image and all data needed for 2D→3D mapping.
- */
-export type ViroFrameEvent = {
-    /** Unique ID for this capture (use with resolveDetections) */
-    frameId: string;
-    /** ARFrame timestamp */
-    timestamp: number;
-    /** Session ID (increments on AR session reset/relocalization) */
-    sessionId: number;
-    /** Base64-encoded JPEG image data */
-    imageData: string;
-    /** Exact image width in pixels */
-    width: number;
-    /** Exact image height in pixels */
-    height: number;
-    /** Camera intrinsics mapped to JPEG dimensions with crop offsets */
-    intrinsics: ViroFrameIntrinsics;
-    /** Camera pose at capture time (4x4 matrix, 16 elements, column-major) */
-    cameraToWorld: number[];
-    /**
-     * Transform: JPEG normalized UV (0-1) → AR image normalized UV (0-1)
-     * Use this to map JPEG coords back to AR image space (e.g., for depth lookup)
-     * Format: [a, b, 0, c, d, 0, tx, ty, 1] (3x3 affine matrix as flat array)
-     */
-    jpegToARTransform: number[];
-    /** Current AR tracking state */
-    trackingState: ViroFrameTrackingState;
-};
-/**
- * Resolution method used for 2D→3D detection mapping.
- * Listed in order of preference/accuracy.
- */
-export type ViroDetectionMethod = "lidar" | "raycast_geometry" | "raycast_infinite" | "raycast_estimated" | "pointcloud";
-/**
- * Result of resolving a single 2D detection point to 3D.
- */
-export type ViroDetectionResult = {
-    /** Input point (normalized 0-1 UV in JPEG space) */
-    input: {
-        x: number;
-        y: number;
-    };
-    /** Whether resolution succeeded */
-    ok: boolean;
-    /** World position [x, y, z] (valid if ok === true) */
-    worldPos?: [number, number, number];
-    /** Confidence level (0-1, varies by method) */
-    confidence?: number;
-    /** Resolution method used */
-    method?: ViroDetectionMethod;
-    /** Error message if resolution failed (ok === false) */
-    error?: string;
-};
-/**
- * Result of resolving detections using capture-time data.
- */
-export type ViroDetectionResolutionResult = {
-    /** The frameId that was used for resolution */
-    frameId: string;
-    /** Array of resolution results (same order as input points) */
-    results: ViroDetectionResult[];
-    /** Error message if the entire operation failed */
     error?: string;
 };

@@ -31,7 +31,13 @@ import { ViroFlexView } from "./components/ViroFlexView";
 import { ViroGeometry } from "./components/ViroGeometry";
 import { ViroLightingEnvironment } from "./components/ViroLightingEnvironment";
 import { ViroImage } from "./components/ViroImage";
-import { ViroMaterials } from "./components/Material/ViroMaterials";
+import {
+  ViroMaterials,
+  ViroMaterial,
+  ViroShaderModifiers,
+  ViroShaderUniform,
+  ViroShaderModifier,
+} from "./components/Material/ViroMaterials";
 import { ViroMaterialVideo } from "./components/ViroMaterialVideo";
 import { ViroNode } from "./components/ViroNode";
 import { ViroOmniLight } from "./components/ViroOmniLight";
@@ -60,7 +66,13 @@ import {
   polarToCartesian,
   polarToCartesianActual,
   isARSupportedOnDevice,
+  requestRequiredPermissions,
+  checkPermissions,
   ViroARSupportResponse,
+  ViroPermissionsResult,
+  ViroPermission,
+  latLngToMercator,
+  gpsToArWorld,
 } from "./components/Utilities/ViroUtils";
 import { ViroARCamera } from "./components/AR/ViroARCamera";
 import {
@@ -123,6 +135,8 @@ import {
   ViroPinchStateTypes,
   ViroClickStateTypes,
   ViroRotateStateTypes,
+  // Provider Types
+  ViroProvider,
   // Cloud Anchor Types
   ViroCloudAnchorState,
   ViroCloudAnchorProvider,
@@ -226,8 +240,14 @@ export {
   polarToCartesian,
   polarToCartesianActual,
   isARSupportedOnDevice,
+  requestRequiredPermissions,
+  checkPermissions,
+  latLngToMercator,
+  gpsToArWorld,
   // Types
   ViroARSupportResponse,
+  ViroPermissionsResult,
+  ViroPermission,
   ViroHoverEvent,
   ViroClickEvent,
   ViroClickStateEvent,
@@ -289,7 +309,13 @@ export {
   ViroSoundFinishEvent,
   ViroTextStyle,
   ViroStyle,
+  ViroMaterial,
+  ViroShaderModifiers,
+  ViroShaderUniform,
+  ViroShaderModifier,
   VIRO_VERSION,
+  // Provider Types
+  ViroProvider,
   // Cloud Anchor Types
   ViroCloudAnchorState,
   ViroCloudAnchorProvider,

@@ -285,6 +285,26 @@ public class VRTNode extends VRTComponent {
     protected int mShadowCastingBitMask = 1;
 
     protected List<Material> mMaterials;
+    protected List<String> mShaderOverrides;
+    protected java.util.HashMap<String, java.util.ArrayList<Material>> mShaderOverrideMap;
+    // Store original embedded materials from GLB before any shader overrides
+    // This allows us to always start from the true baseline when switching shaders
+    protected java.util.ArrayList<Material> mOriginalEmbeddedMaterials;
+    // Store original materials for child nodes (to preserve skinning modifiers, etc.)
+    // Maps node reference to its original materials list
+    protected java.util.HashMap<Node, java.util.ArrayList<Material>> mChildNodeOriginalMaterials;
+    // Use ConcurrentHashMap for thread-safe access, values are WeakReferences to nodes
+    private static java.util.Map<Integer, WeakReference<VRTNode>> sShaderOverrideNodesRegistry =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    // Throttle mechanism for uniform updates (prevent async queue overflow at high fps)
+    private static final long UNIFORM_UPDATE_THROTTLE_MS = 30; // Limit to ~33fps max
+    private static java.util.Map<String, Long> sLastUniformUpdateTime = new java.util.HashMap<>();
+    private static java.util.Map<String, Boolean> sLastUniformUpdateSuccess = new java.util.HashMap<>();
+
+    // Track all nodes using each material (for direct material updates, not shader overrides)
+    private static java.util.Map<String, java.util.Set<WeakReference<VRTNode>>> sMaterialUsageRegistry =
+        new java.util.concurrent.ConcurrentHashMap<>();
     protected EventDelegate mEventDelegateJni;
     private ComponentEventDelegate mComponentEventDelegate;
     private NodeTransformDelegate mTransformDelegate;
@@ -387,12 +407,38 @@ public class VRTNode extends VRTComponent {
                 mEventDelegateJni = null;
             }
             
-            // Clean up materials
+            // Clean up materials — registry must be cleaned BEFORE clearing mMaterials
             if (mMaterials != null) {
+                for (Material mat : mMaterials) {
+                    String matName = mat.getName();
+                    if (matName != null) {
+                        java.util.Set<WeakReference<VRTNode>> nodes = sMaterialUsageRegistry.get(matName);
+                        if (nodes != null) {
+                            nodes.removeIf(ref -> ref.get() == this || ref.get() == null);
+                        }
+                    }
+                }
                 mMaterials.clear();
                 mMaterials = null;
             }
-            
+
+            // Clean up shader overrides
+            if (mShaderOverrides != null && !mShaderOverrides.isEmpty()) {
+                // Remove this node from the global registry
+                sShaderOverrideNodesRegistry.remove(getId());
+                mShaderOverrides = null;
+            }
+            if (mShaderOverrideMap != null) {
+                mShaderOverrideMap.clear();
+                mShaderOverrideMap = null;
+            }
+            // Clear stored original materials
+            mOriginalEmbeddedMaterials = null;
+            if (mChildNodeOriginalMaterials != null) {
+                mChildNodeOriginalMaterials.clear();
+                mChildNodeOriginalMaterials = null;
+            }
+
             // Clean up node
             if (mNodeJni != null) {
                 mNodeJni.dispose();
@@ -888,6 +934,436 @@ public class VRTNode extends VRTComponent {
         mMaterials = materials;
         if (mNodeJni.getGeometry() != null) {
             mNodeJni.getGeometry().copyAndSetMaterials(materials);
+        }
+
+        // Register this node for each material it uses (for uniform updates)
+        if (materials != null) {
+            for (Material mat : materials) {
+                String matName = mat.getName();
+                if (matName != null && !matName.isEmpty()) {
+                    sMaterialUsageRegistry
+                        .computeIfAbsent(matName, k -> java.util.Collections.newSetFromMap(
+                            new java.util.concurrent.ConcurrentHashMap<>()))
+                        .add(new WeakReference<>(this));
+                }
+            }
+        }
+    }
+
+    /**
+     * Refresh materials from current mMaterials list.
+     * Called when shader uniforms are updated to propagate changes to geometry.
+     */
+    private void refreshMaterialsOnGeometry() {
+        if (mMaterials != null && mNodeJni != null && mNodeJni.getGeometry() != null) {
+            mNodeJni.getGeometry().copyAndSetMaterials(mMaterials);
+        }
+    }
+
+    /**
+     * Static method to refresh all nodes using a specific material.
+     * Called from MaterialManager when shader uniforms are updated.
+     */
+    public static void refreshNodesUsingMaterial(String materialName) {
+        java.util.Set<WeakReference<VRTNode>> nodes = sMaterialUsageRegistry.get(materialName);
+        if (nodes == null) {
+            return;
+        }
+
+        // Clean up stale references and refresh live nodes
+        nodes.removeIf(ref -> ref.get() == null);
+        for (WeakReference<VRTNode> nodeRef : nodes) {
+            VRTNode node = nodeRef.get();
+            if (node != null && !node.isTornDown()) {
+                node.refreshMaterialsOnGeometry();
+            }
+        }
+    }
+
+    public void setShaderOverrides(List<String> shaderOverrides) {
+        Log.d(TAG, "VRTNode.setShaderOverrides called with: " +
+              (shaderOverrides != null ? shaderOverrides.size() + " overrides" : "null"));
+
+        mShaderOverrides = shaderOverrides;
+
+        // If clearing shader overrides, unregister from global registry
+        if (shaderOverrides == null || shaderOverrides.isEmpty()) {
+            Log.d(TAG, "Clearing shader overrides");
+            // Remove this node from registry using its ID
+            sShaderOverrideNodesRegistry.remove(getId());
+            if (mShaderOverrideMap != null) {
+                mShaderOverrideMap.clear();
+            }
+
+            // Restore original embedded materials when removing all shader overrides
+            if (mOriginalEmbeddedMaterials != null && mNodeJni != null) {
+                Geometry geometry = mNodeJni.getGeometry();
+                if (geometry != null) {
+                    geometry.setMaterials(mOriginalEmbeddedMaterials);
+                    geometry.updateSubstrate();
+                }
+                // Clear stored materials
+                mOriginalEmbeddedMaterials = null;
+            }
+
+            // Restore original materials for all child nodes
+            if (mChildNodeOriginalMaterials != null && !mChildNodeOriginalMaterials.isEmpty() && mNodeJni != null) {
+                restoreChildNodeMaterials(mNodeJni);
+                mChildNodeOriginalMaterials.clear();
+                mChildNodeOriginalMaterials = null;
+            }
+        } else {
+            Log.d(TAG, "Setting shader overrides: " + shaderOverrides);
+            // Register this node for uniform updates (replace any existing entry)
+            sShaderOverrideNodesRegistry.put(getId(), new WeakReference<>(this));
+            applyShaderOverrides();
+        }
+    }
+
+    protected void applyShaderOverrides() {
+        // CRITICAL: Use recursive=true because GLB/VRX models have geometry on child nodes
+        // Without this, shader changes only affect root node (which has no geometry)
+        applyShaderOverridesRecursive(true);
+    }
+
+    protected void applyShaderOverridesRecursive(boolean recursive) {
+        Log.d(TAG, "applyShaderOverridesRecursive called, recursive=" + recursive);
+
+        if (mNodeJni == null || mShaderOverrides == null || mShaderOverrides.isEmpty()) {
+            Log.d(TAG, "applyShaderOverridesRecursive: early return - mNodeJni=" +
+                  (mNodeJni != null) + ", mShaderOverrides=" +
+                  (mShaderOverrides != null ? mShaderOverrides.size() : "null"));
+            return;
+        }
+
+        Log.d(TAG, "Applying shader overrides: " + mShaderOverrides);
+
+        // Initialize shader override map if needed
+        if (mShaderOverrideMap == null) {
+            mShaderOverrideMap = new java.util.HashMap<>();
+        }
+        mShaderOverrideMap.clear();
+
+        // Apply to this node's geometry
+        // For 3D models (GLB/FBX/VRX), geometry is often on child nodes, not the root
+        Geometry geometry = mNodeJni.getGeometry();
+        Log.d(TAG, "Node geometry: " + (geometry != null ? "found" : "null"));
+        if (geometry != null) {
+            // Get materials from geometry
+            List<Material> currentMaterials = geometry.getMaterials();
+            Log.d(TAG, "Current materials count: " + (currentMaterials != null ? currentMaterials.size() : "null"));
+
+            // Check if we have materials to work with
+            if (currentMaterials == null || currentMaterials.isEmpty()) {
+                // Model hasn't loaded yet or has no materials, skip for now
+                Log.d(TAG, "No materials yet, skipping root node");
+            } else {
+                // Store original embedded materials on first call (only if non-empty!)
+                // This ensures we always start from the true GLB materials, not previously modified ones
+                if (mOriginalEmbeddedMaterials == null) {
+                    mOriginalEmbeddedMaterials = new java.util.ArrayList<>(currentMaterials);
+                    Log.d(TAG, "Stored " + mOriginalEmbeddedMaterials.size() + " original materials");
+                }
+
+                // Always use the stored original embedded materials as the baseline
+                List<Material> originalMaterials = mOriginalEmbeddedMaterials;
+                Log.d(TAG, "Using " + originalMaterials.size() + " original materials as baseline");
+                MaterialManager materialManager = getReactContext().getNativeModule(MaterialManager.class);
+
+                // For each shader override material, extract shader modifiers and uniforms
+                for (String shaderMaterialName : mShaderOverrides) {
+                    Log.d(TAG, "Processing shader override: " + shaderMaterialName);
+                    Material shaderMaterial = materialManager.getMaterial(shaderMaterialName);
+                    if (shaderMaterial == null) {
+                        Log.e(TAG, "Unknown Shader Material: \"" + shaderMaterialName + "\"");
+                        continue;
+                    }
+                    Log.d(TAG, "Found shader material: " + shaderMaterialName);
+
+                    // Track cloned materials for this shader override
+                    java.util.ArrayList<Material> clonedMaterialsList = new java.util.ArrayList<>();
+
+                    // Clone original materials and merge shader modifiers
+                    java.util.ArrayList<Material> mergedMaterials = new java.util.ArrayList<>();
+                    Log.d(TAG, "Creating merged materials for " + originalMaterials.size() + " original materials");
+                    for (Material originalMat : originalMaterials) {
+                        // Create a new material copying the original (preserves textures)
+                        Log.d(TAG, "Copying material via Material(originalMat) constructor");
+                        Material mergedMat = new Material(originalMat);
+                        Log.d(TAG, "Material copied successfully");
+
+                        // Copy shader modifiers from shader material
+                        // Note: Material class doesn't expose getShaderModifiers in Java,
+                        // so we rely on C++ copy constructor handling this
+                        copyShaderModifiersAndUniforms(shaderMaterial, mergedMat);
+
+                        mergedMaterials.add(mergedMat);
+                        clonedMaterialsList.add(mergedMat);
+                    }
+
+                    Log.d(TAG, "Created " + mergedMaterials.size() + " merged materials");
+
+                    // Store cloned materials for uniform updates
+                    mShaderOverrideMap.put(shaderMaterialName, clonedMaterialsList);
+
+                    // Apply merged materials to geometry
+                    Log.d(TAG, "Applying merged materials to geometry");
+                    geometry.setMaterials(mergedMaterials);
+                    Log.d(TAG, "Merged materials applied successfully");
+
+                    // Force geometry substrate to reset after shader override materials are applied
+                    geometry.updateSubstrate();
+                }
+            }
+        }
+
+        // Recursively apply to children if requested
+        if (recursive) {
+            for (Node child : mNodeJni.getChildNodes()) {
+                applyShaderOverridesToNode(child);
+            }
+        }
+    }
+
+    private void applyShaderOverridesToNode(Node node) {
+        Geometry geometry = node.getGeometry();
+        if (geometry != null) {
+            // Initialize child node materials map if needed
+            if (mChildNodeOriginalMaterials == null) {
+                mChildNodeOriginalMaterials = new java.util.HashMap<>();
+            }
+
+            // Store original materials for this child node on first call
+            java.util.ArrayList<Material> originalMaterials;
+            if (!mChildNodeOriginalMaterials.containsKey(node)) {
+                List<Material> currentMaterials = geometry.getMaterials();
+                if (currentMaterials != null && !currentMaterials.isEmpty()) {
+                    // Save a copy of the original materials (with skinning modifiers, textures, etc.)
+                    originalMaterials = new java.util.ArrayList<>(currentMaterials);
+                    mChildNodeOriginalMaterials.put(node, originalMaterials);
+                    Log.d(TAG, "Stored " + originalMaterials.size() + " original materials for child node");
+                } else {
+                    return; // No materials to work with
+                }
+            } else {
+                // Use the stored original materials as baseline
+                originalMaterials = mChildNodeOriginalMaterials.get(node);
+                Log.d(TAG, "Using " + originalMaterials.size() + " stored original materials for child node");
+            }
+
+            if (originalMaterials != null && !originalMaterials.isEmpty()) {
+                MaterialManager materialManager = getReactContext().getNativeModule(MaterialManager.class);
+
+                for (String shaderMaterialName : mShaderOverrides) {
+                    Material shaderMaterial = materialManager.getMaterial(shaderMaterialName);
+                    if (shaderMaterial == null) {
+                        continue;
+                    }
+
+                    java.util.ArrayList<Material> clonedMaterialsList =
+                        mShaderOverrideMap.get(shaderMaterialName);
+                    if (clonedMaterialsList == null) {
+                        clonedMaterialsList = new java.util.ArrayList<>();
+                        mShaderOverrideMap.put(shaderMaterialName, clonedMaterialsList);
+                    }
+
+                    java.util.ArrayList<Material> mergedMaterials = new java.util.ArrayList<>();
+                    for (Material originalMat : originalMaterials) {
+                        Material mergedMat = new Material(originalMat);
+                        copyShaderModifiersAndUniforms(shaderMaterial, mergedMat);
+                        mergedMaterials.add(mergedMat);
+                        clonedMaterialsList.add(mergedMat);
+                    }
+
+                    geometry.setMaterials(mergedMaterials);
+
+                    // Force geometry substrate to reset
+                    geometry.updateSubstrate();
+                }
+            }
+        }
+
+        // Recurse to children
+        for (Node child : node.getChildNodes()) {
+            applyShaderOverridesToNode(child);
+        }
+    }
+
+    private void restoreChildNodeMaterials(Node node) {
+        // Recursively restore original materials for all child nodes
+        for (Node child : node.getChildNodes()) {
+            Geometry geometry = child.getGeometry();
+            if (geometry != null && mChildNodeOriginalMaterials != null) {
+                List<Material> originalMaterials = mChildNodeOriginalMaterials.get(child);
+                if (originalMaterials != null) {
+                    geometry.setMaterials(originalMaterials);
+                    geometry.updateSubstrate();
+                    Log.d(TAG, "Restored " + originalMaterials.size() + " original materials for child node");
+                }
+            }
+            // Recurse to grandchildren
+            restoreChildNodeMaterials(child);
+        }
+    }
+
+    private void copyShaderModifiersAndUniforms(Material source, Material dest) {
+        // Copy shader modifiers and uniforms from source (shader override material)
+        // to destination (cloned original material that already has textures)
+        Log.d(TAG, "=== copyShaderModifiersAndUniforms START ===");
+        Log.d(TAG, "Source material name: " + (source != null ? source.getName() : "null"));
+        Log.d(TAG, "Dest material name: " + (dest != null ? dest.getName() : "null"));
+
+        // CRITICAL: Copy lighting model from shader override to override PBR
+        // This allows "Constant" lighting to override the VRX model's "PhysicallyBased" lighting
+        if (source.getLightingModel() != null) {
+            Log.d(TAG, "Setting lighting model: " + source.getLightingModel());
+            dest.setLightingModel(source.getLightingModel());
+        }
+
+        // NOTE: We DON'T clear existing shader modifiers because:
+        // 1. We always start from a fresh copy of original materials (which have skinning modifiers)
+        // 2. Clearing would remove critical system modifiers like skinning
+        // 3. No accumulation occurs since each shader change starts from stored originals
+        // dest.removeAllShaderModifiers(); // ← REMOVED to preserve skinning modifiers
+
+        Log.d(TAG, "Calling copyShaderModifiers...");
+        dest.copyShaderModifiers(source);
+        Log.d(TAG, "=== copyShaderModifiersAndUniforms END ===");
+    }
+
+    public void updateShaderOverrideUniforms() {
+        if (mShaderOverrideMap == null || mShaderOverrideMap.isEmpty()) {
+            return;
+        }
+
+        for (String shaderMaterialName : mShaderOverrideMap.keySet()) {
+            updateShaderOverrideUniformsForMaterial(shaderMaterialName);
+        }
+    }
+
+    private void updateShaderOverrideUniformsForMaterial(String materialName) {
+        if (mShaderOverrideMap == null || !mShaderOverrideMap.containsKey(materialName)) {
+            return;
+        }
+
+        MaterialManager materialManager = getReactContext().getNativeModule(MaterialManager.class);
+        Material shaderMaterial = materialManager.getMaterial(materialName);
+        if (shaderMaterial == null) {
+            return;
+        }
+
+        java.util.ArrayList<Material> clonedMaterialsList = mShaderOverrideMap.get(materialName);
+        if (clonedMaterialsList == null) {
+            return;
+        }
+
+        // Copy all uniforms from source material to cloned materials
+        for (Material clonedMaterial : clonedMaterialsList) {
+            clonedMaterial.copyShaderUniforms(shaderMaterial);
+        }
+
+        Log.d(TAG, "Updated shader override uniforms for material: " + materialName +
+                   ", propagated to " + clonedMaterialsList.size() + " cloned materials");
+    }
+
+    public static void updateShaderOverridesForMaterial(String materialName) {
+        // Update all nodes that have shader overrides with this material
+        for (WeakReference<VRTNode> nodeRef : sShaderOverrideNodesRegistry.values()) {
+            VRTNode node = nodeRef.get();
+            if (node != null && node.mShaderOverrides != null &&
+                node.mShaderOverrides.contains(materialName)) {
+                node.updateShaderOverrideUniformsForMaterial(materialName);
+            }
+        }
+    }
+
+    /**
+     * Update a specific uniform on shader overrides (efficient for real-time animation).
+     */
+    public static void updateShaderOverrideUniform(String materialName, String uniformName,
+                                                   String uniformType, Object value) {
+        // Throttle mechanism: Only throttle if last update was successful (had materials)
+        String throttleKey = materialName + "_" + uniformName;
+        long currentTime = System.currentTimeMillis();
+        Long lastUpdate = sLastUniformUpdateTime.get(throttleKey);
+        Boolean lastSuccess = sLastUniformUpdateSuccess.get(throttleKey);
+
+        // Only apply throttle if the last update actually succeeded
+        if (lastUpdate != null && Boolean.TRUE.equals(lastSuccess) &&
+            (currentTime - lastUpdate) < UNIFORM_UPDATE_THROTTLE_MS) {
+            // Skip this update - too soon since last successful update
+            Log.d(TAG, "THROTTLED: " + materialName + "." + uniformName + " (last update " + (currentTime - lastUpdate) + "ms ago)");
+            return;
+        }
+
+        Log.d(TAG, "updateShaderOverrideUniform: " + materialName + "." + uniformName + " = " + value + " (lastSuccess=" + lastSuccess + ")");
+
+        int totalUpdated = 0;
+        int totalNodesInRegistry = 0;
+        int totalNodesWithMaterial = 0;
+
+        // Clean up stale references while iterating (prevent memory leak)
+        sShaderOverrideNodesRegistry.values().removeIf(ref -> ref.get() == null);
+
+        // Directly update the uniform on all cloned materials
+        for (WeakReference<VRTNode> nodeRef : sShaderOverrideNodesRegistry.values()) {
+            VRTNode node = nodeRef.get();
+            if (node == null) {
+                continue; // Node was garbage collected
+            }
+
+            totalNodesInRegistry++;
+
+            if (node.mShaderOverrides == null || !node.mShaderOverrides.contains(materialName)) {
+                if (node.mShaderOverrides != null) {
+                    Log.d(TAG, "  Node has overrides " + node.mShaderOverrides + " but not " + materialName);
+                }
+                continue;
+            }
+
+            totalNodesWithMaterial++;
+
+            if (node.mShaderOverrideMap == null || !node.mShaderOverrideMap.containsKey(materialName)) {
+                Log.d(TAG, "  Node has material in list but not in map! map=" +
+                      (node.mShaderOverrideMap == null ? "null" : node.mShaderOverrideMap.keySet()));
+                continue;
+            }
+
+            java.util.ArrayList<Material> clonedMaterialsList = node.mShaderOverrideMap.get(materialName);
+            if (clonedMaterialsList == null) {
+                continue;
+            }
+
+            // Update only this specific uniform on each cloned material
+            for (Material clonedMaterial : clonedMaterialsList) {
+                if ("float".equalsIgnoreCase(uniformType)) {
+                    clonedMaterial.setShaderUniform(uniformName, (Float) value);
+                    totalUpdated++;
+                } else if ("vec3".equalsIgnoreCase(uniformType)) {
+                    float[] vec = (float[]) value;
+                    clonedMaterial.setShaderUniform(uniformName, vec[0], vec[1], vec[2]);
+                    totalUpdated++;
+                } else if ("vec4".equalsIgnoreCase(uniformType)) {
+                    float[] vec = (float[]) value;
+                    clonedMaterial.setShaderUniform(uniformName, vec[0], vec[1], vec[2], vec[3]);
+                    totalUpdated++;
+                } else if ("mat4".equalsIgnoreCase(uniformType)) {
+                    clonedMaterial.setShaderUniform(uniformName, (float[]) value);
+                    totalUpdated++;
+                }
+            }
+        }
+
+        // Record timestamp and success status
+        if (totalUpdated > 0) {
+            sLastUniformUpdateTime.put(throttleKey, currentTime);
+            sLastUniformUpdateSuccess.put(throttleKey, Boolean.TRUE);
+            Log.d(TAG, "Updated uniform '" + uniformName + "' on " + totalUpdated + " cloned materials for " + materialName +
+                  " (registry=" + totalNodesInRegistry + ", withMaterial=" + totalNodesWithMaterial + ")");
+        } else {
+            sLastUniformUpdateSuccess.put(throttleKey, Boolean.FALSE);
+            Log.d(TAG, "NO materials found for " + materialName + "." + uniformName +
+                  " (registry=" + totalNodesInRegistry + ", withMaterial=" + totalNodesWithMaterial + ")");
         }
     }
 

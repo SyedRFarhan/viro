@@ -256,6 +256,29 @@ public:
     void setOcclusionMode(VROOcclusionMode mode);
     void setDepthTexture(std::shared_ptr<VROTexture> depthTexture);
     void setDepthTextureTransform(VROMatrix4f transform);
+    void setSemanticTextureTransform(VROMatrix4f transform);
+
+    /*
+     Set the live AR camera background texture and its viewport-to-image UV transform.
+     These are auto-bound to shader modifier samplers named 'camera_texture' and the
+     uniform 'camera_image_transform', respectively.
+     */
+    void setCameraBackgroundTexture(std::shared_ptr<VROTexture> texture);
+    void setCameraImageTransform(VROMatrix4f transform);
+
+    /*
+     Set the semantic segmentation texture (R8, per-pixel label 0-11).
+     Auto-bound to shader modifier samplers named 'semantic_texture'.
+     Pass nullptr when semantic mode is disabled or data is unavailable.
+     */
+    void setSemanticTexture(std::shared_ptr<VROTexture> texture);
+
+    /*
+     Set the per-pixel semantic confidence texture (R8, 0=uncertain, 255=certain).
+     Auto-bound to shader modifier samplers named 'semantic_confidence_texture'.
+     Pass a 1×1 all-white texture (or nullptr) when confidence data is unavailable.
+     */
+    void setSemanticConfidenceTexture(std::shared_ptr<VROTexture> texture);
     
 #pragma mark - Camera
    

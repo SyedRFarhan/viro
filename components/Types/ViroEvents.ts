@@ -328,6 +328,16 @@ export type ViroARNodeReference = {
 
   /** React tag for the native view */
   reactTag: number;
+
+  /** ID of the associated AR anchor */
+  anchorId?: string;
+
+  /** Current transform of the anchored node */
+  transform?: {
+    position: Viro3DPoint;
+    rotation: ViroRotation;
+    scale: Viro3DPoint;
+  };
 };
 
 export type ViroARPointCloudUpdateEvent = {
@@ -411,9 +421,12 @@ export type ViroCloudAnchorState =
   | "ErrorHostingServiceUnavailable";
 
 /**
- * Cloud anchor provider type.
+ * Unified AR provider — controls both cloud anchors and geospatial anchors.
  */
-export type ViroCloudAnchorProvider = "none" | "arcore";
+export type ViroProvider = "none" | "arcore" | "reactvision";
+
+/** @deprecated Use ViroProvider */
+export type ViroCloudAnchorProvider = ViroProvider;
 
 /**
  * Represents a cloud-hosted AR anchor.
@@ -487,10 +500,8 @@ export type ViroCloudAnchorStateChangeEvent = {
  * Viro Geospatial API Events and Types
  * ============================================================================ */
 
-/**
- * Geospatial anchor provider type.
- */
-export type ViroGeospatialAnchorProvider = "none" | "arcore";
+/** @deprecated Use ViroProvider */
+export type ViroGeospatialAnchorProvider = ViroProvider;
 
 /**
  * Earth tracking state.

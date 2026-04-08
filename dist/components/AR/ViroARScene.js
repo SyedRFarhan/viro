@@ -209,11 +209,37 @@ class ViroARScene extends ViroBase_1.ViroBase {
         return await react_native_1.NativeModules.VRTARSceneModule.performARHitTestWithPoint((0, react_native_1.findNodeHandle)(this), x, y);
     };
     /**
-     * Create a persistent AR anchor from a hit test result.
-     * The hit result must come from one of the performARHitTest methods above.
+     * Create an AR anchor at the location of a hit test result.
      *
-     * @param hitResult - A hit test result with a valid _hitResultId
+     * This method creates a persistent AR anchor that will be tracked by the
+     * AR system. The anchor can be used to place virtual content that stays
+     * in place as the user moves around.
+     *
+     * The returned node reference can be passed to a ViroARNode component
+     * to attach 3D content (though ViroARNode is optional and not yet implemented).
+     *
+     * Note: Hit test results are only valid for 30 seconds. Call this method
+     * soon after performing the hit test.
+     *
+     * @param hitResult The hit test result to create an anchor from
      * @returns Promise resolving to an AR node reference, or null if failed
+     *
+     * @example
+     * ```tsx
+     * // Perform hit test
+     * const results = await arSceneRef.current.performARHitTestWithPoint(x, y);
+     *
+     * if (results.length > 0) {
+     *   // Create anchor from first result
+     *   const nodeRef = await arSceneRef.current.createAnchoredNode(results[0]);
+     *
+     *   if (nodeRef) {
+     *     // Store reference for later use
+     *     setAnchoredNodeRef(nodeRef);
+     *     console.log('Anchor created:', nodeRef.anchorId);
+     *   }
+     * }
+     * ```
      */
     createAnchoredNode = async (hitResult) => {
         if (!hitResult._hitResultId) {
@@ -262,7 +288,7 @@ class ViroARScene extends ViroBase_1.ViroBase {
         // Since anchorDetectionTypes can be either a string or an array, convert the string to a 1-element array.
         let anchorDetectionTypes = typeof this.props.anchorDetectionTypes === "string"
             ? new Array(this.props.anchorDetectionTypes)
-            : this.props.anchorDetectionTypes;
+            : this.props.anchorDetectionTypes ?? ["planesHorizontal", "planesVertical"];
         let timeToFuse = undefined;
         if (this.props.onFuse != undefined &&
             typeof this.props.onFuse === "object") {

@@ -75,24 +75,14 @@ public class ARUtils {
         transformMap.putArray("rotation", ARUtils.arrayFromRotationArray(result.getRotation().toArray()));
         returnMap.putMap("transform", transformMap);
 
-        // Add depth data if available (uses reflection for ViroCore compatibility)
-        try {
-            java.lang.reflect.Method hasDepthMethod = result.getClass().getMethod("hasDepthData");
-            boolean hasDepth = (boolean) hasDepthMethod.invoke(result);
-            returnMap.putBoolean("hasDepthData", hasDepth);
-            if (hasDepth) {
-                returnMap.putDouble("depthValue", (double) result.getClass().getMethod("getDepthValue").invoke(result));
-                double confidence = (double) result.getClass().getMethod("getDepthConfidence").invoke(result);
-                if (confidence >= 0) {
-                    returnMap.putDouble("depthConfidence", confidence);
-                }
-                returnMap.putString("depthSource", (String) result.getClass().getMethod("getDepthSource").invoke(result));
+        // Add depth data if available
+        returnMap.putBoolean("hasDepthData", result.hasDepthData());
+        if (result.hasDepthData()) {
+            returnMap.putDouble("depthValue", result.getDepthValue());
+            if (result.getDepthConfidence() >= 0) {
+                returnMap.putDouble("depthConfidence", result.getDepthConfidence());
             }
-        } catch (NoSuchMethodException e) {
-            // ViroCore build does not include depth API
-            returnMap.putBoolean("hasDepthData", false);
-        } catch (Exception e) {
-            returnMap.putBoolean("hasDepthData", false);
+            returnMap.putString("depthSource", result.getDepthSource());
         }
 
         return returnMap;

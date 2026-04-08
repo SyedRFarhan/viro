@@ -253,7 +253,7 @@ const withViroManifest = (config: ExpoConfig) =>
         },
       });
 
-      // Add Google Cloud API key for ARCore Cloud Anchors if configured
+      // Add Google Cloud API key for ARCore Cloud Anchors and Geospatial API if configured
       const viroPlugin = config?.plugins?.find(
         (plugin) =>
           Array.isArray(plugin) && plugin[0] === "@reactvision/react-viro"
@@ -261,13 +261,54 @@ const withViroManifest = (config: ExpoConfig) =>
 
       if (Array.isArray(viroPlugin) && viroPlugin.length > 1) {
         const pluginOptions = viroPlugin[1] as ViroConfigurationOptions;
-        if (pluginOptions.googleCloudApiKey && pluginOptions.cloudAnchorProvider === "arcore") {
+
+        // Resolve unified provider prop; old geospatialAnchorProvider overrides for backward compat.
+        // Default to "reactvision" only when rvApiKey is present (implies RV intent) but provider
+        // is not explicitly set — avoids injecting location permissions for apps with no credentials.
+        const legacyOpts = pluginOptions as { geospatialAnchorProvider?: string };
+        const geospatialAnchorProvider = legacyOpts.geospatialAnchorProvider
+          ?? pluginOptions.provider
+          ?? (pluginOptions.rvApiKey ? "reactvision" : undefined);
+
+        if (pluginOptions.googleCloudApiKey) {
           contents?.manifest?.application?.[0]["meta-data"]?.push({
             $: {
               "android:name": "com.google.android.ar.API_KEY",
               "android:value": pluginOptions.googleCloudApiKey,
             },
           });
+        }
+        if (pluginOptions.rvApiKey) {
+          contents?.manifest?.application?.[0]["meta-data"]?.push({
+            $: {
+              "android:name": "com.reactvision.RVApiKey",
+              "android:value": pluginOptions.rvApiKey,
+            },
+          });
+        }
+        if (pluginOptions.rvProjectId) {
+          contents?.manifest?.application?.[0]["meta-data"]?.push({
+            $: {
+              "android:name": "com.reactvision.RVProjectId",
+              "android:value": pluginOptions.rvProjectId,
+            },
+          });
+        }
+
+        // Add location permissions when geospatial provider is active
+        if (geospatialAnchorProvider === "arcore" || geospatialAnchorProvider === "reactvision") {
+          const existingPermissions: string[] = (contents.manifest["uses-permission"] || [])
+            .map((p: any) => p.$?.["android:name"]);
+          if (!existingPermissions.includes("android.permission.ACCESS_FINE_LOCATION")) {
+            contents.manifest["uses-permission"].push({
+              $: { "android:name": "android.permission.ACCESS_FINE_LOCATION" },
+            });
+          }
+          if (!existingPermissions.includes("android.permission.ACCESS_COARSE_LOCATION")) {
+            contents.manifest["uses-permission"].push({
+              $: { "android:name": "android.permission.ACCESS_COARSE_LOCATION" },
+            });
+          }
         }
       }
 

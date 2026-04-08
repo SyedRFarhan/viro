@@ -98,11 +98,13 @@ enum class VROImageTrackingImpl {
 enum class VROCloudAnchorProvider {
     None,
     ARCore,
+    ReactVision,  // ReactVision custom backend (ReactVisionCCA)
 };
 
 enum class VROGeospatialAnchorProvider {
     None,
     ARCoreGeospatial,
+    ReactVision,  // ReactVision custom backend (RVCCAGeospatialProvider)
 };
 
 /*
@@ -112,7 +114,8 @@ enum class VROGeospatialAnchorProvider {
 enum class VROOcclusionMode {
     Disabled,       // No occlusion - virtual objects always render on top
     DepthBased,     // Use depth data to occlude virtual objects behind real-world surfaces
-    PeopleOnly      // Only occlude virtual objects behind detected people (iOS 13+/Android with ARCore)
+    PeopleOnly,     // Only occlude virtual objects behind detected people (iOS 13+/Android with ARCore)
+    DepthOnly       // Activates depth sensing WITHOUT occlusion rendering (depth data available, no visual occlusion)
 };
 
 /*
@@ -317,7 +320,21 @@ public:
      texture are updated after each call to updateFrame().
      */
     virtual std::shared_ptr<VROTexture> getCameraBackgroundTexture() = 0;
-    
+
+    /*
+     Get the semantic texture for the current frame. Each pixel is a VROSemanticLabel
+     value (0-11, R8 format). Returns nullptr if semantic mode is not enabled or
+     the platform does not support it.
+     */
+    virtual std::shared_ptr<VROTexture> getSemanticTexture() { return nullptr; }
+
+    /*
+     Get the confidence texture for the current frame. Each pixel is a confidence value
+     (R8, 0=uncertain, 255=certain) corresponding to the label in getSemanticTexture().
+     Returns nullptr if not supported; callers should substitute a 1×1 white texture.
+     */
+    virtual std::shared_ptr<VROTexture> getSemanticConfidenceTexture() { return nullptr; }
+
     /*
      Invoke when the viewport changes. The AR engine may adjust its camera
      background and projection matrices in response to a viewport change.
@@ -444,6 +461,25 @@ public:
         }
     }
 
+    virtual void resolveGeospatialAnchor(const std::string& platformUuid, VROQuaternion quaternion,
+                                          std::function<void(std::shared_ptr<VROGeospatialAnchor>)> onSuccess,
+                                          std::function<void(std::string error)> onFailure) {
+        if (onFailure) {
+            onFailure("Resolve geospatial anchor not supported");
+        }
+    }
+
+    // Host a geospatial anchor to the ReactVision backend at the given GPS position.
+    // Returns the platform UUID via onSuccess(platformUuid) string callback.
+    virtual void hostGeospatialAnchor(double latitude, double longitude, double altitude,
+                                       const std::string& altitudeMode,
+                                       std::function<void(std::string platformUuid)> onSuccess,
+                                       std::function<void(std::string error)> onFailure) {
+        if (onFailure) {
+            onFailure("Host geospatial anchor not supported");
+        }
+    }
+
     /*
      Create a terrain anchor at the specified location.
      Terrain anchors are positioned relative to the terrain surface.
@@ -477,6 +513,145 @@ public:
      */
     virtual void removeGeospatialAnchor(std::shared_ptr<VROGeospatialAnchor> anchor) {
         // Default implementation does nothing
+    }
+
+    // ========================================================================
+    // ReactVision Cloud Anchor Management API
+    // These do not require an active AR frame — they are pure backend operations.
+    // ========================================================================
+
+    virtual void rvGetCloudAnchor(
+        const std::string& anchorId,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
+    virtual void rvListCloudAnchors(
+        int limit, int offset,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
+    virtual void rvUpdateCloudAnchor(
+        const std::string& anchorId,
+        const std::string& name,
+        const std::string& description,
+        bool isPublic,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
+    virtual void rvDeleteCloudAnchor(
+        const std::string& anchorId,
+        std::function<void(bool success, std::string error)> callback) {
+        if (callback) callback(false, "Not supported");
+    }
+    virtual void rvFindNearbyCloudAnchors(
+        double lat, double lng, double radius, int limit,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
+    virtual void rvAttachAssetToCloudAnchor(
+        const std::string& anchorId,
+        const std::string& fileUrl,
+        int64_t fileSize,
+        const std::string& name,
+        const std::string& assetType,
+        const std::string& externalUserId,
+        std::function<void(bool success, std::string error)> callback) {
+        if (callback) callback(false, "Not supported");
+    }
+    virtual void rvRemoveAssetFromCloudAnchor(
+        const std::string& anchorId,
+        const std::string& assetId,
+        std::function<void(bool success, std::string error)> callback) {
+        if (callback) callback(false, "Not supported");
+    }
+    virtual void rvTrackCloudAnchorResolution(
+        const std::string& anchorId,
+        bool success, double confidence,
+        int matchCount, int inlierCount, int processingTimeMs,
+        const std::string& platform, const std::string& externalUserId,
+        std::function<void(bool success, std::string error)> callback) {
+        if (callback) callback(false, "Not supported");
+    }
+    virtual void rvGetSceneAssets(
+        const std::string& sceneId,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
+
+    // ========================================================================
+    // ReactVision Geospatial CRUD API
+    // These methods route directly to the ReactVision backend and are only
+    // meaningful when geospatialAnchorProvider == ReactVision.
+    // ========================================================================
+
+    /*
+     Retrieve a geospatial anchor record by ID (with linked scene asset / scene data).
+     Callback receives (success, jsonData, error).
+     */
+    virtual void rvGetGeospatialAnchor(
+        const std::string& anchorId,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
+
+    /*
+     Find geospatial anchors within radius metres of the given GPS coordinate.
+     Callback receives (success, jsonArrayData, error).
+     */
+    virtual void rvFindNearbyGeospatialAnchors(
+        double lat, double lng, double radius, int limit,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
+
+    /*
+     Update an existing geospatial anchor (link scene asset, scene, user asset, or rename).
+     Pass empty strings to leave a field unchanged.
+     Callback receives (success, jsonData, error).
+     */
+    virtual void rvUpdateGeospatialAnchor(
+        const std::string& anchorId,
+        const std::string& sceneAssetId,
+        const std::string& sceneId,
+        const std::string& name,
+        const std::string& userAssetId,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
+
+    /*
+     Upload a file to ReactVision storage and return a user_asset_id.
+     filePath must be a local file path readable by the native layer.
+     assetType: "3d-model" | "image" | "video" | "audio"
+     Callback receives (success, userAssetId, fileUrl, error).
+     */
+    virtual void rvUploadAsset(
+        const std::string& filePath,
+        const std::string& assetType,
+        const std::string& fileName,
+        const std::string& appUserId,
+        std::function<void(bool success, std::string userAssetId, std::string fileUrl, std::string error)> callback) {
+        if (callback) callback(false, "", "", "Not supported");
+    }
+
+    /*
+     Permanently delete a geospatial anchor from the ReactVision backend.
+     Callback receives (success, error).
+     */
+    virtual void rvDeleteGeospatialAnchor(
+        const std::string& anchorId,
+        std::function<void(bool success, std::string error)> callback) {
+        if (callback) callback(false, "Not supported");
+    }
+
+    /*
+     List geospatial anchors for the current project (paginated).
+     Callback receives (success, jsonArrayData, error).
+     */
+    virtual void rvListGeospatialAnchors(
+        int limit, int offset,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
     }
 
     // ========================================================================

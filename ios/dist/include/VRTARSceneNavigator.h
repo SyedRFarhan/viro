@@ -49,9 +49,12 @@
 @property (nonatomic, readwrite) BOOL shadowsEnabled;
 @property (nonatomic, readwrite) BOOL multisamplingEnabled;
 @property (nonatomic, copy) NSString *occlusionMode;
+@property (nonatomic, assign) BOOL depthEnabled;
 @property (nonatomic, assign) BOOL depthDebugEnabled;
 @property (nonatomic, copy, nullable) NSDictionary *scanWaveConfig;
 @property (nonatomic, copy, nullable) RCTDirectEventBlock onScanWaveComplete;
+@property (nonatomic, assign) BOOL semanticDebugEnabled;
+@property (nonatomic, assign) float semanticConfidenceThreshold;
 @property (nonatomic, copy) NSString *cloudAnchorProvider;
 @property (nonatomic, copy) NSString *geospatialAnchorProvider;
 
@@ -308,6 +311,83 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
 
 - (void)removeGeospatialAnchor:(NSString *)anchorId;
 
+// ReactVision-specific: save GPS anchor to backend (returns platform UUID), no local AR anchor
+- (void)hostGeospatialAnchor:(double)latitude
+                   longitude:(double)longitude
+                    altitude:(double)altitude
+               altitudeMode:(NSString *)altitudeMode
+           completionHandler:(void (^)(BOOL success, NSString * _Nullable platformUuid, NSString * _Nullable error))completionHandler;
+
+// ReactVision-specific: fetch GPS coords from backend by UUID + create local AR anchor
+- (void)resolveGeospatialAnchor:(NSString *)platformUuid
+                      quaternion:(id)quaternion
+              completionHandler:(GeospatialAnchorCompletionHandler)completionHandler;
+
+// ReactVision Geospatial CRUD
+- (void)rvGetGeospatialAnchor:(NSString *)anchorId
+            completionHandler:(void (^)(BOOL success, NSDictionary *anchorData, NSString *error))completionHandler;
+- (void)rvFindNearbyGeospatialAnchors:(double)latitude
+                            longitude:(double)longitude
+                               radius:(double)radius
+                                limit:(int)limit
+                    completionHandler:(void (^)(BOOL success, NSArray *anchors, NSString *error))completionHandler;
+- (void)rvUpdateGeospatialAnchor:(NSString *)anchorId
+                    sceneAssetId:(NSString *)sceneAssetId
+                         sceneId:(NSString *)sceneId
+                            name:(NSString *)name
+                     userAssetId:(NSString *)userAssetId
+               completionHandler:(void (^)(BOOL success, NSDictionary *anchorData, NSString *error))completionHandler;
+- (void)rvUploadAsset:(NSString *)filePath
+            assetType:(NSString *)assetType
+             fileName:(NSString *)fileName
+           appUserId:(NSString *)appUserId
+    completionHandler:(void (^)(BOOL success, NSString *userAssetId, NSString *fileUrl, NSString *error))completionHandler;
+- (void)rvDeleteGeospatialAnchor:(NSString *)anchorId
+               completionHandler:(void (^)(BOOL success, NSString *error))completionHandler;
+- (void)rvListGeospatialAnchors:(int)limit
+                         offset:(int)offset
+              completionHandler:(void (^)(BOOL success, NSArray *anchors, NSString *error))completionHandler;
+
+// Cloud anchor management
+- (void)rvGetCloudAnchor:(NSString *)anchorId
+       completionHandler:(void (^)(BOOL success, NSDictionary *anchorData, NSString *error))completionHandler;
+- (void)rvListCloudAnchors:(int)limit
+                    offset:(int)offset
+         completionHandler:(void (^)(BOOL success, NSArray *anchors, NSString *error))completionHandler;
+- (void)rvUpdateCloudAnchor:(NSString *)anchorId
+                       name:(NSString *)name
+                description:(NSString *)description
+                   isPublic:(BOOL)isPublic
+          completionHandler:(void (^)(BOOL success, NSDictionary *anchorData, NSString *error))completionHandler;
+- (void)rvDeleteCloudAnchor:(NSString *)anchorId
+          completionHandler:(void (^)(BOOL success, NSString *error))completionHandler;
+- (void)rvFindNearbyCloudAnchors:(double)latitude
+                       longitude:(double)longitude
+                          radius:(double)radius
+                           limit:(int)limit
+               completionHandler:(void (^)(BOOL success, NSArray *anchors, NSString *error))completionHandler;
+- (void)rvGetSceneAssets:(NSString *)sceneId
+      completionHandler:(void (^)(BOOL success, NSArray *assets, NSString *error))completionHandler;
+- (void)rvAttachAssetToCloudAnchor:(NSString *)anchorId
+                           fileUrl:(NSString *)fileUrl
+                          fileSize:(int64_t)fileSize
+                              name:(NSString *)name
+                         assetType:(NSString *)assetType
+                    externalUserId:(NSString *)externalUserId
+                 completionHandler:(void (^)(BOOL success, NSString *error))completionHandler;
+- (void)rvRemoveAssetFromCloudAnchor:(NSString *)anchorId
+                             assetId:(NSString *)assetId
+                   completionHandler:(void (^)(BOOL success, NSString *error))completionHandler;
+- (void)rvTrackCloudAnchorResolution:(NSString *)anchorId
+                             success:(BOOL)success
+                          confidence:(double)confidence
+                          matchCount:(int)matchCount
+                         inlierCount:(int)inlierCount
+                    processingTimeMs:(int)processingTimeMs
+                            platform:(NSString *)platform
+                      externalUserId:(NSString *)externalUserId
+                   completionHandler:(void (^)(BOOL success, NSString *error))completionHandler;
+
 #pragma mark - Scene Semantics API Methods
 
 // Check if Scene Semantics mode is supported on this device
@@ -326,28 +406,6 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
 - (float)getSemanticLabelFraction:(NSString *)label;
 
 #pragma mark - Monocular Depth Estimation API Methods
-
-// Monocular depth download progress handler
-typedef void (^MonocularDepthDownloadProgressHandler)(float progress);
-typedef void (^MonocularDepthDownloadCompletionHandler)(BOOL success, NSString * _Nullable error);
-
-// Check if monocular depth estimation is supported on this device (iOS 14.0+)
-- (BOOL)isMonocularDepthSupported;
-
-// Check if the monocular depth model has been downloaded
-- (BOOL)isMonocularDepthModelDownloaded;
-
-// Enable or disable monocular depth estimation for non-LiDAR devices
-// Note: Model must be downloaded first using downloadMonocularDepthModel
-- (void)setMonocularDepthEnabled:(BOOL)enabled;
-
-// Set the base URL for downloading the depth model
-// The full URL will be: baseURL/DepthPro.mlmodelc.zip
-- (void)setMonocularDepthModelURL:(NSString *)baseURL;
-
-// Download the monocular depth model if not already downloaded
-- (void)downloadMonocularDepthModelWithProgress:(MonocularDepthDownloadProgressHandler)progressHandler
-                              completionHandler:(MonocularDepthDownloadCompletionHandler)completionHandler;
 
 // When enabled, monocular depth will be used even on devices with LiDAR
 // This allows consistency across device types, testing, or depth beyond LiDAR's ~5m range

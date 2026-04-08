@@ -27,6 +27,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.util.Log;
 
+import com.facebook.react.bridge.Dynamic;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -160,6 +161,84 @@ public class MaterialManager extends ReactContextBaseJavaModule {
                 sMaterialsMap.remove(materialName);
             }
         }
+    }
+
+    @ReactMethod
+    public void updateShaderUniform(String materialName, String uniformName, String uniformType, Dynamic value) {
+        Material material = getMaterial(materialName);
+        if (material == null) {
+            Log.w("VRTMaterialManager", "Cannot update shader uniform: material '" + materialName + "' not found");
+            return;
+        }
+
+        Object uniformValue = null;
+
+        if ("float".equalsIgnoreCase(uniformType)) {
+            float floatValue = (float) value.asDouble();
+            material.setShaderUniform(uniformName, floatValue);
+            uniformValue = floatValue;
+        } else if ("vec3".equalsIgnoreCase(uniformType)) {
+            ReadableArray arr = value.asArray();
+            if (arr != null && arr.size() >= 3) {
+                float x = (float) arr.getDouble(0);
+                float y = (float) arr.getDouble(1);
+                float z = (float) arr.getDouble(2);
+                material.setShaderUniform(uniformName, x, y, z);
+                uniformValue = new float[]{x, y, z};
+            }
+        } else if ("vec4".equalsIgnoreCase(uniformType)) {
+            ReadableArray arr = value.asArray();
+            if (arr != null && arr.size() >= 4) {
+                float x = (float) arr.getDouble(0);
+                float y = (float) arr.getDouble(1);
+                float z = (float) arr.getDouble(2);
+                float w = (float) arr.getDouble(3);
+                material.setShaderUniform(uniformName, x, y, z, w);
+                uniformValue = new float[]{x, y, z, w};
+            }
+        } else if ("mat4".equalsIgnoreCase(uniformType)) {
+            ReadableArray arr = value.asArray();
+            if (arr != null && arr.size() >= 16) {
+                float[] matrix = new float[16];
+                for (int i = 0; i < 16; i++) {
+                    matrix[i] = (float) arr.getDouble(i);
+                }
+                material.setShaderUniform(uniformName, matrix);
+                uniformValue = matrix;
+            }
+        } else if ("sampler2D".equalsIgnoreCase(uniformType)) {
+            String path = null;
+            ReadableType valueType = value.getType();
+            if (valueType == ReadableType.String) {
+                path = value.asString();
+            } else if (valueType == ReadableType.Map) {
+                ReadableMap sourceMap = value.asMap();
+                if (sourceMap.hasKey("source") && sourceMap.getType("source") == ReadableType.Map) {
+                    path = sourceMap.getMap("source").getString("uri");
+                } else if (sourceMap.hasKey("uri")) {
+                    path = sourceMap.getString("uri");
+                }
+            }
+            if (path != null) {
+                Texture texture = loadTextureFromPath(path);
+                if (texture != null) {
+                    material.setShaderUniform(uniformName, texture);
+                    uniformValue = path;
+                }
+            }
+        }
+
+        // Propagate uniform updates to:
+        // 1. Shader override clones (for shaderOverrides on 3D models)
+        // 2. All geometries using this material directly (for materials prop)
+        if (uniformValue != null) {
+            com.viromedia.bridge.component.node.VRTNode.updateShaderOverrideUniform(
+                materialName, uniformName, uniformType, uniformValue);
+        }
+
+        // Refresh all nodes using this material directly (materials={["name"]} prop)
+        // This re-applies the material with updated uniforms to the geometry
+        com.viromedia.bridge.component.node.VRTNode.refreshNodesUsingMaterial(materialName);
     }
 
     private void loadMaterials(ReadableMap newMaterials) {
@@ -352,6 +431,24 @@ public class MaterialManager extends ReactContextBaseJavaModule {
         parsePBRProperties(PBRProperties.ROUGHNESS, nativeMaterial, materialMap);
         parsePBRProperties(PBRProperties.AMBIENT_OCCLUSION_TEXTURE, nativeMaterial, materialMap);
 
+        // Parse shader modifiers
+        parseShaderModifiers(nativeMaterial, materialMap);
+
+        // Parse material/shader uniforms
+        parseShaderUniforms(nativeMaterial, materialMap);
+
+        // Parse semantic mask config
+        if (materialMap.hasKey("semanticMask")) {
+            ReadableMap maskConfig = materialMap.getMap("semanticMask");
+            if (maskConfig != null) {
+                String modeStr = maskConfig.hasKey("mode") ? maskConfig.getString("mode") : "showOnly";
+                int labelMask = maskConfig.hasKey("labelMask") ? maskConfig.getInt("labelMask") : 0;
+                // mode 0 = ShowOnly, mode 1 = Hide
+                int mode = "hide".equalsIgnoreCase(modeStr) ? 1 : 0;
+                nativeMaterial.setSemanticMaskEnabled(true, mode, labelMask);
+            }
+        }
+
         // We don't need to hold a Java texture reference after assigning the texture to the material.
         // Make an exception for the videoTexture as we use the nativeref to play,pause, loop the video.
         if (diffuseTexture != null && videoTexture == null) {
@@ -397,6 +494,199 @@ public class MaterialManager extends ReactContextBaseJavaModule {
             float value = (float)materialMap.getDouble(key);
             property.setPropertyForMaterial(material, value);
         }
+    }
+
+    private void parseShaderModifiers(Material material, ReadableMap materialMap) {
+        if (!materialMap.hasKey("shaderModifiers")) {
+            Log.d("VRTMaterialManager", "No shaderModifiers key in material map");
+            return;
+        }
+
+        ReadableMap modifiers = materialMap.getMap("shaderModifiers");
+        if (modifiers == null) {
+            Log.d("VRTMaterialManager", "shaderModifiers map is null");
+            return;
+        }
+
+        Log.d("VRTMaterialManager", "Parsing shader modifiers for material");
+
+        ReadableMapKeySetIterator iter = modifiers.keySetIterator();
+        while (iter.hasNextKey()) {
+            String entryPointName = iter.nextKey();
+            ReadableType type = modifiers.getType(entryPointName);
+
+            Log.d("VRTMaterialManager", "Processing entry point: " + entryPointName + ", type: " + type);
+
+            String modifierCode = null;
+            String[] varyings = null;
+            boolean requiresSceneDepth = false;
+            boolean requiresCameraTexture = false;
+
+            // Handle both string and dictionary formats
+            if (type == ReadableType.String) {
+                modifierCode = modifiers.getString(entryPointName);
+                Log.d("VRTMaterialManager", "String format, code length: " + (modifierCode != null ? modifierCode.length() : 0));
+            } else if (type == ReadableType.Map) {
+                ReadableMap modifierDict = modifiers.getMap(entryPointName);
+                String uniforms = modifierDict.hasKey("uniforms") ? modifierDict.getString("uniforms") : null;
+                String body = modifierDict.hasKey("body") ? modifierDict.getString("body") : null;
+
+                if (uniforms != null && uniforms.length() > 0) {
+                    modifierCode = uniforms + "\n" + (body != null ? body : "");
+                } else {
+                    modifierCode = body;
+                }
+
+                if (modifierCode == null) {
+                    Log.e("VRTMaterialManager", "Shader modifier dictionary must contain 'body' or 'uniforms' key");
+                    continue;
+                }
+                Log.d("VRTMaterialManager", "Map format, code length: " + modifierCode.length());
+
+                // Extract varyings if present
+                if (modifierDict.hasKey("varyings") && modifierDict.getType("varyings") == ReadableType.Array) {
+                    ReadableArray varyingsArr = modifierDict.getArray("varyings");
+                    varyings = new String[varyingsArr.size()];
+                    for (int i = 0; i < varyingsArr.size(); i++) {
+                        varyings[i] = varyingsArr.getString(i);
+                    }
+                }
+
+                // Extract requiresSceneDepth flag
+                if (modifierDict.hasKey("requiresSceneDepth")) {
+                    requiresSceneDepth = modifierDict.getBoolean("requiresSceneDepth");
+                }
+                // Extract requiresCameraTexture flag
+                if (modifierDict.hasKey("requiresCameraTexture")) {
+                    requiresCameraTexture = modifierDict.getBoolean("requiresCameraTexture");
+                }
+            } else {
+                Log.e("VRTMaterialManager", "Shader modifier must be string or dictionary with 'body' key");
+                continue;
+            }
+
+            if (modifierCode != null && modifierCode.length() > 0) {
+                Log.d("VRTMaterialManager", "Calling material.addShaderModifier for entry point: " + entryPointName);
+                material.addShaderModifier(entryPointName, modifierCode, varyings, requiresSceneDepth, requiresCameraTexture);
+                Log.d("VRTMaterialManager", "Successfully added shader modifier");
+            }
+        }
+    }
+
+    private void parseShaderUniforms(Material material, ReadableMap materialMap) {
+        // Check for both "materialUniforms" and "shaderUniforms" keys
+        String[] uniformKeys = {"materialUniforms", "shaderUniforms"};
+
+        for (String uniformKey : uniformKeys) {
+            if (!materialMap.hasKey(uniformKey)) {
+                continue;
+            }
+
+            ReadableType type = materialMap.getType(uniformKey);
+
+            // Support array format: [{name, type, value}, ...]
+            if (type == ReadableType.Array) {
+                ReadableArray uniforms = materialMap.getArray(uniformKey);
+                for (int i = 0; i < uniforms.size(); i++) {
+                    if (uniforms.getType(i) != ReadableType.Map) {
+                        continue;
+                    }
+
+                    ReadableMap uniform = uniforms.getMap(i);
+                    if (!uniform.hasKey("name") || !uniform.hasKey("type")) {
+                        continue;
+                    }
+
+                    String name = uniform.getString("name");
+                    String uniformType = uniform.getString("type");
+                    setShaderUniform(material, name, uniformType, uniform);
+                }
+            }
+            // Support dictionary format: {uniformName: {type, value}}
+            else if (type == ReadableType.Map) {
+                ReadableMap uniforms = materialMap.getMap(uniformKey);
+                ReadableMapKeySetIterator iter = uniforms.keySetIterator();
+
+                while (iter.hasNextKey()) {
+                    String name = iter.nextKey();
+                    if (uniforms.getType(name) != ReadableType.Map) {
+                        continue;
+                    }
+
+                    ReadableMap uniform = uniforms.getMap(name);
+                    if (!uniform.hasKey("type")) {
+                        continue;
+                    }
+
+                    String uniformType = uniform.getString("type");
+                    setShaderUniform(material, name, uniformType, uniform);
+                }
+            }
+        }
+    }
+
+    private void setShaderUniform(Material material, String name, String type, ReadableMap uniformData) {
+        if (!uniformData.hasKey("value")) {
+            return;
+        }
+
+        Log.d("VRTMaterialManager", "Setting shader uniform: " + name + " of type: " + type);
+
+        if ("float".equalsIgnoreCase(type)) {
+            float value = (float) uniformData.getDouble("value");
+            material.setShaderUniform(name, value);
+            Log.d("VRTMaterialManager", "Set float uniform: " + name + " = " + value);
+        } else if ("vec3".equalsIgnoreCase(type)) {
+            ReadableArray arr = uniformData.getArray("value");
+            if (arr != null && arr.size() >= 3) {
+                float x = (float) arr.getDouble(0);
+                float y = (float) arr.getDouble(1);
+                float z = (float) arr.getDouble(2);
+                material.setShaderUniform(name, x, y, z);
+                Log.d("VRTMaterialManager", "Set vec3 uniform: " + name);
+            }
+        } else if ("vec4".equalsIgnoreCase(type)) {
+            ReadableArray arr = uniformData.getArray("value");
+            if (arr != null && arr.size() >= 4) {
+                float x = (float) arr.getDouble(0);
+                float y = (float) arr.getDouble(1);
+                float z = (float) arr.getDouble(2);
+                float w = (float) arr.getDouble(3);
+                material.setShaderUniform(name, x, y, z, w);
+                Log.d("VRTMaterialManager", "Set vec4 uniform: " + name);
+            }
+        } else if ("mat4".equalsIgnoreCase(type)) {
+            ReadableArray arr = uniformData.getArray("value");
+            if (arr != null && arr.size() >= 16) {
+                float[] matrix = new float[16];
+                for (int i = 0; i < 16; i++) {
+                    matrix[i] = (float) arr.getDouble(i);
+                }
+                material.setShaderUniform(name, matrix);
+                Log.d("VRTMaterialManager", "Set mat4 uniform: " + name);
+            }
+        } else if ("sampler2D".equalsIgnoreCase(type)) {
+            String path = parseImagePath(uniformData, "value");
+            if (path != null) {
+                Texture texture = loadTextureFromPath(path);
+                if (texture != null) {
+                    material.setShaderUniform(name, texture);
+                    Log.d("VRTMaterialManager", "Set sampler2D uniform: " + name);
+                }
+            }
+        }
+    }
+
+    private Texture loadTextureFromPath(String path) {
+        Uri uri = Helper.parseUri(path, mContext);
+        ImageDownloader downloader = new ImageDownloader(mContext);
+        Bitmap imageBitmap = downloader.getImageSync(uri);
+        if (imageBitmap == null) {
+            Log.w("VRTMaterialManager", "loadTextureFromPath: failed to load image at: " + path);
+            return null;
+        }
+        Image nativeImage = new Image(imageBitmap, Texture.Format.RGBA8);
+        return new Texture(nativeImage, true, false);
     }
 
     private Texture parseTexture(Image image, boolean sRGB, boolean mipmap,

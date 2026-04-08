@@ -29,11 +29,15 @@
 
 #include <memory>
 #include <functional>
+#include <string>
+#include <vector>
+#include <map>
 #include "VROMaterialVisual.h"
 #include "VROAnimatable.h"
 #include "VROStringUtil.h"
 #include "VROThreadRestricted.h"
 #include "VRODriver.h"
+#include "VROSemantics.h"
 
 enum class VROFace {
     Front,
@@ -76,6 +80,7 @@ class VRODriver;
 class VROSortKey;
 class VROMaterialSubstrate;
 class VROShaderModifier;
+class VROTexture;
 
 /*
  Manages the lighting and shading attributes associated with the surface of a geometry that
@@ -358,6 +363,21 @@ public:
     }
 
     /*
+     Semantic masking. When enabled, fragments are shown or hidden based on
+     the semantic label of the underlying real-world pixel (requires ARCore
+     scene semantics to be enabled on the AR session).
+     */
+    void setSemanticMaskEnabled(bool enabled);
+    bool isSemanticMaskEnabled() const { return _semanticMaskEnabled; }
+
+    void setSemanticMaskMode(VROSemanticMaskMode mode);
+    VROSemanticMaskMode getSemanticMaskMode() const { return _semanticMaskMode; }
+
+    // Bitmask of VROSemanticLabel values (bit N = label N). Use (1 << label_int) to set bits.
+    void setSemanticLabelMask(uint16_t mask);
+    uint16_t getSemanticLabelMask() const { return _semanticLabelMask; }
+
+    /*
      Material rendering order; this should only be used to fix a rendering order between materials
      that are part of the same geometry. For cross-geometry rendering order, use
      VRONode::setRenderingOrder().
@@ -369,17 +389,56 @@ public:
         _renderingOrder = renderingOrder;
     }
 
+    void setShaderUniform(std::string name, float value) {
+        _shaderUniformFloats[name] = value;
+        // NOTE: Do NOT call updateSubstrate() - it deletes and recreates the shader binding!
+        // Uniforms are bound automatically during rendering via bindMaterialUniforms()
+    }
+    void setShaderUniform(std::string name, VROVector3f value) {
+        _shaderUniformVec3s[name] = value;
+        // NOTE: Do NOT call updateSubstrate() - it deletes and recreates the shader binding!
+    }
+    void setShaderUniform(std::string name, VROVector4f value) {
+        _shaderUniformVec4s[name] = value;
+        // NOTE: Do NOT call updateSubstrate() - it deletes and recreates the shader binding!
+    }
+    void setShaderUniform(std::string name, VROMatrix4f value) {
+        _shaderUniformMat4s[name] = value;
+        // NOTE: Do NOT call updateSubstrate() - it deletes and recreates the shader binding!
+    }
+    void setShaderUniform(std::string name, std::shared_ptr<VROTexture> texture) {
+        _shaderUniformTextures[name] = texture;
+        // Call updateSubstrateTextures() (not updateSubstrate()) to re-bind textures without
+        // destroying and recreating the shader binding.
+        updateSubstrateTextures();
+    }
+
+    const std::map<std::string, float> &getShaderUniformFloats() const { return _shaderUniformFloats; }
+    const std::map<std::string, VROVector3f> &getShaderUniformVec3s() const { return _shaderUniformVec3s; }
+    const std::map<std::string, VROVector4f> &getShaderUniformVec4s() const { return _shaderUniformVec4s; }
+    const std::map<std::string, VROMatrix4f> &getShaderUniformMat4s() const { return _shaderUniformMat4s; }
+    const std::map<std::string, std::shared_ptr<VROTexture>> &getShaderUniformTextures() const { return _shaderUniformTextures; }
+
     /*
      Shader modifiers.
      */
-    void addShaderModifier(std::shared_ptr<VROShaderModifier> modifier);
-    void removeShaderModifier(std::shared_ptr<VROShaderModifier> modifier);
-    bool hasShaderModifier(std::shared_ptr<VROShaderModifier> modifier);
+    void addShaderModifier(std::shared_ptr<VROShaderModifier> modifier) {
+        _shaderModifiers.push_back(modifier);
+        updateSubstrate();
+    }
+    void removeShaderModifier(std::shared_ptr<VROShaderModifier> modifier) {
+        _shaderModifiers.erase(std::remove(_shaderModifiers.begin(), _shaderModifiers.end(), modifier), _shaderModifiers.end());
+        updateSubstrate();
+    }
+    bool hasShaderModifier(std::shared_ptr<VROShaderModifier> modifier) {
+        return std::find(_shaderModifiers.begin(), _shaderModifiers.end(), modifier) != _shaderModifiers.end();
+    }
     const std::vector<std::shared_ptr<VROShaderModifier>> &getShaderModifiers() const {
         return _shaderModifiers;
     }
     void removeAllShaderModifiers() {
         _shaderModifiers.clear();
+        updateSubstrate();
     }
     
     /*
@@ -605,11 +664,30 @@ private:
     bool _needsToneMapping;
 
     /*
+     Semantic masking.
+     */
+    bool _semanticMaskEnabled = false;
+    VROSemanticMaskMode _semanticMaskMode = VROSemanticMaskMode::ShowOnly;
+    uint16_t _semanticLabelMask = 0;
+
+    // Shader modifier injected when semantic masking is enabled (kept to allow removal).
+    std::shared_ptr<VROShaderModifier> _semanticMaskModifier;
+
+    // Internal: inject or remove the semantic mask shader modifier.
+    void applySemanticMaskModifier();
+
+    /*
      The rendering order of this material, which determines when it is rendered in relation to
      other materials. See VROSortKey for where this falls within the hierarchy of renderinng sort
      concerns.
      */
     int _renderingOrder;
+
+    std::map<std::string, float> _shaderUniformFloats;
+    std::map<std::string, VROVector3f> _shaderUniformVec3s;
+    std::map<std::string, VROVector4f> _shaderUniformVec4s;
+    std::map<std::string, VROMatrix4f> _shaderUniformMat4s;
+    std::map<std::string, std::shared_ptr<VROTexture>> _shaderUniformTextures;
     
     /*
      Representation of this material in the underlying graphics hardware.

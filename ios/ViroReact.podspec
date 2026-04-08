@@ -44,6 +44,7 @@ Pod::Spec.new do |s|
   
   # Fabric-specific build configuration
   s.pod_target_xcconfig = {
+    'SWIFT_VERSION' => '5.0',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'HEADER_SEARCH_PATHS' => [
       '"$(PODS_TARGET_SRCROOT)/ViroReact"',

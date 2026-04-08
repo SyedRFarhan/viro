@@ -22,7 +22,7 @@ import {
 } from "react-native";
 import {
   ViroWorldOrigin,
-  ViroCloudAnchorProvider,
+  ViroProvider,
   ViroCloudAnchorStateChangeEvent,
   ViroHostCloudAnchorResult,
   ViroResolveCloudAnchorResult,
@@ -199,6 +199,20 @@ type Props = ViewProps & {
   occlusionMode?: ViroOcclusionMode;
 
   /**
+   * Enables depth sensing without activating occlusion rendering.
+   * Virtual objects will NOT be occluded by real-world surfaces, but depth data
+   * will be available for hit tests (DepthPoint type) and distance measurement.
+   *
+   * If occlusionMode="depthBased" is also set, occlusionMode takes precedence.
+   *
+   * Android: requires ARCore Depth API support (ARCore 1.18+).
+   * iOS: uses LiDAR on supported devices, monocular depth estimator as fallback.
+   *
+   * @default false
+   */
+  depthEnabled?: boolean;
+
+  /**
    * [Debug] Enable depth debug visualization to see how the depth texture is being sampled.
    * When enabled, the camera background will show a color overlay representing depth values:
    * - Magenta = No depth data
@@ -242,26 +256,71 @@ type Props = ViewProps & {
    * When set to 'arcore', the ARCore Cloud Anchors SDK will be used.
    * Requires a valid Google Cloud API key configured in the native project.
    *
-   * @default "none"
+   * @default false
+   */
+
+  /**
+   * Enable semantic segmentation debug visualization. When enabled, the camera
+   * background shows a color overlay for each real-world category (sky, building, tree,
+   * road, sidewalk, terrain, structure, object, vehicle, person, water).
+   * Requires `setSemanticModeEnabled(true)` to be called on the scene navigator first.
+   *
+   * @default false
+   */
+  semanticDebugEnabled?: boolean;
+
+  /**
+   * Confidence threshold (0.0–1.0) below which semantic labels are discarded (treated
+   * as unlabeled = 0) before the texture is uploaded to the GPU. Higher values reduce
+   * noise and boundary blinking at the cost of smaller labeled regions.
+   *
+   * Only used on Android (ARCore provides per-pixel confidence). On iOS, ARKit's
+   * segmentation is already temporally smoothed by the OS.
+   *
+   * @default 0.0
+   */
+  semanticConfidenceThreshold?: number;
+
+  /**
+   * [iOS Only] Prefer monocular depth estimation over LiDAR.
+   * When true, monocular depth will be used even on devices with LiDAR.
+   *
+   * Monocular depth is automatically used on non-LiDAR devices when depth-based
+   * occlusion is enabled. This prop allows forcing monocular depth on LiDAR devices.
+   *
+   * Useful for:
+   * - Consistency across all device types (same depth method)
+   * - Testing/comparison purposes
+   * - Extended range beyond LiDAR's ~5m limit
+   *
+   * Requires:
+   * - iOS 14.0+
+   * - Neural Engine (A12 Bionic or newer)
+   * - DepthPro.mlmodelc bundled in ViroKit
+   *
+   * @default false
+   * @platform ios
+   */
+  preferMonocularDepth?: boolean;
+
+  /**
+   * Cloud and geospatial anchor provider.
+   * Set to `"reactvision"` (default) for the ReactVision backend,
+   * `"arcore"` for Google Cloud Anchors, or `"none"` to disable.
+   *
+   * Replaces the old `cloudAnchorProvider` / `geospatialAnchorProvider` props,
+   * which are now deprecated. Both providers are set to the same value.
+   *
+   * @default "reactvision"
    * @platform ios,android
    */
-  cloudAnchorProvider?: ViroCloudAnchorProvider;
+  provider?: ViroProvider;
 
   /**
    * Callback fired when a cloud anchor state changes.
    * This includes progress updates during hosting/resolving operations.
    */
   onCloudAnchorStateChange?: (event: ViroCloudAnchorStateChangeEvent) => void;
-
-  /**
-   * Enable the ARCore Geospatial API for location-based AR experiences.
-   * When set to 'arcore', the ARCore Geospatial SDK will be used.
-   * Requires a valid Google Cloud API key configured in the native project.
-   *
-   * @default "none"
-   * @platform ios,android
-   */
-  geospatialAnchorProvider?: ViroGeospatialAnchorProvider;
 
   /**
    * Enable world mesh for physics collision with real-world surfaces.
@@ -943,7 +1002,9 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
    * Use this when exiting a scene or when cloud operations are no longer needed.
    */
   _cancelCloudAnchorOperations = () => {
-    ViroARSceneNavigatorModule.cancelCloudAnchorOperations(findNodeHandle(this));
+    ViroARSceneNavigatorModule.cancelCloudAnchorOperations(
+      findNodeHandle(this)
+    );
   };
 
   /**
@@ -992,11 +1053,12 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
    *
    * @returns Promise resolving to support status
    */
-  _isGeospatialModeSupported = async (): Promise<ViroGeospatialSupportResult> => {
-    return await ViroARSceneNavigatorModule.isGeospatialModeSupported(
-      findNodeHandle(this)
-    );
-  };
+  _isGeospatialModeSupported =
+    async (): Promise<ViroGeospatialSupportResult> => {
+      return await ViroARSceneNavigatorModule.isGeospatialModeSupported(
+        findNodeHandle(this)
+      );
+    };
 
   /**
    * Enable or disable geospatial mode.
@@ -1139,6 +1201,214 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     );
   };
 
+  /**
+   * ReactVision — save GPS coordinates to the backend and return a cross-device shareable UUID.
+   * Does NOT create a local AR anchor — call createGeospatialAnchor separately for AR placement.
+   *
+   * @param latitude     WGS84 latitude
+   * @param longitude    WGS84 longitude
+   * @param altitude     Altitude in metres
+   * @param altitudeMode "street_level" (default) or "rooftop_level"
+   * @returns Promise resolving to { success, anchorId } where anchorId is the platform UUID
+   */
+  _hostGeospatialAnchor = async (
+    latitude: number,
+    longitude: number,
+    altitude: number,
+    altitudeMode?: string
+  ): Promise<any> => {
+    return await ViroARSceneNavigatorModule.hostGeospatialAnchor(
+      findNodeHandle(this),
+      latitude,
+      longitude,
+      altitude,
+      altitudeMode || "street_level"
+    );
+  };
+
+  /**
+   * ReactVision — fetch GPS coordinates from the backend by platform UUID and create a local AR anchor.
+   * Combines rvGetGeospatialAnchor + createGeospatialAnchor into a single call.
+   *
+   * @param platformUuid UUID returned by hostGeospatialAnchor
+   * @param quaternion   Orientation [x, y, z, w] (default identity)
+   * @returns Promise resolving to { success, anchor: { anchorId, latitude, longitude, altitude } }
+   */
+  _resolveGeospatialAnchor = async (
+    platformUuid: string,
+    quaternion?: ViroQuaternion
+  ): Promise<any> => {
+    return await ViroARSceneNavigatorModule.resolveGeospatialAnchor(
+      findNodeHandle(this),
+      platformUuid,
+      quaternion || [0, 0, 0, 1]
+    );
+  };
+
+  /**
+   * ReactVision — fetch a geospatial anchor record by UUID.
+   * Returns the anchor with linked scene asset data (position, rotation, scale, fileUrl).
+   */
+  _rvGetGeospatialAnchor = async (anchorId: string): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvGetGeospatialAnchor(
+      findNodeHandle(this),
+      anchorId
+    );
+  };
+
+  /**
+   * ReactVision — find geospatial anchors near a GPS location.
+   * @param latitude  Centre latitude
+   * @param longitude Centre longitude
+   * @param radius    Search radius in metres (default 500)
+   * @param limit     Max results (default 50)
+   */
+  _rvFindNearbyGeospatialAnchors = async (
+    latitude: number,
+    longitude: number,
+    radius: number = 500,
+    limit: number = 50
+  ): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvFindNearbyGeospatialAnchors(
+      findNodeHandle(this),
+      latitude,
+      longitude,
+      radius,
+      limit
+    );
+  };
+
+  /**
+   * ReactVision — update a geospatial anchor (link scene asset, scene, or rename).
+   * Pass null/empty string to leave a field unchanged.
+   */
+  _rvUpdateGeospatialAnchor = async (
+    anchorId: string,
+    sceneAssetId?: string,
+    sceneId?: string,
+    name?: string,
+    userAssetId?: string
+  ): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvUpdateGeospatialAnchor(
+      findNodeHandle(this),
+      anchorId,
+      sceneAssetId ?? "",
+      sceneId ?? "",
+      name ?? "",
+      userAssetId ?? ""
+    );
+  };
+
+  _rvUploadAsset = async (
+    filePath: string,
+    assetType: string,
+    fileName: string,
+    appUserId?: string
+  ): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvUploadAsset(
+      findNodeHandle(this),
+      filePath,
+      assetType,
+      fileName,
+      appUserId ?? ""
+    );
+  };
+
+  /**
+   * ReactVision — permanently delete a geospatial anchor from the backend.
+   */
+  _rvDeleteGeospatialAnchor = async (anchorId: string): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvDeleteGeospatialAnchor(
+      findNodeHandle(this),
+      anchorId
+    );
+  };
+
+  _rvListGeospatialAnchors = async (limit: number, offset: number): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvListGeospatialAnchors(
+      findNodeHandle(this), limit, offset
+    );
+  };
+
+  // ===========================================================================
+  // Cloud Anchor Management API Methods
+  // ===========================================================================
+
+  _rvGetCloudAnchor = async (anchorId: string): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvGetCloudAnchor(findNodeHandle(this), anchorId);
+  };
+
+  _rvListCloudAnchors = async (limit: number, offset: number): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvListCloudAnchors(findNodeHandle(this), limit, offset);
+  };
+
+  _rvUpdateCloudAnchor = async (
+    anchorId: string,
+    name: string,
+    description: string,
+    isPublic: boolean
+  ): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvUpdateCloudAnchor(
+      findNodeHandle(this), anchorId, name, description, isPublic
+    );
+  };
+
+  _rvDeleteCloudAnchor = async (anchorId: string): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvDeleteCloudAnchor(findNodeHandle(this), anchorId);
+  };
+
+  _rvFindNearbyCloudAnchors = async (
+    latitude: number,
+    longitude: number,
+    radius: number,
+    limit: number
+  ): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvFindNearbyCloudAnchors(
+      findNodeHandle(this), latitude, longitude, radius, limit
+    );
+  };
+
+  _rvGetSceneAssets = async (sceneId: string): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvGetSceneAssets(
+      findNodeHandle(this), sceneId
+    );
+  };
+
+  _rvAttachAssetToCloudAnchor = async (
+    anchorId: string,
+    fileUrl: string,
+    fileSize: number,
+    name: string,
+    assetType: string,
+    externalUserId: string
+  ): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvAttachAssetToCloudAnchor(
+      findNodeHandle(this), anchorId, fileUrl, fileSize, name, assetType, externalUserId
+    );
+  };
+
+  _rvRemoveAssetFromCloudAnchor = async (anchorId: string, assetId: string): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvRemoveAssetFromCloudAnchor(
+      findNodeHandle(this), anchorId, assetId
+    );
+  };
+
+  _rvTrackCloudAnchorResolution = async (
+    anchorId: string,
+    success: boolean,
+    confidence: number,
+    matchCount: number,
+    inlierCount: number,
+    processingTimeMs: number,
+    platform: string,
+    externalUserId: string
+  ): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvTrackCloudAnchorResolution(
+      findNodeHandle(this), anchorId, success, confidence, matchCount,
+      inlierCount, processingTimeMs, platform, externalUserId
+    );
+  };
+
   // ===========================================================================
   // Scene Semantics API Methods
   // ===========================================================================
@@ -1179,11 +1449,12 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
    *
    * @returns Promise resolving to semantic label fractions
    */
-  _getSemanticLabelFractions = async (): Promise<ViroSemanticLabelFractionsResult> => {
-    return await ViroARSceneNavigatorModule.getSemanticLabelFractions(
-      findNodeHandle(this)
-    );
-  };
+  _getSemanticLabelFractions =
+    async (): Promise<ViroSemanticLabelFractionsResult> => {
+      return await ViroARSceneNavigatorModule.getSemanticLabelFractions(
+        findNodeHandle(this)
+      );
+    };
 
   /**
    * Get the fraction of pixels for a specific semantic label.
@@ -1656,9 +1927,29 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     getCameraGeospatialPose: this._getCameraGeospatialPose,
     checkVPSAvailability: this._checkVPSAvailability,
     createGeospatialAnchor: this._createGeospatialAnchor,
+    hostGeospatialAnchor: this._hostGeospatialAnchor,
+    resolveGeospatialAnchor: this._resolveGeospatialAnchor,
     createTerrainAnchor: this._createTerrainAnchor,
     createRooftopAnchor: this._createRooftopAnchor,
     removeGeospatialAnchor: this._removeGeospatialAnchor,
+    // ReactVision Geospatial CRUD
+    rvGetGeospatialAnchor: this._rvGetGeospatialAnchor,
+    rvFindNearbyGeospatialAnchors: this._rvFindNearbyGeospatialAnchors,
+    rvUpdateGeospatialAnchor: this._rvUpdateGeospatialAnchor,
+    rvDeleteGeospatialAnchor: this._rvDeleteGeospatialAnchor,
+    rvListGeospatialAnchors: this._rvListGeospatialAnchors,
+    // ReactVision Cloud Anchor Management
+    rvGetCloudAnchor: this._rvGetCloudAnchor,
+    rvListCloudAnchors: this._rvListCloudAnchors,
+    rvUpdateCloudAnchor: this._rvUpdateCloudAnchor,
+    rvDeleteCloudAnchor: this._rvDeleteCloudAnchor,
+    rvFindNearbyCloudAnchors: this._rvFindNearbyCloudAnchors,
+    rvAttachAssetToCloudAnchor: this._rvAttachAssetToCloudAnchor,
+    rvRemoveAssetFromCloudAnchor: this._rvRemoveAssetFromCloudAnchor,
+    rvTrackCloudAnchorResolution: this._rvTrackCloudAnchorResolution,
+    rvGetSceneAssets: this._rvGetSceneAssets,
+    // Assets API
+    rvUploadAsset: this._rvUploadAsset,
     // Scene Semantics API
     isSemanticModeSupported: this._isSemanticModeSupported,
     setSemanticModeEnabled: this._setSemanticModeEnabled,
@@ -1717,9 +2008,29 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     getCameraGeospatialPose: this._getCameraGeospatialPose,
     checkVPSAvailability: this._checkVPSAvailability,
     createGeospatialAnchor: this._createGeospatialAnchor,
+    hostGeospatialAnchor: this._hostGeospatialAnchor,
+    resolveGeospatialAnchor: this._resolveGeospatialAnchor,
     createTerrainAnchor: this._createTerrainAnchor,
     createRooftopAnchor: this._createRooftopAnchor,
     removeGeospatialAnchor: this._removeGeospatialAnchor,
+    // ReactVision Geospatial CRUD
+    rvGetGeospatialAnchor: this._rvGetGeospatialAnchor,
+    rvFindNearbyGeospatialAnchors: this._rvFindNearbyGeospatialAnchors,
+    rvUpdateGeospatialAnchor: this._rvUpdateGeospatialAnchor,
+    rvDeleteGeospatialAnchor: this._rvDeleteGeospatialAnchor,
+    rvListGeospatialAnchors: this._rvListGeospatialAnchors,
+    // ReactVision Cloud Anchor Management
+    rvGetCloudAnchor: this._rvGetCloudAnchor,
+    rvListCloudAnchors: this._rvListCloudAnchors,
+    rvUpdateCloudAnchor: this._rvUpdateCloudAnchor,
+    rvDeleteCloudAnchor: this._rvDeleteCloudAnchor,
+    rvFindNearbyCloudAnchors: this._rvFindNearbyCloudAnchors,
+    rvAttachAssetToCloudAnchor: this._rvAttachAssetToCloudAnchor,
+    rvRemoveAssetFromCloudAnchor: this._rvRemoveAssetFromCloudAnchor,
+    rvTrackCloudAnchorResolution: this._rvTrackCloudAnchorResolution,
+    rvGetSceneAssets: this._rvGetSceneAssets,
+    // Assets API
+    rvUploadAsset: this._rvUploadAsset,
     // Scene Semantics API
     isSemanticModeSupported: this._isSemanticModeSupported,
     setSemanticModeEnabled: this._setSemanticModeEnabled,
@@ -1772,14 +2083,20 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
       delete this.sceneNavigator.viroAppProps?.rootTag;
     }
 
-    const { viroAppProps = {} } = this.props;
+    const {
+      viroAppProps = {},
+      provider = "reactvision",
+      ...restProps
+    } = this.props;
 
     return (
       <VRTARSceneNavigator
         ref={(component) => {
           this._component = component;
         }}
-        {...this.props}
+        {...restProps}
+        cloudAnchorProvider={provider}
+        geospatialAnchorProvider={provider}
         viroAppProps={viroAppProps}
         currentSceneIndex={this.state.currentSceneIndex}
         style={(this.props.style, styles.container)}

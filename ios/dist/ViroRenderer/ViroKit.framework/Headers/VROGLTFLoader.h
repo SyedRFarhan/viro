@@ -37,6 +37,8 @@
 #include "VROMaterial.h"
 #include "VROModelIOUtil.h"
 #include "VROByteBuffer.h"
+#include "VROVector3f.h"
+#include "VROQuaternion.h"
 
 class VROMorpher;
 class VRONode;
@@ -119,7 +121,7 @@ private:
     static bool processCamera(const tinygltf::Model &gModel, std::shared_ptr<VRONode> &node, int cameraIndex);
     static bool processLight(const tinygltf::Model &gModel, std::shared_ptr<VRONode> &node, int lightIndex);
     static bool processMesh(const tinygltf::Model &gModel, std::shared_ptr<VRONode> &node, const tinygltf::Mesh &gMesh,
-                            std::shared_ptr<VRODriver> driver);
+                            int meshIndex, std::shared_ptr<VRODriver> driver);
     static bool processSkin(const tinygltf::Model &gModel, std::shared_ptr<VRONode> &node, int skinIndex);
     static bool processVertexElement(const tinygltf::Model &gModel, const tinygltf::Primitive &gPrimitive,
                                      std::vector<std::shared_ptr<VROGeometryElement>> &element);
@@ -143,6 +145,7 @@ private:
                                     std::map<int, std::shared_ptr<VROMorpher>> &morphers,
                                     std::shared_ptr<VRODriver> driver);
     static std::string getMorphTargetName(const tinygltf::Model &gModel,
+                                          const tinygltf::Mesh &gMesh,
                                           const tinygltf::Primitive &gPrimtive, int targetIndex);
 
     static void injectGLTF(std::shared_ptr<VRONode> gltfNode, std::shared_ptr<VRONode> rootNode,
@@ -186,7 +189,8 @@ private:
     static bool processKeyFrameAnimations(const tinygltf::Model &gModel,
                                          std::map<int, std::map<int, std::vector<int>>> &gltfAnimatedNodes);
     static void flattenSkeletalKeyframeAnimations(
-            std::map<int, std::pair<int, std::vector<int>>> &skeletalAnimToNodeSkinPair);
+            std::map<int, std::pair<int, std::vector<int>>> &skeletalAnimToNodeSkinPair,
+            int skinIndex);
     static std::shared_ptr<VROKeyframeAnimation> convertChannelToKeyFrameAnimation(
                                                   const tinygltf::Model &gModel,
                                                   const tinygltf::Animation &anim,
@@ -195,9 +199,11 @@ private:
                                       std::string channelProperty,
                                       int channelTarget,
                                       const tinygltf::AnimationSampler &gChannelSampler,
-                                      std::vector<std::unique_ptr<VROKeyframeAnimationFrame>> &framesOut);
+                                      std::vector<std::unique_ptr<VROKeyframeAnimationFrame>> &framesOut,
+                                      float animDuration = 1.0f);
+    // skeletalAnimToSkinToNodeMap: animIndex → vector of (skinIndex, animatedJointNodeIndices)
     static bool processSkeletalAnimation(const tinygltf::Model &gModel,
-                                         std::map<int, std::pair<int, std::vector<int>>> &skeletalAnimToSkinToNodeMap);
+                                         std::map<int, std::vector<std::pair<int, std::vector<int>>>> &skeletalAnimToSkinToNodeMap);
     static bool processSkeletalTransformsForFrame(const tinygltf::Model &gModel,
                                                   int skin,
                                                   int animation,
@@ -210,6 +216,7 @@ private:
                                               const tinygltf::Skin &skin,
                                               std::vector<VROMatrix4f> &invBindTransformsOut);
     static void clearCachedData();
+    static void injectBindPoseAnimations();
 
     /*
      As multiple mesh attributes may point to the same texture or data arrays when loading a
@@ -230,12 +237,50 @@ private:
     static std::map<int, int> _skinIndexToSkeletonRootJoint;
 
     /*
+     Per-mesh bone attribute sources cached during processMesh so that processNode can wire them
+     into the VROSkinner once both mesh geometry and skin data are available.
+     Keyed by glTF mesh index.
+     */
+    static std::map<int, std::shared_ptr<VROGeometrySource>> _meshBoneIndices;
+    static std::map<int, std::shared_ptr<VROGeometrySource>> _meshBoneWeights;
+
+    /*
+     Maps each glTF node index to its parent node index. Needed to walk up the scene graph
+     for multi-skin models where a skin's root joint has non-joint ancestors (e.g. a visor
+     skin whose root is the Neck joint, whose ancestors Hips/Spine are only in the body skin).
+     Populated in processSkinner(), cleared in clearCachedData().
+     */
+    static std::map<int, int> _nodeParentMap;
+
+    /*
+     Maps each skin index to the set of node indices that are ancestors of that skin's mesh
+     node (the glTF node that has gNode.skin == skinIndex). These ancestors are already applied
+     by Viro's renderer as the mesh node's modelMatrix, so the ancestor walk in
+     processSkeletalTransformsForFrame must stop before including them to avoid double-applying
+     transforms (e.g. Character's scale=0.01 being applied twice → model becomes invisible).
+     Populated in processSkinner(), cleared in clearCachedData().
+     */
+    static std::map<int, std::set<int>> _skinMeshAncestors;
+
+    /*
      Cached maps of nodeIndexes to it's corresponding animations. These caches are cleared
      out after the parsing of a single gLTF model. Note that _nodeKeyFrameAnims is of the form:
      <nodeIndex , <animationIndex, VROKeyframeAnimation>>> _nodeKeyframeAnims.
      */
     static std::map<int, std::map<int, std::vector<std::shared_ptr<VROKeyframeAnimation>>>> _nodeKeyFrameAnims;
     static std::map<int, std::vector<std::shared_ptr<VROSkeletalAnimation>>> _skinSkeletalAnims;
+
+    /*
+     Per-node VRONode references and bind-pose TRS, populated during processNode for any node
+     that has keyframe animations. Used by injectBindPoseAnimations() to create single-frame
+     bind-pose reset animations for animation names a node doesn't participate in.
+     Without these, switching animations leaves non-driven nodes at the previous animation's
+     final pose, causing visible mesh disassembly.
+     */
+    static std::map<int, std::shared_ptr<VRONode>> _nodeGLTFMap;
+    static std::map<int, VROVector3f>   _nodeBindPos;
+    static std::map<int, VROVector3f>   _nodeBindScale;
+    static std::map<int, VROQuaternion> _nodeBindRot;
 
     /*
      Returns the local transform of the node index retried from the gltf model.

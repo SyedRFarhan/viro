@@ -33,6 +33,7 @@
 RCT_EXPORT_MODULE()
 
 RCT_EXPORT_VIEW_PROPERTY(source, NSDictionary)
+RCT_EXPORT_VIEW_PROPERTY(resources, NSArray)
 RCT_EXPORT_VIEW_PROPERTY(animation, NSDictionary)
 RCT_EXPORT_VIEW_PROPERTY(morphTargets, NSArray<NSDictionary *>)
 RCT_EXPORT_VIEW_PROPERTY(onAnimationStartViro, RCTDirectEventBlock)
@@ -43,6 +44,7 @@ RCT_EXPORT_VIEW_PROPERTY(scale, NSNumberArray)
 RCT_EXPORT_VIEW_PROPERTY(rotationPivot, NSNumberArray)
 RCT_EXPORT_VIEW_PROPERTY(scalePivot, NSNumberArray)
 RCT_EXPORT_VIEW_PROPERTY(materials, NSArray<NSString *>)
+RCT_EXPORT_VIEW_PROPERTY(shaderOverrides, NSArray<NSString *>)
 RCT_EXPORT_VIEW_PROPERTY(type, NSString)
 RCT_EXPORT_VIEW_PROPERTY(renderingOrder, int)
 RCT_EXPORT_VIEW_PROPERTY(visible, BOOL)
@@ -76,6 +78,8 @@ RCT_EXPORT_VIEW_PROPERTY(shadowCastingBitMask, int)
 RCT_EXPORT_VIEW_PROPERTY(ignoreEventHandling, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(dragType, NSString)
 RCT_EXPORT_VIEW_PROPERTY(dragPlane, NSDictionary)
+RCT_EXPORT_VIEW_PROPERTY(shaderModifiers, NSDictionary)
+RCT_EXPORT_VIEW_PROPERTY(materialUniforms, NSDictionary)
 - (VRT3DObject *)view
 {
     return [[VRT3DObject alloc] initWithBridge:self.bridge];

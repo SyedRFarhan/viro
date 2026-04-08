@@ -73,11 +73,12 @@
 @end
 
 @implementation VRT3DObject {
-    
+
     NSURL *_url;
     std::shared_ptr<VROMaterial> _objMaterial;
     BOOL _sourceChanged;
     BOOL _modelLoaded;
+    NSArray *_resources;
 
 }
 
@@ -107,12 +108,19 @@
     _sourceChanged = YES;
 }
 
+- (void)setResources:(NSArray *)resources {
+    _resources = resources;
+    _sourceChanged = YES;
+}
+
 - (void)setMorphTargets:(NSArray *)morphTargets {
     _morphTargets = morphTargets;
     if (!_modelLoaded){
         return;
     }
-    
+
+    std::set<std::shared_ptr<VROMorpher>> allMorphers = self.node->getMorphers(true);
+
     for (NSDictionary *target in morphTargets) {
         // Grab the target key and values
         NSObject *targetObject = [target objectForKey:@"target"];
@@ -123,9 +131,8 @@
         NSString *key = (NSString *) targetObject;
         float value = [[target objectForKey:@"weight"] floatValue];
         std::string targetStr = std::string([key UTF8String]);
-        
-        std::set<std::shared_ptr<VROMorpher>> morphers = self.node->getMorphers(true);
-        for (auto morph : morphers) {
+
+        for (auto morph : allMorphers) {
             morph->setWeightForTarget(targetStr, value);
         }
     }
@@ -201,11 +208,18 @@
         if (success && strongSelf) {
             strongSelf->_modelLoaded = YES;
             [strongSelf setMorphTargets:strongSelf->_morphTargets];
-            
+
             if (strongSelf.materials) {
-                [strongSelf applyMaterials];
+                // Apply materials recursively so child geometry nodes (sub-meshes) of the model
+                // also receive the rendering properties, but textures are preserved via merge logic.
+                [strongSelf applyMaterialsRecursive:YES];
             }
-            
+
+            // Apply shader overrides if specified (preserves textures)
+            if (strongSelf.shaderOverrides) {
+                [strongSelf applyShaderOverridesRecursive:YES];
+            }
+
             [weakSelf updateAnimation];
         }
 
@@ -232,7 +246,53 @@
     if ([_type caseInsensitiveCompare:@"OBJ"] == NSOrderedSame) {
         VROOBJLoader::loadOBJFromResource(url, VROResourceType::URL, self.node, self.driver, onFinish);
     } else if ([_type caseInsensitiveCompare:@"VRX"] == NSOrderedSame) {
-        VROFBXLoader::loadFBXFromResource(url, VROResourceType::URL, self.node, self.driver, onFinish);
+        if (_resources && _resources.count > 0) {
+            // Convert NSArray of resource dictionaries to std::map<std::string, std::string>
+            // Each resource is a dictionary with {uri: "...", name: "..."} from resolveAssetSource
+            std::map<std::string, std::string> resourceMap;
+            for (NSDictionary *resource in _resources) {
+                if ([resource isKindOfClass:[NSDictionary class]]) {
+                    NSString *uri = resource[@"uri"];
+                    NSString *filename = nil;
+
+                    // Extract filename from URI
+                    NSURL *url = [NSURL URLWithString:uri];
+
+                    // For Metro bundler URLs, the filename is in the unstable_path query parameter
+                    if (url && url.query) {
+                        NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+                        for (NSURLQueryItem *item in components.queryItems) {
+                            if ([item.name isEqualToString:@"unstable_path"]) {
+                                // unstable_path contains the relative path like "./assets/models/cloud_anim/file.png?platform=ios&hash=..."
+                                NSString *unstablePath = [item.value stringByRemovingPercentEncoding];
+
+                                // Strip any query parameters from the unstable_path itself
+                                NSRange queryStart = [unstablePath rangeOfString:@"?"];
+                                if (queryStart.location != NSNotFound) {
+                                    unstablePath = [unstablePath substringToIndex:queryStart.location];
+                                }
+
+                                filename = [unstablePath lastPathComponent];
+                                break;
+                            }
+                        }
+                    }
+
+                    // Fallback: extract from URL path (for file:// URLs)
+                    if (!filename || filename.length == 0) {
+                        NSString *path = url.path ?: uri;
+                        filename = [[path lastPathComponent] stringByRemovingPercentEncoding];
+                    }
+
+                    if (uri && filename && filename.length > 0) {
+                        resourceMap[std::string([filename UTF8String])] = std::string([uri UTF8String]);
+                    }
+                }
+            }
+            VROFBXLoader::loadFBXFromResources(url, VROResourceType::URL, self.node, resourceMap, self.driver, onFinish);
+        } else {
+            VROFBXLoader::loadFBXFromResource(url, VROResourceType::URL, self.node, self.driver, onFinish);
+        }
     } else if ([_type caseInsensitiveCompare:@"GLTF"] == NSOrderedSame) {
         VROGLTFLoader::loadGLTFFromResource(url, {},  VROResourceType::URL, self.node, false, self.driver, onFinish);
     } else if ([_type caseInsensitiveCompare:@"GLB"] == NSOrderedSame) {

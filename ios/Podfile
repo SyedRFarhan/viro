@@ -25,6 +25,14 @@ target 'ViroReact' do
   )
 
   post_install do |installer|
+    # https://github.com/facebook/react-native/blob/main/packages/react-native/scripts/react_native_pods.rb#L197-L202
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      # :ccache_enabled => true
+    )
+
     # Exclude Hermes targets from building sources to avoid compiler errors in library build
     # The consumer app will build these correctly
     installer.pods_project.targets.each do |target|
@@ -33,11 +41,18 @@ target 'ViroReact' do
           config.build_settings['EXCLUDED_SOURCE_FILE_NAMES'] = '*'
         end
       end
-    end
 
-    # Set C++20 for library targets
-    installer.pods_project.build_configurations.each do |config|
-      config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++20'
+      target.build_configurations.each do |config|
+        config.build_settings['SWIFT_VERSION'] = '5.0'
+
+        # fmt/base.h unconditionally redefines FMT_USE_CONSTEVAL based on __cplusplus,
+        # so preprocessor defines are overwritten. The reliable fix is to compile fmt
+        # in C++17 mode: FMT_CPLUSPLUS (201703L) < 201709L → FMT_USE_CONSTEVAL = 0.
+        # All other pods stay in C++20 (React-perflogger needs std::unordered_map::contains).
+        if target.name == 'fmt'
+          config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+        end
+      end
     end
   end
 end

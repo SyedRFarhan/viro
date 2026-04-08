@@ -6,13 +6,13 @@ uniform highp vec3 camera_position;
 uniform highp vec4 material_diffuse_surface_color;
 uniform highp float material_diffuse_intensity;
 uniform lowp float material_alpha;
-uniform lowp float material_alpha_cutoff;
 uniform lowp float material_shininess;
 uniform highp float material_roughness;
 uniform highp float material_roughness_intensity;
 uniform highp float material_metalness;
 uniform highp float material_metalness_intensity;
 uniform highp float material_ao;
+uniform lowp float material_alpha_cutoff;
 uniform highp vec3 material_emissive_color;
 uniform highp mat4 material_diffuse_contents_transform;
 
@@ -23,6 +23,7 @@ uniform highp mat4 material_diffuse_contents_transform;
 in lowp mat3 v_tbn;
 in highp vec2 v_texcoord;
 in highp vec3 v_surface_position;
+#pragma varying_in_declarations
 
 layout (location = 0) out highp vec4 frag_color;
 
@@ -70,7 +71,6 @@ void main() {
                                     material_emissive_color,
                                     _surface.alpha * _surface.diffuse_color.a);
 
-    // Alpha masking: discard fragments below the cutoff threshold
     if (material_alpha_cutoff > 0.0 && _output_color.a < material_alpha_cutoff) {
         discard;
     }

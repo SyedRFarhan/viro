@@ -15,6 +15,7 @@ import {
   ImageResolvedAssetSource,
   NativeModules,
   processColor,
+  TurboModuleRegistry,
 } from "react-native";
 
 // @ts-ignore
@@ -24,7 +25,13 @@ import { getAssetByID } from "react-native/Libraries/Image/AssetRegistry";
 import resolveAssetSource from "react-native/Libraries/Image/resolveAssetSource";
 import { ViroSource } from "../Types/ViroUtils";
 
-var MaterialManager = NativeModules.VRTMaterialManager;
+var MaterialManager =
+  NativeModules.VRTMaterialManager ||
+  TurboModuleRegistry.get("VRTMaterialManager");
+console.log(
+  "VRTMaterialManager lookup:",
+  MaterialManager ? "FOUND" : "NOT FOUND"
+);
 
 // Reflective textures are cube maps(nx, px, ny, py, nz, pz), which is
 // left(negative x), right(positive x), down(neg y), up(pos y), forward(neg z), backward(pos z)
@@ -47,16 +54,75 @@ export type ViroResolvedCubeMap = {
   pz: ImageResolvedAssetSource;
 };
 
-export type ViroShaderEntryPoint =
-  | "geometry"
-  | "vertex"
-  | "surface"
-  | "lighting"
-  | "fragment";
+export type ViroSemanticMaskMode = "showOnly" | "hide" | "debug";
 
-export type ViroShaderModifiers = Partial<
-  Record<ViroShaderEntryPoint, string[]>
->;
+export type ViroSemanticLabel =
+  | "sky"
+  | "building"
+  | "tree"
+  | "road"
+  | "sidewalk"
+  | "terrain"
+  | "structure"
+  | "object"
+  | "vehicle"
+  | "person"
+  | "water";
+
+export type ViroSemanticMaskConfig = {
+  /** Whether to show the material only where the label matches, or to hide it there. */
+  mode: ViroSemanticMaskMode;
+  /** One or more semantic labels to match against. */
+  labels: ViroSemanticLabel[];
+};
+
+// Maps VROSemanticLabel enum value → bit position (bit N = label N, value 1-11).
+const kSemanticLabelBit: Record<ViroSemanticLabel, number> = {
+  sky:       1 << 1,
+  building:  1 << 2,
+  tree:      1 << 3,
+  road:      1 << 4,
+  sidewalk:  1 << 5,
+  terrain:   1 << 6,
+  structure: 1 << 7,
+  object:    1 << 8,
+  vehicle:   1 << 9,
+  person:    1 << 10,
+  water:     1 << 11,
+};
+
+export type ViroShaderModifier = {
+  body?: string;
+  uniforms?: string;
+  /** Typed varying declarations shared between vertex and fragment stages.
+   *  Each string is a GLSL type+name pair, e.g. "highp float displacement".
+   *  The 'out' / 'in' qualifiers are added automatically. */
+  varyings?: string[];
+  /** When true the modifier may declare and sample
+   *  'uniform sampler2D scene_depth_texture'.
+   *  The engine auto-binds the previous frame's scene depth buffer (HDR mode only).
+   *  The sampler is bound by name — this flag is informational metadata. */
+  requiresSceneDepth?: boolean;
+  /** When true the modifier may declare and sample 'uniform sampler2D camera_texture'.
+   *  The engine auto-binds the live AR camera background texture.
+   *  On Android (ARCore) the OES extension and samplerExternalOES are injected automatically.
+   *  A 'uniform mat4 camera_image_transform' is also auto-bound for UV mapping. */
+  requiresCameraTexture?: boolean;
+};
+
+export type ViroShaderModifiers = {
+  geometry?: string | ViroShaderModifier;
+  vertex?: string | ViroShaderModifier;
+  surface?: string | ViroShaderModifier;
+  fragment?: string | ViroShaderModifier;
+  lightingModel?: string | ViroShaderModifier;
+};
+
+export type ViroShaderUniform = {
+  name: string;
+  type: "float" | "vec2" | "vec3" | "vec4" | "mat4" | "sampler2D";
+  value: any;
+};
 
 export type ViroMaterial = {
   shininess?: number;
@@ -86,6 +152,11 @@ export type ViroMaterial = {
   metalnessTexture?: any; // TODO: types
   ambientOcclusionTexture?: any; // TODO: types
   shaderModifiers?: ViroShaderModifiers;
+  materialUniforms?: ViroShaderUniform[];
+  /** Semantic masking — shows or hides the material based on ARCore scene semantics labels.
+   *  Requires `setSemanticModeEnabled(true)` on the AR scene navigator.
+   *  Only supported on Android (ARCore). Gracefully no-ops on iOS. */
+  semanticMask?: ViroSemanticMaskConfig;
 };
 
 export type ViroMaterialDict = {
@@ -125,20 +196,39 @@ export class ViroMaterials {
             }
 
             var source = resolveAssetSource(material[prop]);
-            source["type"] = assetType;
-            resultMaterial[prop] = source;
+            if (source) {
+              source["type"] = assetType;
+              resultMaterial[prop] = source;
+            }
           }
         } else if (prop.endsWith("color") || prop.endsWith("Color")) {
           var color = processColor(material[prop]);
           resultMaterial[prop] = color;
+        } else if (prop === "semanticMask") {
+          const config = material[prop] as ViroSemanticMaskConfig;
+          let labelMask = 0;
+          for (const label of config.labels) {
+            labelMask |= kSemanticLabelBit[label] ?? 0;
+          }
+          resultMaterial["semanticMask"] = {
+            mode: config.mode,
+            labelMask,
+          };
         } else {
           //just apply material property directly.
           resultMaterial[prop] = material[prop];
         }
-        result[key] = resultMaterial;
       }
+      result[key] = resultMaterial;
     }
-    MaterialManager.setJSMaterials(result);
+
+    if (MaterialManager) {
+      MaterialManager.setJSMaterials(result);
+    } else {
+      console.error(
+        "ViroMaterials: MaterialManager (NativeModules.VRTMaterialManager) is not available!"
+      );
+    }
   }
 
   /*
@@ -150,5 +240,42 @@ export class ViroMaterials {
    */
   static deleteMaterials(materials: any) {
     MaterialManager.deleteMaterials(materials);
+  }
+
+  /**
+   * Update a shader uniform value for a specific material.
+   * This allows runtime animation of shader modifiers.
+   *
+   * @param materialName - The name of the material to update
+   * @param uniformName - The name of the uniform variable (e.g., "time")
+   * @param uniformType - The type of the uniform ("float", "vec2", "vec3", "vec4", "mat4", "sampler2D")
+   * @param value - The new value (number for float, array for vectors/matrices)
+   *
+   * @example
+   * // Update time uniform for animation
+   * ViroMaterials.updateShaderUniform("wobblySphere", "time", "float", Date.now());
+   *
+   * @example
+   * // Update color uniform
+   * ViroMaterials.updateShaderUniform("myMaterial", "glowColor", "vec3", [1.0, 0.5, 0.0]);
+   */
+  static updateShaderUniform(
+    materialName: string,
+    uniformName: string,
+    uniformType: "float" | "vec2" | "vec3" | "vec4" | "mat4" | "sampler2D",
+    value: number | number[] | any
+  ) {
+    if (!MaterialManager) {
+      console.error(
+        "ViroMaterials: MaterialManager is not available for uniform update"
+      );
+      return;
+    }
+    MaterialManager.updateShaderUniform(
+      materialName,
+      uniformName,
+      uniformType,
+      value
+    );
   }
 }
