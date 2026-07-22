@@ -30,7 +30,9 @@
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000
 #include "VROARSession.h"
 #include "VROViewport.h"
+#include "VROARMeshAnchor.h"
 #include <ARKit/ARKit.h>
+#include <AVFoundation/AVFoundation.h>
 #include <map>
 #include <vector>
 
@@ -83,6 +85,11 @@ public:
                          int ttlDays,
                          std::function<void(std::shared_ptr<VROARAnchor>)> onSuccess,
                          std::function<void(std::string error)> onFailure);
+    void hostCloudAnchorWithNativeAnchor(
+        ARAnchor *nativeAnchor,
+        int ttlDays,
+        std::function<void(std::shared_ptr<VROARAnchor>)> onSuccess,
+        std::function<void(std::string error)> onFailure);
     void resolveCloudAnchor(std::string anchorId,
                             std::function<void(std::shared_ptr<VROARAnchor> anchor)> onSuccess,
                             std::function<void(std::string error)> onFailure);
@@ -105,6 +112,13 @@ public:
     }
     void setVideoQuality(VROVideoQuality quality);
     void setVisionModel(std::shared_ptr<VROVisionModel> visionModel);
+
+    /*
+     Capture a high-resolution frame using ARKit's captureHighResolutionFrame (iOS 16+).
+     Returns true if the capture was initiated, false if not supported.
+     */
+    bool captureHighResolutionFrame(
+        std::function<void(CVPixelBufferRef image, VROMatrix4f cameraTransform, NSError *error)> completion);
 
     // Occlusion support
     void setOcclusionMode(VROOcclusionMode mode) override;
@@ -130,6 +144,7 @@ public:
      Set the base URL from which to download the depth model.
      The full URL will be: baseURL/DepthPro.mlmodelc.zip
      */
+
 
     // Geospatial API
     void setGeospatialAnchorProvider(VROGeospatialAnchorProvider provider) override;
@@ -220,6 +235,15 @@ public:
      Get the native ARSession object for anchor creation.
      */
     ARSession *getARSession() const { return _session; }
+    ARSession *getNativeARSession() const { return _session; }
+    ARSession *getNativeARSessioniOS() const { return _session; }
+    ARConfiguration *getSessionConfiguration() const { return _sessionConfiguration; }
+
+    #pragma mark - World Map Capture for Session Resume
+    void captureWorldMapForResume();
+    bool hasCapturedWorldMap() const;
+    ARWorldMap *getCapturedWorldMap() const;
+    void clearCapturedWorldMap();
 
 private:
     
@@ -354,6 +378,11 @@ private:
     bool _preferMonocularDepth;  // When true, use monocular even on LiDAR devices
     bool _monocularDepthLoading;
     std::shared_ptr<VRODriver> _driver;
+
+    /*
+     Captured world map for session resume after backgrounding.
+     */
+    ARWorldMap *_capturedWorldMap;
 
     void updateTrackingType(VROTrackingType trackingType);
     void initializeMonocularDepthEstimator(NSString *modelPath);

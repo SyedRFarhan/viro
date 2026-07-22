@@ -216,7 +216,6 @@
 		A5F6D4051E4B179700655F60 /* VRTControllerManager.mm in Sources */ = {isa = PBXBuildFile; fileRef = A5F6D4041E4B179700655F60 /* VRTControllerManager.mm */; };
 		B1474D6075ADD7ABC3883EAA /* VROFrameCaptureService.mm in Sources */ = {isa = PBXBuildFile; fileRef = 81F15EEF2FA6130600ADADBE /* VROFrameCaptureService.mm */; };
 		C804D4054990F4A70018B918 /* VROFrameRingBuffer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1DC6D4389479C41D1552395A /* VROFrameRingBuffer.mm */; };
-
 		E139A8EB2E0B9C6A0050EC9A /* BuildFile in Sources */ = {isa = PBXBuildFile; };
 		E139A8EC2E0B9C6A0050EC9A /* BuildFile in Sources */ = {isa = PBXBuildFile; };
 		E139A8ED2E0B9C6A0050EC9A /* BuildFile in Sources */ = {isa = PBXBuildFile; };
@@ -847,7 +846,6 @@
 		13F630342057642500A74EFC /* VRT3DSceneNavigator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VRT3DSceneNavigator.h; sourceTree = "<group>"; };
 		13F630352057644D00A74EFC /* VRT3DSceneNavigator.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = VRT3DSceneNavigator.mm; sourceTree = "<group>"; };
 		1DC6D4389479C41D1552395A /* VROFrameRingBuffer.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = VROFrameRingBuffer.mm; sourceTree = "<group>"; };
-		AB1E81C536C9046803693831 /* libPods-ViroReact.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-ViroReact.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C4C156252C1B5F692120D90 /* VRODetectionResolver.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = VRODetectionResolver.mm; sourceTree = "<group>"; };
 		81F15EEF2FA6130600ADADBE /* VROFrameCaptureService.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = VROFrameCaptureService.mm; sourceTree = "<group>"; };
 		8983C0BABC2851CD7FB27DF7 /* VROFrameRingBuffer.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = VROFrameRingBuffer.h; sourceTree = "<group>"; };
@@ -1093,14 +1091,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		D36A8CD2C4DBF931585756EA /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				AB1E81C536C9046803693831 /* libPods-ViroReact.a */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		77F74095230E12AF203B5980 /* VROCapture */ = {
 			isa = PBXGroup;
 			children = (

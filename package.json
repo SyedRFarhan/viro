@@ -1,16 +1,16 @@
 {
-  "name": "@reactvision/react-viro",
+  "name": "@syedrfarhan/react-viro",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "version": "2.61.45",
+  "version": "2.61.48",
   "license": "MIT",
   "publishConfig": {
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://npm.pkg.github.com"
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/ReactVision/viro.git"
+    "url": "git+ssh://git@github.com/SyedRFarhan/viro.git"
   },
   "description": "Maintained version of react-viro - New Architecture (Fabric) required",
   "scripts": {
@@ -39,22 +39,28 @@
     }
   },
   "files": [
-    "index.d.ts",
-    "index.js",
-    "index.ts",
-    "components",
     "dist",
-    "docs",
-    "scripts",
-    "examples",
     "app.plugin.js",
+    "plugins",
+    "react-native.config.js",
     "android/react_viro",
     "android/viro_renderer",
+    "android/viro_bridge",
     "android/gvr_common",
     "android/arcore_client",
-    "ios/dist",
+    "android/build.gradle",
+    "android/settings.gradle",
+    "android/gradle.properties",
+    "ios/dist/ViroRenderer/ViroKit.framework",
+    "ios/dist/ViroRenderer/ViroKit.podspec",
+    "ios/dist/lib",
+    "ios/dist/include",
+    "ios/ViroReact",
     "ios/ViroReact.podspec",
-    "bin",
+    "ios/ViroReact.xcodeproj",
+    "ios/ViroReact.xcworkspace",
+    "ios/ViroReactFramework",
+    "scripts/viro_post_install.rb",
     "LICENSE"
   ],
   "dependencies": {

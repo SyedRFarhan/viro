@@ -35,8 +35,6 @@ import {
   ViroTrackingReason,
   ViroTrackingState,
   ViroTrackingUpdatedEvent,
-  ViroARHitTestResult,
-  ViroARNodeReference,
 } from "../Types/ViroEvents";
 import {
   Viro3DPoint,

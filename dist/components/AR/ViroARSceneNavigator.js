@@ -44,15 +44,36 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ViroARSceneNavigator = void 0;
+exports.ViroARSceneNavigator = exports.SCAN_WAVE_PRESETS = void 0;
 const React = __importStar(require("react"));
 const react_native_1 = require("react-native");
 const ViroARSceneNavigatorModule = react_native_1.NativeModules.VRTARSceneNavigatorModule;
 let mathRandomOffset = 0;
+/** Pre-built scan wave configurations. */
+exports.SCAN_WAVE_PRESETS = {
+    /** Default — luminous cool pearl white (Vision Pro style). Native defaults ARE this preset. */
+    visionProCoolPearl: {},
+    /** Warm pearl — same structure, warm-shifted palette */
+    visionProWarmPearl: {
+        waveCoreColor: [1.0, 0.97, 0.92],
+        waveHaloColor: [1.0, 0.93, 0.85],
+        rimColor: [1.0, 0.9, 0.8],
+        noiseTint: [1.0, 0.95, 0.9],
+    },
+    /** Minimal — reduced intensities for subtlety */
+    subtleMinimal: {
+        coreIntensity: 0.5,
+        haloIntensity: 0.15,
+        rimIntensity: 0.3,
+        noiseIntensity: 0.05,
+        duration: 800,
+    },
+};
 /**
  * ViroARSceneNavigator is used to transition between multiple AR Scenes.
+ * Internal class component - use ViroARSceneNavigator (the forwardRef wrapper) for ref access.
  */
-class ViroARSceneNavigator extends React.Component {
+class ViroARSceneNavigatorClass extends React.Component {
     _component = null;
     constructor(props) {
         super(props);
@@ -87,6 +108,14 @@ class ViroARSceneNavigator extends React.Component {
             this._setPreferMonocularDepth(this.props.preferMonocularDepth);
         }
     }
+    componentWillUnmount() {
+        // Explicitly trigger native cleanup to prevent memory leaks
+        // This ensures ARSession is properly paused and GL resources are released
+        const nodeHandle = (0, react_native_1.findNodeHandle)(this);
+        if (nodeHandle) {
+            ViroARSceneNavigatorModule.cleanup(nodeHandle);
+        }
+    }
     /**
      * [Android Only - Internal]
      * Handle tab switch detection from native side.
@@ -101,14 +130,6 @@ class ViroARSceneNavigator extends React.Component {
             }));
         }
     };
-    componentWillUnmount() {
-        // Explicitly trigger native cleanup to prevent memory leaks
-        // This ensures ARSession is properly paused and GL resources are released
-        const nodeHandle = (0, react_native_1.findNodeHandle)(this);
-        if (nodeHandle) {
-            ViroARSceneNavigatorModule.cleanup(nodeHandle);
-        }
-    }
     /**
      * Starts recording video of the Viro renderer and external audio
      *
@@ -139,6 +160,20 @@ class ViroARSceneNavigator extends React.Component {
      */
     _takeScreenshot = async (fileName, saveToCameraRoll) => {
         return await ViroARSceneNavigatorModule.takeScreenshot((0, react_native_1.findNodeHandle)(this), fileName, saveToCameraRoll);
+    };
+    /**
+     * Takes a high-resolution photo using ARKit's captureHighResolutionFrame (iOS 16+).
+     * This captures the camera image at full sensor resolution (up to 12MP) with
+     * the 3D scene composited on top.
+     *
+     * @param fileName - name of the file (without extension)
+     * @param saveToCameraRoll - whether or not the file should also be saved to the camera roll
+     * @returns Object with success, url, and errorCode keys.
+     *          errorCode: 0=success, 1=no permissions, 5=write failed,
+     *                     10=iOS<16 not supported, 11=capture failed, 15=session not ready
+     */
+    _takeHighResolutionPhoto = async (fileName, saveToCameraRoll) => {
+        return await ViroARSceneNavigatorModule.takeHighResolutionPhoto((0, react_native_1.findNodeHandle)(this), fileName, saveToCameraRoll);
     };
     /**
      * @todo document _project
@@ -456,6 +491,26 @@ class ViroARSceneNavigator extends React.Component {
      * @param resetTracking - determines if the tracking should be reset.
      * @param removeAnchors - determines if the existing anchors should be removed too.
      */
+    /**
+     * [iOS Only]
+     *
+     * Checks if the native ARSession is available and accessible.
+     * Useful for verifying if the AR session has been successfully initialized
+     * and exposed to the React Native bridge.
+     *
+     * @returns Promise resolving to a boolean indicating availability
+     */
+    _isNativeARSessionAvailable = async () => {
+        return await ViroARSceneNavigatorModule.isNativeARSessionAvailable((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * [iOS Only]
+     *
+     * Resets the tracking of the AR session.
+     *
+     * @param resetTracking - determines if the tracking should be reset.
+     * @param removeAnchors - determines if the existing anchors should be removed too.
+     */
     _resetARSession = (resetTracking, removeAnchors) => {
         ViroARSceneNavigatorModule.resetARSession((0, react_native_1.findNodeHandle)(this), resetTracking, removeAnchors);
     };
@@ -508,6 +563,31 @@ class ViroARSceneNavigator extends React.Component {
      */
     _cancelCloudAnchorOperations = () => {
         ViroARSceneNavigatorModule.cancelCloudAnchorOperations((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * Create an AR anchor at the specified world position.
+     *
+     * The anchor can later be used with hostCloudAnchor() to persist it to the cloud
+     * for cross-device sharing. The returned anchorId is compatible with the
+     * anchorId parameter expected by hostCloudAnchor().
+     *
+     * @param position - World position [x, y, z] where the anchor should be created
+     * @returns Promise resolving to the creation result with anchorId
+     */
+    _addAnchor = async (position) => {
+        return await ViroARSceneNavigatorModule.addAnchor((0, react_native_1.findNodeHandle)(this), position);
+    };
+    /**
+     * Create an AR anchor at the specified world position and immediately host it to the cloud.
+     * This is an atomic operation that creates a native ARKit anchor and hosts it in one step,
+     * avoiding lookup issues that can occur when creating and hosting anchors separately.
+     *
+     * @param position - World position [x, y, z] in meters
+     * @param ttlDays - Time-to-live in days for the cloud anchor (1-365)
+     * @returns Promise resolving to the cloud hosting result with cloudAnchorId
+     */
+    _createAndHostCloudAnchor = async (position, ttlDays) => {
+        return await ViroARSceneNavigatorModule.createAndHostCloudAnchor((0, react_native_1.findNodeHandle)(this), position, ttlDays);
     };
     // ===========================================================================
     // Geospatial API Methods
@@ -741,6 +821,23 @@ class ViroARSceneNavigator extends React.Component {
     // Monocular Depth Estimation API Methods
     // ===========================================================================
     /**
+     * Check if monocular depth estimation is supported on this device.
+     * Requires iOS 14.0+ with Neural Engine capabilities.
+     *
+     * @returns Promise resolving to support status
+     */
+    _isMonocularDepthSupported = async () => {
+        return await ViroARSceneNavigatorModule.isMonocularDepthSupported((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * Check if the monocular depth model is available (bundled in ViroKit).
+     *
+     * @returns Promise resolving to availability status
+     */
+    _isMonocularDepthModelAvailable = async () => {
+        return await ViroARSceneNavigatorModule.isMonocularDepthModelAvailable((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
      * Set whether to prefer monocular depth estimation over LiDAR.
      * When enabled, monocular depth will be used even on devices with LiDAR.
      * Useful for:
@@ -844,6 +941,199 @@ class ViroARSceneNavigator extends React.Component {
             };
         }
     };
+    // ===========================================================================
+    // World Map Persistence API Methods (iOS Only)
+    // ===========================================================================
+    /**
+     * [iOS Only] Manually trigger a world map save.
+     * Use this to ensure the world map is saved before navigating away,
+     * or when you want to save at a specific point in time.
+     *
+     * @param sessionId - Unique identifier for the session (used as filename if filePath not provided)
+     * @param filePath - Optional custom path to save the world map
+     * @returns Promise resolving to the save result with success/error/code and filePath
+     */
+    _saveWorldMap = async (sessionId, filePath) => {
+        return await ViroARSceneNavigatorModule.saveWorldMap((0, react_native_1.findNodeHandle)(this), sessionId, filePath ?? null);
+    };
+    /**
+     * [iOS Only] Load a previously saved world map and restart the AR session.
+     *
+     * Note: success=true means the session was restarted with initialWorldMap set.
+     * Relocalization happens asynchronously - monitor trackingState for .normal.
+     *
+     * @param sessionId - Unique identifier for the session to load
+     * @param filePath - Optional custom path to load from (e.g., downloaded from cloud)
+     * @returns Promise resolving to the load result with success/error/code
+     */
+    _loadWorldMap = async (sessionId, filePath) => {
+        return await ViroARSceneNavigatorModule.loadWorldMap((0, react_native_1.findNodeHandle)(this), sessionId, filePath ?? null);
+    };
+    /**
+     * [iOS Only] Delete a previously saved world map from storage.
+     *
+     * @param sessionId - Unique identifier for the session to delete
+     * @returns Promise resolving to the delete result with success/error/code
+     */
+    _deleteWorldMap = async (sessionId) => {
+        return await ViroARSceneNavigatorModule.deleteWorldMap((0, react_native_1.findNodeHandle)(this), sessionId);
+    };
+    /**
+     * [iOS Only] Get the current world mapping status.
+     * Use this to check if the world map is ready to save, or to show
+     * scanning progress UI.
+     *
+     * For continuous updates, use the onWorldMappingStatusChanged prop instead.
+     *
+     * @returns Promise resolving to current mapping status, tracking state, and canSave flag
+     */
+    _getWorldMappingStatus = async () => {
+        return await ViroARSceneNavigatorModule.getWorldMappingStatus((0, react_native_1.findNodeHandle)(this));
+    };
+    // ===========================================================================
+    // World Mesh Snapshot (Imperative API)
+    // ===========================================================================
+    /**
+     * [iOS Only] Get a snapshot of the current world mesh from ARKit.
+     *
+     * @param options - Optional config. Pass `{ includeGeometry: true }` for full geometry.
+     * @returns Promise resolving to mesh snapshot with stats and optionally anchors
+     */
+    _getWorldMeshSnapshot = async (options) => {
+        return await ViroARSceneNavigatorModule.getWorldMeshSnapshot((0, react_native_1.findNodeHandle)(this), options ?? {});
+    };
+    // ===========================================================================
+    // Scan Wave (Imperative API)
+    // ===========================================================================
+    /**
+     * [iOS Only] Trigger a scan wave effect with optional config overrides and looping.
+     *
+     * @param config - Optional visual config + repeatCount/totalDuration
+     * @returns Promise resolving when the trigger is accepted (not when animation completes)
+     */
+    _triggerScanWave = async (config) => {
+        return await ViroARSceneNavigatorModule.triggerScanWave((0, react_native_1.findNodeHandle)(this), config ?? {});
+    };
+    /**
+     * [iOS Only] Stop the scan wave effect immediately.
+     */
+    _stopScanWave = () => {
+        ViroARSceneNavigatorModule.stopScanWave((0, react_native_1.findNodeHandle)(this));
+    };
+    // ===========================================================================
+    // Frame Streaming API Methods (for Gemini Vision integration)
+    // ===========================================================================
+    /**
+     * [iOS Only] Start streaming AR frames for external processing (e.g., Gemini Vision).
+     *
+     * Frames are captured at a configurable rate, JPEG-encoded to exact target dimensions
+     * using scale+crop (cover), and delivered via the onFrameUpdate callback.
+     *
+     * Each frame includes:
+     * - frameId: Unique identifier for later 2D→3D resolution
+     * - imageData: Base64 JPEG
+     * - intrinsics: Camera intrinsics mapped to JPEG dimensions (with crop offsets)
+     * - cameraToWorld: Camera pose at capture time
+     * - jpegToARTransform: Transform from JPEG UV to AR image UV
+     *
+     * @param config - Frame streaming configuration
+     * @platform ios
+     */
+    _startFrameStream = (config) => {
+        ViroARSceneNavigatorModule.startFrameStream((0, react_native_1.findNodeHandle)(this), config);
+    };
+    /**
+     * [iOS Only] Stop streaming AR frames.
+     *
+     * @platform ios
+     */
+    _stopFrameStream = () => {
+        ViroARSceneNavigatorModule.stopFrameStream((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * [iOS Only] Resolve 2D detection points to 3D world coordinates.
+     *
+     * This uses capture-time data stored in the ring buffer, ensuring correct
+     * mapping even when the camera has moved since the frame was captured.
+     * This is critical for delayed responses from vision AI services like Gemini.
+     *
+     * Resolution uses a fallback ladder (in order of preference):
+     * 1. LiDAR depth sampling (0.95 confidence) - most accurate on Pro devices
+     * 2. Raycast vs plane geometry (0.95) - hits actual mesh
+     * 3. Raycast vs plane extent (0.85) - hits bounding box
+     * 4. Raycast vs estimated planes (0.6) - can shift over time
+     * 5. Point cloud fallback (0.3-0.6) - finds nearest feature point to ray
+     *
+     * @param frameId - The frameId from a ViroFrameEvent
+     * @param points - Array of normalized UV coordinates (0-1) in JPEG space
+     * @returns Promise resolving to resolution results
+     * @platform ios
+     */
+    _resolveDetections = async (frameId, points) => {
+        return await ViroARSceneNavigatorModule.resolveDetections((0, react_native_1.findNodeHandle)(this), frameId, points);
+    };
+    // ===========================================================================
+    // Camera Zoom API Methods
+    // ===========================================================================
+    /**
+     * Set zoom using UIView transform (CGAffineTransform scale).
+     * This scales the entire ARView visually, different from camera optical zoom.
+     * Useful for quick visual zoom without camera hardware changes.
+     *
+     * @param zoomFactor - The scale factor (1.0 = normal, 2.0 = 2x scale, etc.)
+     * @platform ios
+     */
+    _setViewZoom = (zoomFactor) => {
+        ViroARSceneNavigatorModule.setViewZoom((0, react_native_1.findNodeHandle)(this), zoomFactor);
+    };
+    // ===========================================================================
+    // Render Zoom API Methods (Projection-Based)
+    // ===========================================================================
+    /**
+     * Set render zoom using projection matrix scaling.
+     * This modifies the camera's field of view and background texture to achieve
+     * a real zoom effect that IS captured in screenshots, video recordings, and photos.
+     *
+     * Unlike setViewZoom (which uses UI scaling and isn't captured), setRenderZoom
+     * modifies the actual render pipeline:
+     * - Scales the projection matrix to narrow the field of view
+     * - Crops the camera background texture to match
+     * - Adjusts hit testing to account for the zoomed viewport
+     *
+     * @param zoomFactor - The zoom factor (1.0 = no zoom, 2.0 = 2x zoom, etc.)
+     *                     Clamped to range [1.0, maxRenderZoom]
+     * @platform ios
+     */
+    _setRenderZoom = (zoomFactor) => {
+        ViroARSceneNavigatorModule.setRenderZoom((0, react_native_1.findNodeHandle)(this), zoomFactor);
+    };
+    /**
+     * Get the current render zoom factor.
+     *
+     * @returns Promise resolving to the current zoom factor
+     * @platform ios
+     */
+    _getRenderZoom = async () => {
+        return await ViroARSceneNavigatorModule.getRenderZoom((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * Get the maximum render zoom factor.
+     *
+     * @returns Promise resolving to the maximum zoom factor
+     * @platform ios
+     */
+    _getMaxRenderZoom = async () => {
+        return await ViroARSceneNavigatorModule.getMaxRenderZoom((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
+     * Set the maximum render zoom factor.
+     *
+     * @param maxZoom - The maximum zoom factor (must be >= 1.0)
+     * @platform ios
+     */
+    _setMaxRenderZoom = (maxZoom) => {
+        ViroARSceneNavigatorModule.setMaxRenderZoom((0, react_native_1.findNodeHandle)(this), maxZoom);
+    };
     /**
      * Renders the Scene Views in the stack.
      *
@@ -870,6 +1160,8 @@ class ViroARSceneNavigator extends React.Component {
         startVideoRecording: this._startVideoRecording,
         stopVideoRecording: this._stopVideoRecording,
         takeScreenshot: this._takeScreenshot,
+        takeHighResolutionPhoto: this._takeHighResolutionPhoto,
+        isNativeARSessionAvailable: this._isNativeARSessionAvailable,
         resetARSession: this._resetARSession,
         setWorldOrigin: this._setWorldOrigin,
         project: this._project,
@@ -877,6 +1169,8 @@ class ViroARSceneNavigator extends React.Component {
         hostCloudAnchor: this._hostCloudAnchor,
         resolveCloudAnchor: this._resolveCloudAnchor,
         cancelCloudAnchorOperations: this._cancelCloudAnchorOperations,
+        addAnchor: this._addAnchor,
+        createAndHostCloudAnchor: this._createAndHostCloudAnchor,
         // Geospatial API
         isGeospatialModeSupported: this._isGeospatialModeSupported,
         setGeospatialModeEnabled: this._setGeospatialModeEnabled,
@@ -913,11 +1207,29 @@ class ViroARSceneNavigator extends React.Component {
         getSemanticLabelFractions: this._getSemanticLabelFractions,
         getSemanticLabelFraction: this._getSemanticLabelFraction,
         // Monocular Depth Estimation API
+        isMonocularDepthSupported: this._isMonocularDepthSupported,
+        isMonocularDepthModelAvailable: this._isMonocularDepthModelAvailable,
         setPreferMonocularDepth: this._setPreferMonocularDepth,
         isPreferMonocularDepth: this._isPreferMonocularDepth,
         // Debugging & Validation API
         isDepthOcclusionSupported: this._isDepthOcclusionSupported,
         getGeospatialSetupStatus: this._getGeospatialSetupStatus,
+        // World Map Persistence API (iOS only) - imperative methods
+        saveWorldMap: this._saveWorldMap,
+        loadWorldMap: this._loadWorldMap,
+        deleteWorldMap: this._deleteWorldMap,
+        getWorldMappingStatus: this._getWorldMappingStatus,
+        // Frame Streaming API (iOS only, for Gemini Vision integration)
+        startFrameStream: this._startFrameStream,
+        stopFrameStream: this._stopFrameStream,
+        resolveDetections: this._resolveDetections,
+        // View Transform Zoom API
+        setViewZoom: this._setViewZoom,
+        // Render Zoom API (Projection-Based)
+        setRenderZoom: this._setRenderZoom,
+        getRenderZoom: this._getRenderZoom,
+        getMaxRenderZoom: this._getMaxRenderZoom,
+        setMaxRenderZoom: this._setMaxRenderZoom,
         viroAppProps: {},
     };
     sceneNavigator = {
@@ -929,6 +1241,8 @@ class ViroARSceneNavigator extends React.Component {
         startVideoRecording: this._startVideoRecording,
         stopVideoRecording: this._stopVideoRecording,
         takeScreenshot: this._takeScreenshot,
+        takeHighResolutionPhoto: this._takeHighResolutionPhoto,
+        isNativeARSessionAvailable: this._isNativeARSessionAvailable,
         resetARSession: this._resetARSession,
         setWorldOrigin: this._setWorldOrigin,
         project: this._project,
@@ -936,6 +1250,8 @@ class ViroARSceneNavigator extends React.Component {
         hostCloudAnchor: this._hostCloudAnchor,
         resolveCloudAnchor: this._resolveCloudAnchor,
         cancelCloudAnchorOperations: this._cancelCloudAnchorOperations,
+        addAnchor: this._addAnchor,
+        createAndHostCloudAnchor: this._createAndHostCloudAnchor,
         // Geospatial API
         isGeospatialModeSupported: this._isGeospatialModeSupported,
         setGeospatialModeEnabled: this._setGeospatialModeEnabled,
@@ -972,11 +1288,29 @@ class ViroARSceneNavigator extends React.Component {
         getSemanticLabelFractions: this._getSemanticLabelFractions,
         getSemanticLabelFraction: this._getSemanticLabelFraction,
         // Monocular Depth Estimation API
+        isMonocularDepthSupported: this._isMonocularDepthSupported,
+        isMonocularDepthModelAvailable: this._isMonocularDepthModelAvailable,
         setPreferMonocularDepth: this._setPreferMonocularDepth,
         isPreferMonocularDepth: this._isPreferMonocularDepth,
         // Debugging & Validation API
         isDepthOcclusionSupported: this._isDepthOcclusionSupported,
         getGeospatialSetupStatus: this._getGeospatialSetupStatus,
+        // World Map Persistence API (iOS only) - imperative methods
+        saveWorldMap: this._saveWorldMap,
+        loadWorldMap: this._loadWorldMap,
+        deleteWorldMap: this._deleteWorldMap,
+        getWorldMappingStatus: this._getWorldMappingStatus,
+        // Frame Streaming API (iOS only, for Gemini Vision integration)
+        startFrameStream: this._startFrameStream,
+        stopFrameStream: this._stopFrameStream,
+        resolveDetections: this._resolveDetections,
+        // View Transform Zoom API
+        setViewZoom: this._setViewZoom,
+        // Render Zoom API (Projection-Based)
+        setRenderZoom: this._setRenderZoom,
+        getRenderZoom: this._getRenderZoom,
+        getMaxRenderZoom: this._getMaxRenderZoom,
+        setMaxRenderZoom: this._setMaxRenderZoom,
         viroAppProps: {},
     };
     render() {
@@ -1003,7 +1337,67 @@ class ViroARSceneNavigator extends React.Component {
       </VRTARSceneNavigator>);
     }
 }
-exports.ViroARSceneNavigator = ViroARSceneNavigator;
+/**
+ * ViroARSceneNavigator with ref support for imperative world map persistence API.
+ *
+ * @example
+ * ```tsx
+ * const ref = useRef<ViroARSceneNavigatorHandle>(null);
+ *
+ * <ViroARSceneNavigator ref={ref} ... />
+ *
+ * // Save world map
+ * await ref.current?.saveWorldMap("my-session");
+ *
+ * // Load world map (restarts AR session)
+ * await ref.current?.loadWorldMap("my-session");
+ *
+ * // Delete world map
+ * await ref.current?.deleteWorldMap("my-session");
+ * ```
+ */
+exports.ViroARSceneNavigator = React.forwardRef((props, ref) => {
+    const innerRef = React.useRef(null);
+    React.useImperativeHandle(ref, () => ({
+        saveWorldMap: (sessionId, filePath) => innerRef.current?._saveWorldMap(sessionId, filePath) ??
+            Promise.resolve({
+                success: false,
+                error: "Component not mounted",
+                code: "SESSION_UNAVAILABLE",
+            }),
+        loadWorldMap: (sessionId, filePath) => innerRef.current?._loadWorldMap(sessionId, filePath) ??
+            Promise.resolve({
+                success: false,
+                error: "Component not mounted",
+                code: "SESSION_UNAVAILABLE",
+            }),
+        deleteWorldMap: (sessionId) => innerRef.current?._deleteWorldMap(sessionId) ??
+            Promise.resolve({
+                success: false,
+                error: "Component not mounted",
+                code: "SESSION_UNAVAILABLE",
+            }),
+        getWorldMappingStatus: () => innerRef.current?._getWorldMappingStatus() ??
+            Promise.resolve({
+                mappingStatus: "notAvailable",
+                trackingState: "notAvailable",
+                canSave: false,
+            }),
+        getWorldMeshSnapshot: (options) => innerRef.current?._getWorldMeshSnapshot(options) ??
+            Promise.resolve({
+                success: false,
+                error: "Component not mounted",
+            }),
+        triggerScanWave: (config) => innerRef.current?._triggerScanWave(config) ??
+            Promise.resolve({ success: false, error: "Component not mounted" }),
+        stopScanWave: () => {
+            innerRef.current?._stopScanWave();
+        },
+    }));
+    return <ViroARSceneNavigatorClass ref={innerRef} {...props}/>;
+});
+// Set display name for React DevTools
+exports.ViroARSceneNavigator.displayName = "ViroARSceneNavigator";
 const styles = react_native_1.StyleSheet.create({
     container: {
         flex: 1,
@@ -1013,6 +1407,6 @@ const styles = react_native_1.StyleSheet.create({
 });
 const VRTARSceneNavigator = (0, react_native_1.requireNativeComponent)("VRTARSceneNavigator", 
 // @ts-ignore
-ViroARSceneNavigator, {
+ViroARSceneNavigatorClass, {
     nativeOnly: { currentSceneIndex: true },
 });

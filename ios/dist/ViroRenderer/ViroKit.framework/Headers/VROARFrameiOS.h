@@ -121,6 +121,7 @@ private:
     mutable std::vector<uint8_t> _lumaData;
     mutable int _lumaW = 0, _lumaH = 0;
 
+
     /*
      Sample depth texture at normalized UV coordinates (0-1 range).
      Returns depth value in meters, or 0.0 if invalid.
