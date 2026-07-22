@@ -5,7 +5,6 @@ import {
   withDangerousMod,
   withPlugins,
   withXcodeProject,
-  WarningAggregator,
 } from "@expo/config-plugins";
 import { ExpoConfig } from "@expo/config-types";
 import fs from "fs";
@@ -44,18 +43,6 @@ const withViroPods = (config: ExpoConfig) => {
       }
 
       fs.readFile(`${root}/Podfile`, "utf-8", (err, data) => {
-        // Check for New Architecture environment variable
-        if (
-          !data.includes('ENV["RCT_NEW_ARCH_ENABLED"]') &&
-          !data.includes("RCT_NEW_ARCH_ENABLED=1")
-        ) {
-          WarningAggregator.addWarningIOS(
-            "withViroIos",
-            "ViroReact requires New Architecture to be enabled. " +
-              "Please set RCT_NEW_ARCH_ENABLED=1 in your ios/.xcode.env file."
-          );
-        }
-
         // ViroReact with integrated Fabric support
         let viroPods =
           `  # ViroReact with integrated New Architecture (Fabric) support\n` +
@@ -224,6 +211,7 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
   let googleCloudApiKey: string | undefined;
   let rvApiKey: string | undefined;
   let rvProjectId: string | undefined;
+  let rvEndpoint: string | undefined;
   let cloudAnchorProvider: string | undefined;
   let geospatialAnchorProvider: string | undefined;
   let includeARCore: boolean | undefined;
@@ -247,6 +235,7 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
       googleCloudApiKey = pluginOptions.googleCloudApiKey;
       rvApiKey = pluginOptions.rvApiKey;
       rvProjectId = pluginOptions.rvProjectId;
+      rvEndpoint = pluginOptions.rvEndpoint;
       // Resolve unified provider prop; old props override for backward compat.
       // Default to "reactvision" only when rvApiKey is present (implies RV intent).
       const defaultProvider2 = pluginOptions.rvApiKey ? "reactvision" : undefined;
@@ -281,6 +270,9 @@ export const withDefaultInfoPlist: ConfigPlugin<ViroConfigurationOptions> = (
   }
   if (rvProjectId) {
     config.ios.infoPlist.RVProjectId = rvProjectId;
+  }
+  if (rvEndpoint) {
+    config.ios.infoPlist.RVEndpoint = rvEndpoint;
   }
 
   // Add location permissions for Geospatial API

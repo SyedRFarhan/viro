@@ -1,5 +1,268 @@
 # CHANGELOG
 
+## v2.57.4 — 9 July 2026
+
+- Stability improvements
+
+## v2.57.3 — 2 July 2026
+
+### Added
+
+- **Expo SDK 57 / React Native 0.86 support (viro#492).** Widened `peerDependencies` (`expo` to `<58.0.0`, `react-native` to `<0.87.0`) and `engines`, and bumped the build/test toolchain (`expo` 57, `react-native` 0.86, `@react-native/*` 0.86, `@expo/config-plugins` 57). RN 0.86 ships no breaking changes and the Android bridge resolves the host app's RN version dynamically, so no native changes were required.
+
+### Changed
+
+- **`frontCameraEnabled` on iOS now requires the optional [`@reactvision/react-viro-face-tracking`](https://www.npmjs.com/package/@reactvision/react-viro-face-tracking) package.** ARKit exposes the front camera only through `ARFaceTrackingConfiguration` (the TrueDepth API), and Apple's App Store review (Guideline 2.5.1) statically scans the binary for it — so bundling it in core caused *every* app, including rear-camera-only ones (image markers, world tracking), to be flagged for unused TrueDepth code. That path has been extracted from core (companion to `@reactvision/virocore` 2.57.3's provider seam) into a plug-and-play package whose Expo config plugin adds the pod and injects `NSCameraUsageDescription`. Apps that need front-camera face tracking install it and declare TrueDepth to Apple; everyone else ships a TrueDepth-free binary that passes 2.5.1 with no configuration. Without the package, `frontCameraEnabled` is a no-op on iOS (falls through to world tracking). **Android is unchanged** — front-camera AR (ARCore) stays in core, as there's no Play Store TrueDepth restriction. For a selfie *feed* without face tracking, use `ViroCameraTexture` with `cameraPosition="front"` (AVFoundation, no TrueDepth). See `docs/PLATFORM_EXTENSIONS.md`.
+
+### Fixed
+
+- **ViroVideo no longer crashes or freezes around Android lifecycle transitions (viro#478).** With a `ViroVideo` in the scene, a background/foreground transition could crash the app (ExoPlayer listener callbacks reaching freed native memory after the video was torn down) and leaving the screen could freeze/ANR (the GL render thread blocked calling ExoPlayer on the main thread while the main thread waited for the GL thread in `GLSurfaceView.surfaceDestroyed()`). Fixed in `@reactvision/virocore` 2.57.3 via a post-destroy callback guard, a main-thread-refreshed cache for per-frame position/duration, and fire-and-forget play/pause.
+- **`ViroARImageMarker` no longer crashes the app when its `target` is registered after the marker mounts.** Registering targets from a React `useEffect` (the common pattern) runs *after* the marker's native view is committed, so `VRTARImageMarker` looked up a target that did not exist yet and threw an `IllegalArgumentException` from inside a Fabric prop update — which is fatal under the New Architecture (bridgeless) and tore down the entire `ReactHost`, terminating the app. The marker no longer throws (matching iOS, which only `RCTLogError`s); instead it registers interest by target name with `ARTrackingTargetsModule`, which now queues waiters for not-yet-registered targets and flushes them when `createTargets(...)` runs. The marker therefore attaches automatically regardless of whether `createTargets` runs before or after it mounts.
+- **Removed the non-compliant `libvrapi.so` (viro#491).** v2.57.2 aligned every `PT_LOAD` segment to ≥ 16 KB, but the prebuilt `libvrapi.so` (Meta VrApi / Oculus Mobile SDK) still had a `PT_GNU_RELRO` segment ending on a 4 KB boundary, which the Android 15+ linker rejects (`dlopen … "libvrapi.so" program alignment (4096) cannot be smaller than system page size (16384)`). Because `libviro_renderer.so` listed `libvrapi.so` as a `NEEDED` dependency, it was force-loaded on **every** launch — so the crash affected all Android apps, not just VR. A prebuilt binary's RELRO padding cannot be re-aligned by a field patch, so the fix removes the dependency entirely.
+
+### Removed
+
+- **Deprecated the Oculus Mobile SDK (VrApi) path — `ViroPlatform.OVR_MOBILE` / `ViroViewOVR`.** VrApi targets EOL hardware (GearVR / Oculus Go) and was superseded by the OpenXR path (`ViroPlatform.QUEST` / `ViroViewOpenXR`), which covers all current Meta headsets (Quest 1/2/3/Pro). `OVR_MOBILE` and `ViroViewOVR` are now `@Deprecated` and no longer create a native renderer; selecting `OVR_MOBILE` logs a warning. Companion to `@reactvision/virocore` 2.57.3, which drops `libvrapi.so` and the VrApi renderer from the native build.
+
+---
+
+## v2.57.2 — 29 June 2026
+
+### Fixed
+
+- **16 KB page-size alignment completed for all bundled native libraries (Android).** Companion to the renderer fix in `@reactvision/virocore` 2.57.2. v2.57.0 aligned `libopenxr_loader.so`, but the prebuilt `libc++_shared.so` inside the renderer AAR was still 4 KB-aligned (`2**12`) and failed the 16 KB memory-page requirement for Android 15+ / Google Play. The renderer's Android NDK was bumped from r25 to r27 — whose `libc++_shared.so` is 16 KB-aligned — and the prebuilt AARs (`viro_renderer-release.aar`, `react_viro-release.aar`) were regenerated. Every 64-bit (`arm64-v8a`) library now reports ≥ 16 KB segment alignment (16 KB / `2**14` for most libs, 64 KB / `2**16` for `libvrapi` / `libgvr`), verified with Google's `check_elf_alignment.sh` (0 unaligned). This unblocks Google Play / Meta Quest Store submission for 16 KB devices.
+
+---
+
+## v2.57.1 — 27 June 2026
+
+### Added
+
+- **Mixed Reality on Meta Quest 3 / 3S.** AR scenes now run through the OpenXR renderer with passthrough, lighting up the standard Viro AR component API on Quest with **no separate API**: pass a `ViroARScene` to `ViroXRSceneNavigator` and the same scene runs on phones (ARCore) and Quest (OpenXR). `onAnchorFound` / `onAnchorUpdated` / `onAnchorRemoved`, `ViroARPlane`, and `ViroARPlaneSelector` all fire from the room's detected floors, walls, ceilings, and tables; passthrough is enabled automatically when an AR scene is mounted. Plane data comes from the Quest **room model** (the spatial-entity scene captured in Space Setup), so it requires `horizonos.permission.USE_ANCHOR_API` and a completed Space Setup on the headset. See `docs/QUEST_SETUP.md` §7b.
+
+- **Object detection on Meta Quest.** `ViroObjectDetector` now runs on Quest 3 / 3S. Because there's no ARCore camera and the passthrough layer isn't app-readable, frames come from the **Meta Passthrough Camera API** (Camera2, Horizon OS v74+). The entire YOLOE/ONNX preprocess → inference → `onDetection` pipeline is reused unchanged; v1 emits `label` + normalized `boundingBox` (no `worldPosition` / `screenBoundingBox` yet — those need camera extrinsics + raycast). Requires `horizonos.permission.HEADSET_CAMERA` (runtime-granted). See `docs/ViroObjectDetector.md`.
+
+- **Passthrough styling API.** `setPassthroughStyle(viewTag, { opacity, edgeColor })` styles the Quest passthrough layer (texture opacity + edge-highlight colour) via `XR_FB_passthrough`'s `xrPassthroughLayerSetStyleFB`. Exported alongside `useVRViewTag()` and the new `ViroPassthroughStyle` type. No-op off-Quest.
+
+### Fixed
+
+- **Passthrough showed a black background on Quest.** Mixed-reality scenes have no skybox or camera quad to fill the view, so the projection layer stayed opaque and hid the passthrough layer beneath it. The OpenXR display now clears transparent (alpha 0) when passthrough is enabled and the projection composition layer is submitted with the source-alpha blend flag, so empty regions reveal the room.
+
+- **`passthroughEnabled` / `handTrackingEnabled` dropped when set before the renderer existed.** On Quest the native renderer is created lazily (deferred to the host Activity's first resume), so an initial `passthroughEnabled` prop set during mount was silently ignored. These values are now cached and re-applied once the renderer initializes — passthrough engages reliably from the first frame.
+
+- **`ViroARPlaneSelector` content rendered in only one eye on Quest.** The selector's plane overlays use a translucent material with `writesToDepthBuffer: false`. On Quest's tiled GPU, rendering many non-depth-writing transparent objects breaks the second (right) eye's entire render — the whole eye goes black/garbage (taking any other scene content, e.g. a model on the selected plane, with it), while the left eye is correct. The overlay material now writes depth **on Quest only** (`writesToDepthBuffer: isQuest`), which renders correctly in both eyes; phone AR keeps `false` for clean coplanar overlay blending and is unchanged. (The underlying engine bug — a non-depth-writing transparent pass breaking stereo at quantity — needs on-device GPU capture and is tracked as a follow-up; see `docs/QUEST_SETUP.md` §7b.)
+
+---
+
+## v2.57.0 — 19 June 2026
+
+### Added
+
+- **`ViroObjectDetector` — on-device object detection.** A new component that runs open-vocabulary [YOLOE](https://docs.ultralytics.com/models/yoloe/) detection through ONNX Runtime, on-device and offline. It runs inside an AR session — sharing the enclosing `ViroARSceneNavigator`'s camera feed — and fires `onDetection` with labels, confidences, and bounding boxes. Each detection also carries a `screenBoundingBox` in density-independent points (dp), aligned to the on-screen camera preview, so boxes drop straight into an absolutely-positioned overlay. iOS and Android reach parity for detection and the 2D overlay (`worldPosition` 3D raycast remains iOS-only for now). Inference is delegated to the companion package **`@reactvision/react-viro-onnx`** (Android uses the NNAPI execution provider with FP16); without the provider the detector emits no detections and fires `onError`. See `docs/ViroObjectDetector.md`.
+
+- **`onDepthReady` event on `ViroARScene`.** Fires once, when AR depth first becomes available, on both iOS and Android. Use it to gate depth-dependent features (occlusion, hit-testing) until the depth subsystem is actually producing data.
+
+- **Expo SDK 56 support.** The config plugin and prebuilt artifacts now build against Expo 56 / React Native's new architecture.
+
+### Improved
+
+- **iOS depth precision.** Depth points are now derived directly from the AR depth map rather than approximated, and the monocular depth model is warmed up ahead of first use — eliminating inaccurate/late depth on the first frames and tightening occlusion and hit-test accuracy on non-LiDAR devices.
+
+### Fixed
+
+- **Layered / stacked GLB animations freezing instead of playing (VIRO-5741).** glTF skeletal clips whose channels mixed STEP and LINEAR interpolation or sat on multiple independent time-grids (common in Blender exports with layered animations) were being dropped or flattened, causing the animation to freeze. Channels are now resampled onto a single common time-grid and merged per joint into one index-aligned keyframe animation, with a per-frame density cap to bound skinning cost on pathological assets. Affected clips now play through fully.
+
+- **16 KB page-size alignment for `libopenxr_loader.so` (Android).** The bundled OpenXR loader library, `libopenxr_loader.so`, previously used 4 KB alignment and failed the 16 KB memory-page requirement for Android 15+ devices, blocking Google Play / Meta Quest Store submission. The loader was updated from 1.1.38 to 1.1.49, which is 16 KB-page aligned. Apps that don't use XR are unaffected.
+
+- **VR controller input** — upgraded the VR event listener path to the new architecture, restoring controller controls in VR.
+
+- **`onDrag` in `StudioSceneNavigator`** — drag events now fire correctly.
+
+- **iOS pod build** — visionOS-only sources are now excluded from the iOS CocoaPods build, fixing compile errors in iOS-only targets.
+
+### Experimental / Preview
+
+- **visionOS renderer.** Initial visionOS support landed: a Metal-based renderer/driver, the React Native bindings, and the renderer bridge. This is a work-in-progress foundation and not yet production-ready.
+
+---
+
+## v2.56.0 — 04 June 2026
+
+### Added
+
+- **Dynamic mesh node** — new `VRODynamicMeshNode` lets vertex buffers be replaced every frame without recreating geometry or its GPU resources. Designed for procedural meshes, external engine output, real-time simulations, and any use case where mesh topology changes at runtime.
+
+- **Virtual game controller** — `ViroVirtualJoystick` and `ViroVirtualButton` are native on-screen controller components for iOS and Android. Input is captured at the native layer and written directly to a thread-safe state registry, bypassing the JS bridge for sub-2 ms input latency. Both components also fire JS callbacks (`onStickChange`, `onPressIn`, `onPressOut`) for UI feedback.
+
+- **PCM audio streaming** — `StreamingAudioManager` enables real-time audio output by pushing raw PCM samples at runtime, without loading a complete audio file. Useful for procedural audio, embedded engine sound output, positional TTS, and physics-driven audio.
+
+- **AR World Mesh — public subscriber API** — `VROARWorldMesh` is now a general-purpose multi-consumer mesh provider. Subscribers receive full mesh geometry (vertices, indices, confidence) and a source tag (`LiDAR`, `Monocular`, or `Plane`). Key improvements include: persistent mesh sourcing from `ARMeshAnchor` (iOS LiDAR), a plane-based fallback for non-LiDAR devices, per-consumer triangle decimation, asynchronous Bullet physics construction to prevent ARKit frame drops, and vertex clustering for gap-free collision meshes.
+
+- **Game loop** — `ViroGameLoop` component and `useGameLoop` / `useFixedUpdate` hooks provide per-frame callbacks with variable dt and optional deterministic fixed-step mode (configurable frequency). `ViroGameLoopUtils` exposes `setPosition`, `setRotation`, and `setScale` for zero-overhead node manipulation from the game loop, bypassing the React reconciler.
+
+- **Selfie camera** — new AR scene that renders the front-facing camera with AR overlay effects.
+
+### Improved
+
+- **Monocular depth pipeline** (iOS) — the depth estimation model has been upgraded to Depth Anything V2 (metric, indoor), which outputs depth in meters and significantly improves occlusion accuracy on non-LiDAR devices. Additional improvements include temporal confidence synthesis, world-mesh fallback via monocular depth, full orientation support, thermal throttling, and per-source occlusion bias. Two new props on `ViroARSceneNavigator` — `monocularDepthScale` and `monocularDepthTargetFPS` — allow runtime calibration and inference rate control.
+
+### Fixed
+
+- **SIGABRT on Android 14+ (API 34)** — `ARUtilsCreateJavaARAnchorFromAnchor` called `NewStringUTF` with a non-Modified-UTF-8 ARCore anchor ID, causing a hard crash on Android 14 and above.
+
+- **Quest Store submission rejected due to forced landscape orientation** — `withViroAndroid.ts` unconditionally set `android:screenOrientation="landscape"` on `MainActivity`, overriding `app.json` orientation for all apps regardless of platform. This caused Quest Store validation failures for apps that did not target Quest. The landscape override is now applied only when `props.android.questAppId` is set.
+
+---
+
+## v2.55.0 — 27 April 2026
+
+> **Install path.** Bare React Native is not tested for this release. It
+> should work but will require a substantial amount of manual wiring (the
+> `VRActivity` Android Activity, Quest manifest features, package
+> registration in `MainApplication.kt`, iOS Podfile entries). For now we
+> recommend the **Expo Dev Client**, where the plugin emits all of the
+> above automatically. Bare RN support will be revisited in a follow-up
+> release.
+
+### Added
+
+- **Meta Horizon OS support**
+
+  VR scenes run natively on Meta Quest 3 / Quest Pro / Quest 2 / Quest 1
+  through the new OpenXR backend in `virocore`. Validated end-to-end at 90Hz
+  on Quest 3. Includes:
+
+  - **Dual-Activity launcher pattern** — `MainActivity` for the panel,
+    `VRActivity` for exclusive VR. The plugin emits `VRActivity.kt`,
+    manifest entries, Quest features (`android.hardware.vr.headtracking`,
+    `oculus.software.handtracking`, `com.oculus.feature.PASSTHROUGH`) and
+    the haptic / hand-tracking permissions automatically when `xRMode`
+    includes `"QUEST"` in `app.json`.
+  - **Two simultaneous pointers** — right and left controllers / tracked
+    hands each render an independent cyan laser, with independent hover and
+    click resolution per source.
+  - **Touch controllers + hand tracking** — triggers, grips, A/B/X/Y, menu,
+    thumbsticks, haptics; `XR_FB_hand_tracking_aim` for fingertip aim;
+    pinch-to-click and grip-to-grab per hand.
+  - **Passthrough + recenter** — `VRModuleOpenXR.setPassthroughEnabled(viewTag, …)`
+    and `recenterTracking(viewTag)` exposed via `NativeModules`.
+  - **Full lighting pipeline** — HDR, PBR, bloom, shadows.
+
+- **`ViroXRSceneNavigator`** — cross-reality auto-router
+
+  Mounts `ViroVRSceneNavigator` on Meta Quest, `ViroARSceneNavigator` on
+  iOS / non-Quest Android. Accepts a single `initialScene` (used for both
+  modes) or per-platform `arInitialScene` / `vrInitialScene`. Forwards
+  `ref` to the underlying navigator.
+
+  ```tsx
+  import { ViroXRSceneNavigator } from "@reactvision/react-viro";
+
+  <ViroXRSceneNavigator
+    arInitialScene={{ scene: MyARScene }}
+    vrInitialScene={{ scene: MyVRScene }}
+  />
+  ```
+
+- **`StudioSceneNavigator`**
+
+  Drop-in component for ReactVision Studio scenes. Fetches scene by UUID via
+  `rvGetScene(sceneId)` (auth via Expo plugin's API key) and renders the full
+  scene tree: 3D models / images / video / text, scene functions
+  (`NAVIGATION` / `ALERT` / `ANIMATION`), collision bindings, animation
+  registry, material configs (with `time`, viewport `_rf_vpw`/`_rf_vph`,
+  and auto-flagged `requiresCameraTexture` shader uniforms), physics world.
+
+  ```tsx
+  import { StudioSceneNavigator } from "@reactvision/react-viro";
+
+  <StudioSceneNavigator sceneId="abc-123-uuid" style={StyleSheet.absoluteFill} />
+  ```
+
+  TypeScript schema for the scene response is exported (`StudioSceneResponse`,
+  `StudioAsset`, `StudioAnimation`, `StudioSceneFunction`,
+  `StudioCollisionBinding`, `StudioSceneMeta`, `StudioProjectMeta`).
+
+  Aligned with the Studio API rename: animation fields are now
+  `animation_key` (was `name`), `duration_ms` (was `duration`), `delay_ms`
+  (was `delay`).
+
+- **Platform-detection utilities**
+
+  - `isQuest` — `true` on actual Quest hardware. Detection is based on
+    `Build.MANUFACTURER` / `BRAND` / `MODEL` via `Platform.constants`
+    (covers Oculus and Meta strings), **not** on module presence — so a
+    single APK that bundles Quest support does not misidentify regular
+    Android phones as Quest.
+  - `hasOpenXRSupport` — build-time check for whether the OpenXR native
+    module is registered. Useful for in-app diagnostics.
+
+- **Multi-pointer JS hooks**
+
+  - `useAnySourceHover()` — `[hovered, onHover]`. Aggregates per-source
+    hover events into a single boolean (`true` while any source is on the
+    node). Eliminates spurious enter/exit toggles when a second pointer
+    crosses an already-hovered node.
+  - `useAnySourcePressed()` — `[pressed, onClickState]`. Aggregates
+    per-source `CLICK_DOWN` / `CLICK_UP` into a single boolean (`true`
+    while any pointer is holding). Useful for visual feedback during the
+    held portion of a click.
+
+  Both hooks deduplicate within the same source so a repeated event
+  doesn't re-render. Apps that *do* care which specific pointer fired
+  (drag-to-controller, single-handed gestures) can ignore the hooks and
+  read `source` directly from the raw callbacks — same as before.
+
+- **Platform guards on `ViroARSceneNavigator` and `ViroVRSceneNavigator`**
+
+  - `ViroARSceneNavigator` no longer attempts to mount the AR view on Meta
+    Quest (would have crashed the renderer). Renders a default fallback
+    message; override via the new `questFallback?: React.ReactNode` prop
+    (pass `null` to render nothing).
+  - `ViroVRSceneNavigator` no longer falls through to the deprecated
+    Google Cardboard split-screen renderer on regular Android phones.
+    Renders a default fallback message; override via the new
+    `nonQuestFallback?: React.ReactNode` prop.
+
+  Both guards are pure JS (`isQuest` check at render time); no native
+  changes required.
+
+### Fixed
+
+- **AR Image Markers — children pin to screen coordinates after re-detection**
+  *(Android, [GitHub #465](https://github.com/ReactVision/viro/issues/465))*
+
+  Models parented to a `ViroARImageMarker` no longer become fixed at screen
+  coordinates after the target was lost and re-acquired in v2.54.0. Markers
+  re-anchor cleanly to the detected world pose every time, including
+  subsequent re-detection.
+
+- **iOS `ViroPortalScene` portal-tree stability**
+  *([GitHub #452](https://github.com/ReactVision/viro/issues/452))*
+
+  Continued portal-render-pass hardening on top of the v2.54.0 fix:
+  - Portal stencil silhouette no longer drops transparent entry fragments
+    before alpha discard runs (`_silhouetteMaterial->setAlphaCutoff(0.0f)`).
+  - 360° background inside a portal is no longer overwritten by the AR
+    camera background drawn afterwards (depth=0.9999 + depth-write enabled
+    on the portal background sphere/cube).
+  - The interior of a portal hole no longer reveals the portal interior
+    when the user is *outside* a nested exit-frame portal (skip stencil
+    DECR for `isExit=true`, use `Equal` stencil function when
+    `anyChildIsExit=true`).
+  - AR occlusion is disabled inside the portal interior (`recursionLevel > 0`)
+    so virtual content is no longer discarded by depth-based occlusion in
+    nested portals.
+
+- **16 KB `.so` page alignment for `libvrapi.so`** *(Issue A)*
+
+  The Android 2025 ABI requires all shipped `.so` files to align to 16 KB
+  pages. `libvrapi.so` is now repackaged with
+  `-Wl,-z,max-page-size=16384`, fixing load failures on devices with the
+  new page size.
+
+---
+
 ## v2.54.0 — 31 March 2026
 
 ### Added

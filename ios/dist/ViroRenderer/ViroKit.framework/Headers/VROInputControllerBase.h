@@ -27,6 +27,7 @@
 #define VROInputControllerBase_h
 
 #include <stdio.h>
+#include <map>
 #include <vector>
 #include <string>
 #include <memory>
@@ -181,6 +182,23 @@ protected:
     void updateHitNode(const VROCamera &camera, VROVector3f origin, VROVector3f ray);
 
     /*
+     Source-aware hit-node update. Stores the result both in the legacy
+     `_hitResult` (so single-pointer subsystems — drag, fuse, pinch, rotate —
+     keep working unchanged) and in `_hitResultsBySource[source]` so that
+     gaze/click events can resolve against the specific input source that
+     produced them. Used by backends with multiple simultaneous pointers
+     (e.g. OpenXR with two hands tracked at once).
+     */
+    void updateHitNode(int source, const VROCamera &camera,
+                       VROVector3f origin, VROVector3f ray);
+
+    /*
+     Returns the per-source hit result if one was recorded for this source,
+     otherwise falls back to the legacy single-source `_hitResult`.
+     */
+    std::shared_ptr<VROHitTestResult> getHitResultForSource(int source) const;
+
+    /*
      VRODraggedObject encapsulates all the information that needs to be tracked
      and processed for onDrag events for a given dragged node.
      */
@@ -226,6 +244,12 @@ protected:
      Last result that was returned from the hit test.
      */
     std::shared_ptr<VROHitTestResult> _hitResult;
+
+    /*
+     Per-source hit results, populated by the source-aware updateHitNode
+     overload. Empty entry → no per-source override; falls back to `_hitResult`.
+     */
+    std::map<int, std::shared_ptr<VROHitTestResult>> _hitResultsBySource;
     
     /*
      Last known posiiton of the controller.
@@ -297,9 +321,59 @@ private:
     std::shared_ptr<VRONode> _lastClickedNode;
 
     /*
+     Per-source last clicked node — used to detect a "completed" click
+     (ClickDown + ClickUp on the same node from the same source) when
+     multiple pointers are active simultaneously.
+     */
+    std::map<int, std::shared_ptr<VRONode>> _lastClickedNodesBySource;
+
+    /*
      Last known that was successfully hovered upon.
      */
     std::shared_ptr<VRONode> _lastHoveredNode;
+
+    /*
+     Per-source last hovered node, used by the source-aware hover dispatch in
+     `processGazeEvent`. An entry's presence is the signal that this source
+     has its own hover state; otherwise we fall back to `_lastHoveredNode`.
+     */
+    std::map<int, std::shared_ptr<VRONode>> _lastHoveredNodesBySource;
+
+    /*
+     Hover hysteresis state, per source.
+
+     OpenXR controller / hand aim ray-casts naturally jitter — pointing at a
+     small target with a controller held by an unsteady hand causes the
+     hit-test to alternate between the target node and the surrounding
+     background every 1–3 frames. Without hysteresis, every alternation
+     produced an `onHover(false)` / `onHover(true)` pair to JS, which
+     manifested as a flickering hover state and "the click takes dozens of
+     presses to register" — because if the user pulled the trigger on a
+     "miss" frame, `onButtonEvent` resolved the click against the background
+     instead of the target.
+
+     The hysteresis works as a grace period: when the hit changes from
+     `lastHovered` to a different node, we do NOT immediately fire the
+     exit — instead we record the candidate change and the timestamp.
+     If, within `kHoverHysteresisMillis`, the hit returns to `lastHovered`,
+     the exit is cancelled (no `onHover(false)` ever fires). If the new
+     candidate persists past the window, the exit is confirmed and the
+     normal enter/exit dispatch happens.
+
+     The same window is consulted by `onButtonEvent` so that clicks landing
+     on a transient miss-frame are still routed to `lastHovered` if the
+     pending-exit window is still open. That eliminates the "many presses
+     to click" symptom even though the underlying ray-cast still oscillates.
+     */
+    static constexpr double kHoverHysteresisMillis = 75.0;
+    struct HoverPending {
+        std::shared_ptr<VRONode> candidateNode;   // node the hit currently resolves to
+        VROVector3f candidatePos;                 // hit location at the moment of pending start
+        bool candidateBgHit = false;              // whether candidate is a background hit
+        double startedMillis = -1.0;              // wall-clock time when the candidate first appeared
+    };
+    std::map<int, HoverPending> _hoverPendingBySource;
+    HoverPending _hoverPending;  // legacy single-source fallback
 
     /*
      Returns the first node that is able to handle the event action by bubbling it up.

@@ -19,5 +19,5 @@ export declare class ViroARImageMarker extends ViroBase<{}> {
     _onAnchorFound: (event: NativeSyntheticEvent<ViroARAnchorFoundEvent>) => void;
     _onAnchorUpdated: (event: NativeSyntheticEvent<ViroARAnchorUpdatedEvent>) => void;
     _onAnchorRemoved: (_event: NativeSyntheticEvent<ViroARAnchorRemovedEvent>) => void;
-    render(): React.JSX.Element;
+    render(): React.JSX.Element | null;
 }

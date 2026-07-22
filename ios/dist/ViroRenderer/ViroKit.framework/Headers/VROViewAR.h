@@ -231,4 +231,15 @@ enum class VROCameraPosition;
                saveToCameraRoll:(BOOL)saveToCamera
           withCompletionHandler:(VROViewWriteMediaFinishBlock)completionHandler;
 
+// Calibration scale applied to monocular depth values (1.0 = no change).
+- (void)setMonocularDepthScale:(float)scale;
+
+// Target inference rate for monocular depth. Thermal state overrides downward automatically.
+- (void)setMonocularDepthTargetFPS:(int)fps;
+
+// Switch to front-camera AR when YES. Requires the optional face-tracking
+// module to be installed (see VROARSessioniOS::setFrontCameraConfigProvider);
+// otherwise this has no effect.
+- (void)setFrontCameraEnabled:(BOOL)enabled;
+
 @end

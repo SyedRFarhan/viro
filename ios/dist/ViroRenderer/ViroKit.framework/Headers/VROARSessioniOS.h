@@ -140,6 +140,30 @@ public:
     void setPreferMonocularDepth(bool prefer);
     bool isPreferMonocularDepth() const;
 
+    // Front-camera AR is supplied by an optional external module so that ViroKit
+    // itself never references the ARKit face-tracking / TrueDepth API. Apps that
+    // need it install @reactvision/react-viro-face-tracking, which registers a
+    // provider here. The provider returns a ready-to-run front-camera
+    // ARConfiguration (or nil if the device is unsupported). When no provider is
+    // registered, setFrontCameraEnabled(true) has no effect and AR falls through
+    // to world tracking.
+    typedef ARConfiguration * _Nullable (^VROARFrontCameraConfigProvider)(void);
+    static void setFrontCameraConfigProvider(VROARFrontCameraConfigProvider provider);
+
+    // Enable/disable front-camera AR. Requires a registered config provider
+    // (see setFrontCameraConfigProvider); otherwise it is a no-op. When active,
+    // world tracking, planes, and LiDAR are unavailable.
+    void setFrontCameraEnabled(bool enabled);
+    bool isFrontCameraEnabled() const { return _frontCameraEnabled; }
+
+    // Multiply all monocular depth values by this factor before use.
+    // 1.0 = no change (default). Use < 1.0 if model overestimates distance.
+    void setMonocularDepthScale(float scale);
+
+    // Set the target inference rate (default 5). Thermal state overrides this
+    // downward automatically (Fair→3fps, Serious→2fps, Critical→stop).
+    void setMonocularDepthTargetFPS(int fps);
+
     /*
      Set the base URL from which to download the depth model.
      The full URL will be: baseURL/DepthPro.mlmodelc.zip
@@ -212,6 +236,10 @@ public:
         double confidence, int matchCount, int inlierCount, int processingTimeMs,
         const std::string& platform, const std::string& externalUserId,
         std::function<void(bool, std::string)> callback) override;
+    void rvGetProject(const std::string& projectId,
+        std::function<void(bool, std::string, std::string)> callback) override;
+    void rvGetScene(const std::string& sceneId,
+        std::function<void(bool, std::string, std::string)> callback) override;
     void rvGetSceneAssets(const std::string& sceneId,
         std::function<void(bool, std::string, std::string)> callback) override;
 
@@ -238,6 +266,7 @@ public:
     ARSession *getNativeARSession() const { return _session; }
     ARSession *getNativeARSessioniOS() const { return _session; }
     ARConfiguration *getSessionConfiguration() const { return _sessionConfiguration; }
+    bool isPaused() const { return _sessionPaused; }
 
     #pragma mark - World Map Capture for Session Resume
     void captureWorldMapForResume();
@@ -376,7 +405,10 @@ private:
     std::shared_ptr<VROMonocularDepthEstimator> _monocularDepthEstimator;
     bool _monocularDepthEnabled;
     bool _preferMonocularDepth;  // When true, use monocular even on LiDAR devices
+    bool _frontCameraEnabled;    // When true and a config provider is registered, use front-camera AR
     bool _monocularDepthLoading;
+    float _monocularDepthScale;  // Multiplied into depth values (1.0 = no change)
+    int   _monocularDepthTargetFPS;  // 0 = use estimator default
     std::shared_ptr<VRODriver> _driver;
 
     /*

@@ -54,6 +54,9 @@
 @property (nonatomic, copy, nullable) NSDictionary *scanWaveConfig;
 @property (nonatomic, copy, nullable) RCTDirectEventBlock onScanWaveComplete;
 @property (nonatomic, assign) BOOL semanticDebugEnabled;
+@property (nonatomic, assign) float monocularDepthScale;
+@property (nonatomic, assign) int monocularDepthTargetFPS;
+@property (nonatomic, assign) BOOL frontCameraEnabled;
 @property (nonatomic, assign) float semanticConfidenceThreshold;
 @property (nonatomic, copy) NSString *cloudAnchorProvider;
 @property (nonatomic, copy) NSString *geospatialAnchorProvider;
@@ -366,6 +369,9 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
                           radius:(double)radius
                            limit:(int)limit
                completionHandler:(void (^)(BOOL success, NSArray *anchors, NSString *error))completionHandler;
+- (void)rvGetProject:(void (^)(BOOL success, NSString *data, NSString *error))completionHandler;
+- (void)rvGetScene:(NSString *)sceneId
+ completionHandler:(void (^)(BOOL success, NSString *data, NSString *error))completionHandler;
 - (void)rvGetSceneAssets:(NSString *)sceneId
       completionHandler:(void (^)(BOOL success, NSArray *assets, NSString *error))completionHandler;
 - (void)rvAttachAssetToCloudAnchor:(NSString *)anchorId

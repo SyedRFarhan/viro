@@ -47,6 +47,7 @@ exports.ViroARImageMarker = void 0;
 const React = __importStar(require("react"));
 const react_native_1 = require("react-native");
 const ViroBase_1 = require("../ViroBase");
+const ViroPlatform_1 = require("../Utilities/ViroPlatform");
 /**
  * Container for Viro Components anchored to a detected image.
  */
@@ -67,6 +68,10 @@ class ViroARImageMarker extends ViroBase_1.ViroBase {
         }
     };
     render() {
+        if (ViroPlatform_1.isQuest) {
+            console.warn("[Viro] ViroARImageMarker is not supported on Quest and will not render.");
+            return null;
+        }
         // Uncomment this line to check for misnamed props
         //checkMisnamedProps("ViroARImageMarker", this.props);
         let timeToFuse = undefined;

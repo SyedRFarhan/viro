@@ -35,6 +35,7 @@ import com.viromedia.bridge.component.VRT360ImageManager;
 import com.viromedia.bridge.component.VRTAmbientLightManager;
 import com.viromedia.bridge.component.VRTDirectionalLightManager;
 import com.viromedia.bridge.component.VRTLightingEnvironmentManager;
+import com.viromedia.bridge.component.VRTCameraTextureManager;
 import com.viromedia.bridge.component.VRTMaterialVideoManager;
 import com.viromedia.bridge.component.VRTOmniLightManager;
 import com.viromedia.bridge.component.VRTSkyBoxManager;
@@ -69,10 +70,15 @@ import com.viromedia.bridge.component.node.control.VRTQuadManager;
 import com.viromedia.bridge.component.node.control.VRTVideoSurfaceManager;
 import com.viromedia.bridge.component.node.VRTPortalSceneManager;
 import com.viromedia.bridge.component.node.VRTPortalManager;
+import com.viromedia.bridge.component.VRTVirtualJoystickViewManager;
+import com.viromedia.bridge.component.VRTVirtualButtonViewManager;
+import com.viromedia.bridge.component.VRTGameLoopViewManager;
+import com.viromedia.bridge.component.VRTObjectDetectorViewManager;
 
 
 import com.viromedia.bridge.module.ARSceneModule;
 import com.viromedia.bridge.module.ARSceneNavigatorModule;
+import com.viromedia.bridge.module.VRTCameraTextureModule;
 import com.viromedia.bridge.module.ARTrackingTargetsModule;
 import com.viromedia.bridge.module.AnimationManager;
 import com.viromedia.bridge.module.CameraModule;
@@ -84,6 +90,10 @@ import com.viromedia.bridge.module.SceneNavigatorModule;
 import com.viromedia.bridge.module.PerfMonitor;
 import com.viromedia.bridge.module.SoundModule;
 import com.viromedia.bridge.module.VRT3DSceneNavigatorModule;
+import com.viromedia.bridge.module.VRTStudioModule;
+import com.viromedia.bridge.module.StreamingAudioModule;
+import com.viromedia.bridge.module.VRLauncherModule;
+import com.viromedia.bridge.module.VRModuleOpenXR;
 import com.viromedia.bridge.module.VRTImageModule;
 
 import java.util.Arrays;
@@ -96,7 +106,16 @@ public class ReactViroPackage implements ReactPackage {
     public static final String ON_EXIT_VIRO_BROADCAST ="com.viromedia.bridge.broadcast.OnExitViro";
 
     public enum ViroPlatform {
-        GVR, OVR_MOBILE, AR
+        GVR,
+        /**
+         * @deprecated Deprecated in 2.57.3 — the Oculus Mobile SDK (VrApi) path targets EOL
+         * hardware (GearVR / Oculus Go) and its {@code libvrapi.so} is not 16 KB page-size
+         * compliant (viro#491). Use {@link #QUEST} (OpenXR) for all current Meta headsets.
+         */
+        @Deprecated
+        OVR_MOBILE,
+        AR,
+        QUEST
     }
 
     private final ViroPlatform mViroPlatform;
@@ -108,7 +127,7 @@ public class ReactViroPackage implements ReactPackage {
     @Override
     public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
         Log.e("Manish", "createNativeModules");
-        return Arrays.<NativeModule>asList(
+        List<NativeModule> modules = new java.util.ArrayList<>(Arrays.<NativeModule>asList(
                 new MaterialManager(reactContext),
                 new AnimationManager(reactContext),
                 new CameraModule(reactContext),
@@ -121,9 +140,17 @@ public class ReactViroPackage implements ReactPackage {
                 new VRTImageModule(reactContext),
                 new ARSceneModule(reactContext),
                 new ARSceneNavigatorModule(reactContext),
+                new VRTCameraTextureModule(reactContext),
                 new ARTrackingTargetsModule(reactContext),
-                new VRT3DSceneNavigatorModule(reactContext)
-        );
+                new VRT3DSceneNavigatorModule(reactContext),
+                new VRTStudioModule(reactContext),
+                new StreamingAudioModule(reactContext)
+        ));
+        if (mViroPlatform == ViroPlatform.QUEST) {
+            modules.add(new VRModuleOpenXR(reactContext));
+            modules.add(new VRLauncherModule(reactContext));
+        }
+        return modules;
     }
 
     @Override
@@ -167,12 +194,17 @@ public class ReactViroPackage implements ReactPackage {
                 new VRTPortalManager(reactContext),
                 new VRTLightingEnvironmentManager(reactContext),
                 new VRTMaterialVideoManager(reactContext),
+                new VRTCameraTextureManager(reactContext),
                 // AR Components
                 new VRTARSceneNavigatorManager(reactContext),
                 new VRTARSceneManager(reactContext),
                 new VRTARPlaneManager(reactContext),
                 new VRTARImageMarkerManager(reactContext),
-                new VRTARObjectMarkerManager(reactContext)
+                new VRTARObjectMarkerManager(reactContext),
+                new VRTVirtualJoystickViewManager(reactContext),
+                new VRTVirtualButtonViewManager(reactContext),
+                new VRTGameLoopViewManager(reactContext),
+                new VRTObjectDetectorViewManager(reactContext)
         );
     }
 }

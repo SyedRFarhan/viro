@@ -14,11 +14,16 @@
 import * as React from "react";
 import { ViewProps } from "react-native";
 import { ViroCamera } from "../ViroCamera";
+import { isQuest } from "../Utilities/ViroPlatform";
 
 export class ViroARCamera extends React.Component<ViewProps> {
   _component: ViroCamera | null = null;
 
   render() {
+    if (isQuest) {
+      console.warn("[Viro] ViroARCamera is not supported on Quest and will not render.");
+      return null;
+    }
     // Uncomment this to check props
     return (
       <ViroCamera

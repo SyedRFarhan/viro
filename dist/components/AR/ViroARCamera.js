@@ -47,9 +47,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ViroARCamera = void 0;
 const React = __importStar(require("react"));
 const ViroCamera_1 = require("../ViroCamera");
+const ViroPlatform_1 = require("../Utilities/ViroPlatform");
 class ViroARCamera extends React.Component {
     _component = null;
     render() {
+        if (ViroPlatform_1.isQuest) {
+            console.warn("[Viro] ViroARCamera is not supported on Quest and will not render.");
+            return null;
+        }
         // Uncomment this to check props
         return (<ViroCamera_1.ViroCamera ref={(component) => {
                 this._component = component;

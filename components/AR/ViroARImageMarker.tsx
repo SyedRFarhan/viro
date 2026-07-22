@@ -19,6 +19,7 @@ import {
   ViroARAnchorUpdatedEvent,
 } from "../Types/ViroEvents";
 import { ViroBase } from "../ViroBase";
+import { isQuest } from "../Utilities/ViroPlatform";
 
 /**
  * Container for Viro Components anchored to a detected image.
@@ -47,6 +48,10 @@ export class ViroARImageMarker extends ViroBase<{}> {
   };
 
   render() {
+    if (isQuest) {
+      console.warn("[Viro] ViroARImageMarker is not supported on Quest and will not render.");
+      return null;
+    }
     // Uncomment this line to check for misnamed props
     //checkMisnamedProps("ViroARImageMarker", this.props);
 

@@ -27,6 +27,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -237,8 +241,14 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                 arView.takeScreenshotWithPixelCopy(new ViroViewARCore.PixelCopyScreenshotListener() {
                     @Override
                     public void onSuccess(Bitmap bitmap) {
-                        // Save the bitmap to file
-                        String filePath = saveScreenshotToFile(bitmap, fileName, saveToCameraRoll);
+                        // PixelCopy doesn't capture the overlay View, so burn the
+                        // mark into the bitmap (covers both the file and camera roll).
+                        Bitmap output = bitmap;
+                        if (RVStudioWatermarkState.getInstance().isFreeTier()) {
+                            output = drawWatermark(bitmap);
+                        }
+
+                        String filePath = saveScreenshotToFile(output, fileName, saveToCameraRoll);
 
                         WritableMap returnMap = Arguments.createMap();
                         if (filePath != null) {
@@ -249,6 +259,9 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                             returnMap.putBoolean(RECORDING_SUCCESS_KEY, false);
                             returnMap.putInt(RECORDING_ERROR_KEY, Error.WRITE_TO_FILE.toInt());
                             returnMap.putString(RECORDING_URL_KEY, null);
+                        }
+                        if (output != bitmap) {
+                            output.recycle();
                         }
                         bitmap.recycle();
                         promise.resolve(returnMap);
@@ -265,6 +278,42 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                 });
             }
         });
+    }
+
+    // Composites the pill bottom-centre; returns the source unchanged if a
+    // mutable copy can't be allocated.
+    private Bitmap drawWatermark(Bitmap source) {
+        Bitmap result = source.copy(Bitmap.Config.ARGB_8888, true);
+        if (result == null) {
+            return source;
+        }
+        Canvas canvas = new Canvas(result);
+        float w = result.getWidth();
+        float h = result.getHeight();
+
+        String text = "Powered by ReactVision Studio";
+        float textSize = Math.max(28f, w * 0.030f);
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setColor(Color.WHITE);
+        textPaint.setTextSize(textSize);
+        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.NORMAL));
+        textPaint.setTextAlign(Paint.Align.CENTER);
+
+        Paint.FontMetrics fm = textPaint.getFontMetrics();
+        float textHeight = fm.descent - fm.ascent;
+
+        // Vertical padding scaled off the 12sp live-overlay baseline (6dp).
+        float padY = textSize * (6f / 12f);
+        float barH = textHeight + padY * 2;
+        float margin = w * 0.04f;
+        float top = h - barH - margin;
+
+        Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        bgPaint.setColor(Color.argb(153, 0, 0, 0)); // ~60% black
+        canvas.drawRect(0, top, w, top + barH, bgPaint);
+        canvas.drawText(text, w / 2f, top + padY - fm.ascent, textPaint);
+
+        return result;
     }
 
     /**
@@ -609,154 +658,6 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
     public interface HostGeospatialAnchorCallback {
         void onSuccess(String platformUuid);
         void onFailure(String error);
-    }
-
-    // ========================================================================
-    // Debugging & Validation Methods
-    // ========================================================================
-
-    @ReactMethod
-    public void isDepthOcclusionSupported(final int sceneNavTag, final Promise promise) {
-        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
-        if (uiManager == null) {
-            WritableMap result = Arguments.createMap();
-            result.putBoolean("supported", false);
-            result.putString("error", "UIManager not available");
-            promise.resolve(result);
-            return;
-        }
-
-        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
-            @Override
-            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
-                try {
-                    WritableMap result = Arguments.createMap();
-                    
-                    // On Android, depth-based occlusion requires ARCore 1.18+
-                    // We report supported=true if ARCore is available, but note the requirement
-                    View view = viewResolver.resolveView(sceneNavTag);
-                    if (!(view instanceof VRTARSceneNavigator)) {
-                        result.putBoolean("supported", false);
-                        result.putString("error", "Invalid view type");
-                        promise.resolve(result);
-                        return;
-                    }
-
-                    // Depth occlusion support depends on device having ARCore 1.18+
-                    // Most modern Android devices support this
-                    result.putBoolean("supported", true);
-                    result.putString("minARCoreVersion", "1.18");
-                    promise.resolve(result);
-                } catch (Exception e) {
-                    WritableMap result = Arguments.createMap();
-                    result.putBoolean("supported", false);
-                    result.putString("error", e.getMessage());
-                    promise.resolve(result);
-                }
-            }
-        });
-    }
-
-    @ReactMethod
-    public void getGeospatialSetupStatus(final int sceneNavTag, final Promise promise) {
-        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
-        if (uiManager == null) {
-            WritableMap result = Arguments.createMap();
-            result.putBoolean("geospatialSupported", false);
-            result.putBoolean("locationServicesAvailable", false);
-            result.putBoolean("apiKeyConfigured", false);
-            result.putString("error", "UIManager not available");
-            promise.resolve(result);
-            return;
-        }
-
-        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
-            @Override
-            public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
-                try {
-                    WritableMap result = Arguments.createMap();
-                    
-                    View view = viewResolver.resolveView(sceneNavTag);
-                    if (!(view instanceof VRTARSceneNavigator)) {
-                        result.putBoolean("geospatialSupported", false);
-                        result.putBoolean("locationServicesAvailable", false);
-                        result.putBoolean("apiKeyConfigured", false);
-                        result.putString("error", "Invalid view type");
-                        promise.resolve(result);
-                        return;
-                    }
-
-                    VRTARSceneNavigator sceneNavigator = (VRTARSceneNavigator) view;
-                    
-                    // Check geospatial support (requires ARCore and play-services-location)
-                    boolean geospatialSupported = sceneNavigator.isGeospatialModeSupported();
-                    
-                    // Check if location services are enabled
-                    android.content.Context context = getReactApplicationContext();
-                    boolean locationServicesAvailable = isLocationServicesEnabled(context);
-                    
-                    // Check if Google Cloud API key is configured in AndroidManifest.xml
-                    // This is a basic check - a missing key will cause geospatial to fail
-                    String apiKey = getGoogleCloudApiKey(context);
-                    boolean apiKeyConfigured = apiKey != null && !apiKey.isEmpty();
-                    
-                    result.putBoolean("geospatialSupported", geospatialSupported);
-                    result.putBoolean("locationServicesAvailable", locationServicesAvailable);
-                    result.putBoolean("apiKeyConfigured", apiKeyConfigured);
-                    
-                    if (!geospatialSupported) {
-                        result.putString("error", "Geospatial mode not supported. Ensure play-services-location is included in build.gradle");
-                    }
-                    if (!apiKeyConfigured) {
-                        result.putString("error", "Google Cloud API key not configured. Add com.google.android.geo.API_KEY meta-data to AndroidManifest.xml");
-                    }
-                    
-                    promise.resolve(result);
-                } catch (Exception e) {
-                    WritableMap result = Arguments.createMap();
-                    result.putBoolean("geospatialSupported", false);
-                    result.putBoolean("locationServicesAvailable", false);
-                    result.putBoolean("apiKeyConfigured", false);
-                    result.putString("error", e.getMessage());
-                    promise.resolve(result);
-                }
-            }
-        });
-    }
-
-    /**
-     * Check if location services are enabled on this device.
-     */
-    private boolean isLocationServicesEnabled(android.content.Context context) {
-        try {
-            android.location.LocationManager locationManager = 
-                (android.location.LocationManager) context.getSystemService(android.content.Context.LOCATION_SERVICE);
-            if (locationManager == null) {
-                return false;
-            }
-            boolean gpsEnabled = locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER);
-            boolean networkEnabled = locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER);
-            return gpsEnabled || networkEnabled;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /**
-     * Get the Google Cloud API key from AndroidManifest.xml metadata.
-     */
-    private String getGoogleCloudApiKey(android.content.Context context) {
-        try {
-            android.content.pm.PackageManager pm = context.getPackageManager();
-            android.content.pm.ApplicationInfo ai = pm.getApplicationInfo(
-                context.getPackageName(), android.content.pm.PackageManager.GET_META_DATA);
-            if (ai != null && ai.metaData != null) {
-                return ai.metaData.getString("com.google.android.geo.API_KEY");
-            }
-        } catch (Exception e) {
-            // Ignore errors
-        }
-        return null;
     }
 
     // ========================================================================
@@ -1786,6 +1687,48 @@ public class ARSceneNavigatorModule extends ReactContextBaseJavaModule {
                         WritableMap r = Arguments.createMap();
                         r.putBoolean("success", success);
                         r.putArray("assets", rvJsonArrayToArray(jsonData));
+                        if (!success) r.putString("error", error);
+                        promise.resolve(r);
+                    });
+                } catch (Exception e) { WritableMap r = Arguments.createMap(); r.putBoolean("success", false); r.putString("error", e.getMessage()); promise.resolve(r); }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void rvGetProject(final int sceneNavTag, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) { WritableMap r = Arguments.createMap(); r.putBoolean("success", false); r.putString("error", "UIManager not available"); promise.resolve(r); return; }
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) { WritableMap r = Arguments.createMap(); r.putBoolean("success", false); r.putString("error", "Invalid view type"); promise.resolve(r); return; }
+                    ((VRTARSceneNavigator) view).rvGetProject((success, jsonData, error) -> {
+                        WritableMap r = Arguments.createMap();
+                        r.putBoolean("success", success);
+                        if (success) r.putString("data", jsonData);
+                        if (!success) r.putString("error", error);
+                        promise.resolve(r);
+                    });
+                } catch (Exception e) { WritableMap r = Arguments.createMap(); r.putBoolean("success", false); r.putString("error", e.getMessage()); promise.resolve(r); }
+            }
+        });
+    }
+
+    @ReactMethod
+    public void rvGetScene(final int sceneNavTag, final String sceneId, final Promise promise) {
+        UIManager uiManager = UIManagerHelper.getUIManager(getReactApplicationContext(), sceneNavTag);
+        if (uiManager == null) { WritableMap r = Arguments.createMap(); r.putBoolean("success", false); r.putString("error", "UIManager not available"); promise.resolve(r); return; }
+        ((FabricUIManager) uiManager).addUIBlock(new com.facebook.react.fabric.interop.UIBlock() {
+            @Override public void execute(com.facebook.react.fabric.interop.UIBlockViewResolver viewResolver) {
+                try {
+                    View view = viewResolver.resolveView(sceneNavTag);
+                    if (!(view instanceof VRTARSceneNavigator)) { WritableMap r = Arguments.createMap(); r.putBoolean("success", false); r.putString("error", "Invalid view type"); promise.resolve(r); return; }
+                    ((VRTARSceneNavigator) view).rvGetScene(sceneId, (success, jsonData, error) -> {
+                        WritableMap r = Arguments.createMap();
+                        r.putBoolean("success", success);
+                        if (success) r.putString("data", jsonData);
                         if (!success) r.putString("error", error);
                         promise.resolve(r);
                     });

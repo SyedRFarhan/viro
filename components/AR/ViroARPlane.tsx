@@ -19,6 +19,7 @@ import {
 import { ViroBase } from "../ViroBase";
 import * as React from "react";
 import { NativeSyntheticEvent, requireNativeComponent } from "react-native";
+import { isQuest } from "../Utilities/ViroPlatform";
 
 type Props = {
   anchorId?: string;
@@ -58,6 +59,7 @@ export class ViroARPlane extends ViroBase<Props> {
   };
 
   render() {
+    // Supported on Quest via XR_FB_scene plane anchors (room model). No longer gated.
     // Uncomment this line to check for misnamed props
     //checkMisnamedProps("ViroARPlane", this.props);
 

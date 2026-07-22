@@ -67,6 +67,7 @@ class ViroARPlane extends ViroBase_1.ViroBase {
         }
     };
     render() {
+        // Supported on Quest via XR_FB_scene plane anchors (room model). No longer gated.
         // Uncomment this line to check for misnamed props
         //checkMisnamedProps("ViroARPlane", this.props);
         let timeToFuse = undefined;

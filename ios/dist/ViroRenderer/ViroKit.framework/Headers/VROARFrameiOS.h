@@ -94,6 +94,17 @@ public:
      */
     VROMatrix4f getDepthTextureTransform() const;
 
+    /*
+     Returns a simplified depth transform for DEBUG visualization only.
+     Unlike getDepthTextureTransform(), this does NOT apply the ScaleFill
+     crop correction — it maps the full screen [0,1]×[0,1] to the full
+     depth texture [0,1]×[0,1]. This gives a single full-screen depth
+     overlay (no magenta bands at the edges of the coverage region).
+     The occlusion path still uses getDepthTextureTransform() for
+     correctness (only occlude where real depth data exists).
+     */
+    VROMatrix4f getDepthDebugTextureTransform() const;
+
     // Scene Semantics support (requires ARCore SDK with Semantics extension)
     float getSemanticLabelFraction(VROSemanticLabel label) override;
 
@@ -102,6 +113,12 @@ public:
         int stride = 4,
         float minConfidence = 0.3f,
         float maxDepth = 5.0f) override;
+
+    // Persistent mesh from ARMeshAnchor (LiDAR, iOS 13.4+)
+    std::shared_ptr<VROARDepthMesh> generateMeshAnchorMesh() override;
+
+    // Plane-based fallback mesh (non-LiDAR / non-Depth-API)
+    std::shared_ptr<VROARDepthMesh> generatePlaneMesh() override;
 
 private:
 
@@ -127,6 +144,23 @@ private:
      Returns depth value in meters, or 0.0 if invalid.
      */
     float sampleDepthTextureAtUV(std::shared_ptr<VROTexture> texture, float u, float v) const;
+
+    /*
+     Sample the LiDAR depth confidence at normalized UV coordinates (0-1 range).
+     Reads ARKit's ARDepthData.confidenceMap (ARConfidenceLevel: 0=low, 1=medium, 2=high)
+     and normalizes to [0,1] (low=0.0, medium=0.5, high=1.0). Returns -1.0 when confidence
+     is unavailable (no LiDAR / no confidence map).
+     */
+    float sampleConfidenceAtUV(float u, float v) const;
+
+    /*
+     Unproject a camera-image-space point (normalized [0,1] in ARKit's landscape image
+     space, the same space used for [ARFrame hitTest:]) at a given metric depth (meters
+     along the optical axis) to a world-space position. Returns false if camera
+     intrinsics are unavailable. Used to build a depth-derived DepthPoint hit result.
+     */
+    bool unprojectToWorld(VROVector3f cameraImagePoint, float depthMeters,
+                          VROVector3f &outWorld) const;
 
 };
 

@@ -256,6 +256,7 @@ public:
     void setOcclusionMode(VROOcclusionMode mode);
     void setDepthTexture(std::shared_ptr<VROTexture> depthTexture);
     void setDepthTextureTransform(VROMatrix4f transform);
+    void setDepthIsMonocular(bool monocular);
     void setSemanticTextureTransform(VROMatrix4f transform);
 
     /*
@@ -282,6 +283,14 @@ public:
     
 #pragma mark - Camera
    
+    /*
+     Returns true if the render context has been initialized (initRenderer called).
+     Safe to call before any scene is set.
+     */
+    bool hasRenderContext() const {
+        return _context != nullptr;
+    }
+
     /*
      Get the camera used in the last frame.
      */

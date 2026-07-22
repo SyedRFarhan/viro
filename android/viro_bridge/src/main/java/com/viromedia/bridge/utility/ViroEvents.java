@@ -53,6 +53,7 @@ public class ViroEvents {
     public static final String ON_TRANSFORM_DELEGATE = "onNativeTransformDelegateViro";
     public static final String ON_TRACKING_UPDATED = "onTrackingUpdatedViro";
     public static final String ON_AMBIENT_LIGHT_UPDATE = "onAmbientLightUpdateViro";
+    public static final String ON_DEPTH_READY = "onDepthReadyViro";
     public static final String ON_ANCHOR_FOUND = "onAnchorFoundViro";
     public static final String ON_ANCHOR_UPDATED = "onAnchorUpdatedViro";
     public static final String ON_ANCHOR_REMOVED = "onAnchorRemovedViro";
@@ -61,5 +62,22 @@ public class ViroEvents {
     public static final String ON_CAMERA_AR_HIT_TEST_VIRO = "onCameraARHitTestViro";
     public static final String ON_AR_POINT_CLOUD_UPDATE = "onARPointCloudUpdateViro";
     public static final String ON_CAMERA_TRANSFORM_UPDATE = "onCameraTransformUpdateViro";
+    public static final String ON_HAND_UPDATE = "onHandUpdateViro";
+    public static final String ON_CAMERA_READY = "onCameraReadyViro";
+
+    // Game loop events
+    public static final String ON_UPDATE       = "onUpdate";
+    public static final String ON_LATE_UPDATE  = "onLateUpdate";
+    public static final String ON_FIXED_UPDATE = "onFixedUpdate";
+
+    // Virtual controller events
+    public static final String ON_STICK_CHANGE = "onStickChange";
+    public static final String ON_PRESS_IN     = "onPressIn";
+    public static final String ON_PRESS_OUT    = "onPressOut";
+
+    // Object detector events
+    public static final String ON_DETECTION    = "onDetectionViro";
+    public static final String ON_DETECTOR_READY = "onReadyViro";
+    public static final String ON_DETECTOR_ERROR = "onErrorViro";
 
 }

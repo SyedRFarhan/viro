@@ -47,6 +47,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ViroARSceneNavigator = exports.SCAN_WAVE_PRESETS = void 0;
 const React = __importStar(require("react"));
 const react_native_1 = require("react-native");
+const ViroPlatform_1 = require("../Utilities/ViroPlatform");
 const ViroARSceneNavigatorModule = react_native_1.NativeModules.VRTARSceneNavigatorModule;
 let mathRandomOffset = 0;
 /** Pre-built scan wave configurations. */
@@ -74,6 +75,7 @@ exports.SCAN_WAVE_PRESETS = {
  * Internal class component - use ViroARSceneNavigator (the forwardRef wrapper) for ref access.
  */
 class ViroARSceneNavigatorClass extends React.Component {
+    static _questWarningLogged = false;
     _component = null;
     constructor(props) {
         super(props);
@@ -761,6 +763,12 @@ class ViroARSceneNavigatorClass extends React.Component {
     _rvFindNearbyCloudAnchors = async (latitude, longitude, radius, limit) => {
         return await ViroARSceneNavigatorModule.rvFindNearbyCloudAnchors((0, react_native_1.findNodeHandle)(this), latitude, longitude, radius, limit);
     };
+    _rvGetProject = async () => {
+        return await ViroARSceneNavigatorModule.rvGetProject((0, react_native_1.findNodeHandle)(this));
+    };
+    _rvGetScene = async (sceneId) => {
+        return await ViroARSceneNavigatorModule.rvGetScene((0, react_native_1.findNodeHandle)(this), sceneId);
+    };
     _rvGetSceneAssets = async (sceneId) => {
         return await ViroARSceneNavigatorModule.rvGetSceneAssets((0, react_native_1.findNodeHandle)(this), sceneId);
     };
@@ -1198,6 +1206,8 @@ class ViroARSceneNavigatorClass extends React.Component {
         rvAttachAssetToCloudAnchor: this._rvAttachAssetToCloudAnchor,
         rvRemoveAssetFromCloudAnchor: this._rvRemoveAssetFromCloudAnchor,
         rvTrackCloudAnchorResolution: this._rvTrackCloudAnchorResolution,
+        rvGetProject: this._rvGetProject,
+        rvGetScene: this._rvGetScene,
         rvGetSceneAssets: this._rvGetSceneAssets,
         // Assets API
         rvUploadAsset: this._rvUploadAsset,
@@ -1279,6 +1289,8 @@ class ViroARSceneNavigatorClass extends React.Component {
         rvAttachAssetToCloudAnchor: this._rvAttachAssetToCloudAnchor,
         rvRemoveAssetFromCloudAnchor: this._rvRemoveAssetFromCloudAnchor,
         rvTrackCloudAnchorResolution: this._rvTrackCloudAnchorResolution,
+        rvGetProject: this._rvGetProject,
+        rvGetScene: this._rvGetScene,
         rvGetSceneAssets: this._rvGetSceneAssets,
         // Assets API
         rvUploadAsset: this._rvUploadAsset,
@@ -1316,6 +1328,21 @@ class ViroARSceneNavigatorClass extends React.Component {
     render() {
         // Uncomment this line to check for misnamed props
         //checkMisnamedProps("ViroARSceneNavigator", this.props);
+        if (ViroPlatform_1.isQuest) {
+            if (!ViroARSceneNavigatorClass._questWarningLogged) {
+                console.warn("[Viro] ViroARSceneNavigator is not supported on Meta Quest. " +
+                    "Use ViroXRSceneNavigator (auto-detects Quest) or ViroVRSceneNavigator instead.");
+                ViroARSceneNavigatorClass._questWarningLogged = true;
+            }
+            if ("questFallback" in this.props) {
+                return <>{this.props.questFallback}</>;
+            }
+            return (<react_native_1.View style={[styles.container, styles.questFallback]}>
+          <react_native_1.Text style={styles.questFallbackText}>
+            AR is not supported on Meta Quest.
+          </react_native_1.Text>
+        </react_native_1.View>);
+        }
         const items = this._renderSceneStackItems();
         // update the arSceneNavigator with the latest given props on every render
         this.arSceneNavigator.viroAppProps = this.props.viroAppProps;
@@ -1403,6 +1430,15 @@ const styles = react_native_1.StyleSheet.create({
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
+    },
+    questFallback: {
+        backgroundColor: "#000",
+        padding: 24,
+    },
+    questFallbackText: {
+        color: "#fff",
+        fontSize: 16,
+        textAlign: "center",
     },
 });
 const VRTARSceneNavigator = (0, react_native_1.requireNativeComponent)("VRTARSceneNavigator", 

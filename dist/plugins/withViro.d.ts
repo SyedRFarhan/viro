@@ -1,5 +1,5 @@
 import { ConfigPlugin } from "@expo/config-plugins";
-export type XrMode = "GVR" | "AR" | "OVR_MOBILE";
+export type XrMode = "GVR" | "AR" | "OVR_MOBILE" | "QUEST";
 /**
  * Anchor provider type.
  * - "none": Disabled
@@ -55,6 +55,13 @@ export interface ViroConfigurationOptions {
      * Written to AndroidManifest as com.reactvision.RVProjectId and to Info.plist as RVProjectId.
      */
     rvProjectId?: string;
+    /**
+     * Override the ReactVision platform base URL.
+     * Omit for production. Set to a staging URL for testing.
+     *
+     * Written to AndroidManifest as com.reactvision.RVEndpoint and to Info.plist as RVEndpoint.
+     */
+    rvEndpoint?: string;
     /**
      * Anchor provider for both cloud anchors and geospatial anchors.
      * Replaces the deprecated cloudAnchorProvider + geospatialAnchorProvider props.
@@ -132,6 +139,15 @@ export interface ViroConfigurationOptions {
     };
     android?: {
         xRMode?: XrMode[];
+        /**
+         * Meta Developer Portal App ID (numeric string).
+         * Written to AndroidManifest as com.oculus.app_id meta-data.
+         * Eliminates the "App Name Unavailable" popup on Meta Quest.
+         *
+         * Get your App ID from the Meta Developer Portal:
+         * https://developer.oculus.com/manage
+         */
+        questAppId?: string;
     };
 }
 /**

@@ -18,8 +18,11 @@ import {
   NativeModules,
   requireNativeComponent,
   StyleSheet,
+  Text,
+  View,
   ViewProps,
 } from "react-native";
+import { isQuest } from "../Utilities/ViroPlatform";
 import {
   ViroWorldOrigin,
   ViroProvider,
@@ -171,6 +174,13 @@ type Props = ViewProps & {
   };
   initialSceneKey?: string;
 
+  /**
+   * Optional fallback rendered when this navigator is mounted on a Meta Quest
+   * device (where AR is not supported). When omitted, a default message view
+   * is rendered. Pass `null` to render nothing.
+   */
+  questFallback?: React.ReactNode;
+
   autofocus?: boolean;
   /**
    * iOS only props! Note: these props may change as the underlying platforms coalesce in features.
@@ -293,6 +303,47 @@ type Props = ViewProps & {
   preferMonocularDepth?: boolean;
 
   /**
+   * Calibration scale applied to monocular depth values before use in occlusion.
+   * 1.0 (default) = no change. Use < 1.0 if the model overestimates distances
+   * (virtual objects visible through real surfaces). Use > 1.0 if it underestimates.
+   * Typical tuning range: 0.7 – 1.3.
+   *
+   * @default 1.0
+   * @platform ios
+   */
+  monocularDepthScale?: number;
+
+  /**
+   * Maximum inference rate for monocular depth (default: 5).
+   * Lower values reduce device heat. Thermal state automatically
+   * overrides this downward: Fair→3fps, Serious→2fps, Critical→stopped.
+   * 3fps is barely perceptible for occlusion; 5fps is very smooth.
+   *
+   * @default 5
+   * @platform ios
+   */
+  monocularDepthTargetFPS?: number;
+
+  /**
+   * Use the front (selfie) camera as the AR session background.
+   *
+   * Requires the optional `@reactvision/react-viro-face-tracking` package to be
+   * installed — it provides the native front-camera AR configuration and, on
+   * iOS, declares TrueDepth usage. Without it, this prop has no effect.
+   *
+   * On iOS the package uses the front TrueDepth camera; on Android it uses
+   * ARCore Augmented Faces mode. World tracking, plane detection, and LiDAR are
+   * unavailable in this mode.
+   *
+   * For a plain selfie feed without face tracking (no TrueDepth), use
+   * `ViroCameraTexture` with `cameraPosition="front"` instead.
+   *
+   * @default false
+   * @platform ios, android
+   */
+  frontCameraEnabled?: boolean;
+
+  /**
    * Cloud and geospatial anchor provider.
    * Set to `"reactvision"` (default) for the ReactVision backend,
    * `"arcore"` for Google Cloud Anchors, or `"none"` to disable.
@@ -380,6 +431,7 @@ type State = {
  * Internal class component - use ViroARSceneNavigator (the forwardRef wrapper) for ref access.
  */
 class ViroARSceneNavigatorClass extends React.Component<Props, State> {
+  static _questWarningLogged = false;
   _component: ViroNativeRef = null;
 
   constructor(props: Props) {
@@ -1357,6 +1409,16 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     );
   };
 
+  _rvGetProject = async (): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvGetProject(findNodeHandle(this));
+  };
+
+  _rvGetScene = async (sceneId: string): Promise<any> => {
+    return await ViroARSceneNavigatorModule.rvGetScene(
+      findNodeHandle(this), sceneId
+    );
+  };
+
   _rvGetSceneAssets = async (sceneId: string): Promise<any> => {
     return await ViroARSceneNavigatorModule.rvGetSceneAssets(
       findNodeHandle(this), sceneId
@@ -1936,6 +1998,8 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     rvAttachAssetToCloudAnchor: this._rvAttachAssetToCloudAnchor,
     rvRemoveAssetFromCloudAnchor: this._rvRemoveAssetFromCloudAnchor,
     rvTrackCloudAnchorResolution: this._rvTrackCloudAnchorResolution,
+    rvGetProject: this._rvGetProject,
+    rvGetScene: this._rvGetScene,
     rvGetSceneAssets: this._rvGetSceneAssets,
     // Assets API
     rvUploadAsset: this._rvUploadAsset,
@@ -2017,6 +2081,8 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     rvAttachAssetToCloudAnchor: this._rvAttachAssetToCloudAnchor,
     rvRemoveAssetFromCloudAnchor: this._rvRemoveAssetFromCloudAnchor,
     rvTrackCloudAnchorResolution: this._rvTrackCloudAnchorResolution,
+    rvGetProject: this._rvGetProject,
+    rvGetScene: this._rvGetScene,
     rvGetSceneAssets: this._rvGetSceneAssets,
     // Assets API
     rvUploadAsset: this._rvUploadAsset,
@@ -2055,6 +2121,26 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
   render() {
     // Uncomment this line to check for misnamed props
     //checkMisnamedProps("ViroARSceneNavigator", this.props);
+
+    if (isQuest) {
+      if (!ViroARSceneNavigatorClass._questWarningLogged) {
+        console.warn(
+          "[Viro] ViroARSceneNavigator is not supported on Meta Quest. " +
+            "Use ViroXRSceneNavigator (auto-detects Quest) or ViroVRSceneNavigator instead."
+        );
+        ViroARSceneNavigatorClass._questWarningLogged = true;
+      }
+      if ("questFallback" in this.props) {
+        return <>{this.props.questFallback}</>;
+      }
+      return (
+        <View style={[styles.container, styles.questFallback]}>
+          <Text style={styles.questFallbackText}>
+            AR is not supported on Meta Quest.
+          </Text>
+        </View>
+      );
+    }
 
     const items = this._renderSceneStackItems();
 
@@ -2177,6 +2263,15 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  questFallback: {
+    backgroundColor: "#000",
+    padding: 24,
+  },
+  questFallbackText: {
+    color: "#fff",
+    fontSize: 16,
+    textAlign: "center",
   },
 });
 

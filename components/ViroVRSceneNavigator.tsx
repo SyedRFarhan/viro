@@ -19,7 +19,10 @@ import {
   StyleSheet,
   ViewProps,
 } from "react-native";
-import { ViroExitViroEvent } from "./Types/ViroEvents";
+import {
+  ViroExitViroEvent,
+  ViroHandUpdateEvent,
+} from "./Types/ViroEvents";
 import {
   Viro3DPoint,
   ViroNativeRef,
@@ -27,6 +30,10 @@ import {
   ViroSceneDictionary,
 } from "./Types/ViroUtils";
 const ViroSceneNavigatorModule = NativeModules.VRTSceneNavigatorModule;
+const VRModuleOpenXR = NativeModules.VRModuleOpenXR as {
+  recenterTracking: (viewTag: number) => void;
+  setPassthroughEnabled: (viewTag: number, enabled: boolean) => void;
+} | undefined;
 
 type State = {
   sceneDictionary: ViroSceneDictionary;
@@ -78,10 +85,27 @@ type Props = ViewProps & {
   bloomEnabled?: boolean;
   shadowsEnabled?: boolean;
   multisamplingEnabled?: boolean;
+
+  /** Enable XR_FB_passthrough mixed-reality camera feed (Quest 3 / Quest Pro). */
+  passthroughEnabled?: boolean;
+
+  /**
+   * Enable skeletal hand tracking (Quest — requires com.oculus.permission.HAND_TRACKING in manifest).
+   * Pinch and grab gestures fire the same onClick/onDrag events as controller buttons.
+   */
+  handTrackingEnabled?: boolean;
+
+  /**
+   * Per-frame skeletal hand joint data. Fires at display refresh rate (72/90 Hz).
+   * null for a hand means it is not currently tracked.
+   */
+  onHandUpdate?: (event: NativeSyntheticEvent<ViroHandUpdateEvent>) => void;
 };
 
 /**
  * ViroVRSceneNavigator is used to transition between multiple scenes.
+ * Intended for OVR / Google Cardboard VR mode on non-Quest Android devices.
+ * On Meta Quest use ViroXRSceneNavigator instead.
  */
 export class ViroVRSceneNavigator extends React.Component<Props, State> {
   _component: ViroNativeRef = null;
@@ -90,9 +114,9 @@ export class ViroVRSceneNavigator extends React.Component<Props, State> {
    * Called from native when either the user physically decides to exit vr (hits
    * the "X" buton).
    */
-  _onExitViro(_event: NativeSyntheticEvent<ViroExitViroEvent>) {
+  _onExitViro = (_event: NativeSyntheticEvent<ViroExitViroEvent>) => {
     this.props.onExitViro && this.props.onExitViro();
-  }
+  };
 
   constructor(props: Props) {
     super(props);
@@ -134,7 +158,7 @@ export class ViroVRSceneNavigator extends React.Component<Props, State> {
    *
    * @todo: use Typescript function overloading rather than this inaccurate solution
    */
-  push(param1?: ViroScene | string, param2?: ViroScene) {
+  push = (param1?: ViroScene | string, param2?: ViroScene) => {
     var sceneKey = undefined;
     var scene = undefined;
     if (typeof param1 == "string") {
@@ -169,7 +193,7 @@ export class ViroVRSceneNavigator extends React.Component<Props, State> {
 
     this.incrementSceneReference(scene as ViroScene, sceneKey, false);
     this.addToHistory(sceneKey);
-  }
+  };
 
   /**
    * Replace the top scene in the stack with the given scene. The remainder of the back
@@ -182,7 +206,7 @@ export class ViroVRSceneNavigator extends React.Component<Props, State> {
    *
    * @todo: use Typescript function overloading rather than this inaccurate solution
    */
-  replace(param1?: ViroScene | string, param2?: ViroScene) {
+  replace = (param1?: ViroScene | string, param2?: ViroScene) => {
     var sceneKey = undefined;
     var scene = undefined;
     if (typeof param1 == "string") {
@@ -221,7 +245,7 @@ export class ViroVRSceneNavigator extends React.Component<Props, State> {
     this.popHistoryByN(1);
     this.incrementSceneReference(scene as ViroScene, sceneKey, false);
     this.addToHistory(sceneKey);
-  }
+  };
 
   /**
    * Jumps to a given scene that had been previously pushed. If the scene was not pushed, we
@@ -235,7 +259,7 @@ export class ViroVRSceneNavigator extends React.Component<Props, State> {
    *
    * @todo: use Typescript function overloading rather than this inaccurate solution
    */
-  jump(param1?: ViroScene | string, param2?: ViroScene) {
+  jump = (param1?: ViroScene | string, param2?: ViroScene) => {
     var sceneKey = undefined;
     var scene = undefined;
     if (typeof param1 == "string") {
@@ -270,13 +294,13 @@ export class ViroVRSceneNavigator extends React.Component<Props, State> {
 
     this.incrementSceneReference(scene as ViroScene, sceneKey, true);
     this.reorderHistory(sceneKey);
-  }
+  };
 
-  pop() {
+  pop = () => {
     this.popN(1);
-  }
+  };
 
-  popN(n: number) {
+  popN = (n: number) => {
     if (n === 0) {
       return;
     }
@@ -290,7 +314,7 @@ export class ViroVRSceneNavigator extends React.Component<Props, State> {
 
     this.decrementReferenceForLastNScenes(n);
     this.popHistoryByN(n);
-  }
+  };
 
   /**
    * Increments the reference count for a scene within sceneDictionary that is
@@ -426,20 +450,20 @@ export class ViroVRSceneNavigator extends React.Component<Props, State> {
     return -1;
   }
 
-  _recenterTracking() {
+  _recenterTracking = () => {
     ViroSceneNavigatorModule.recenterTracking(findNodeHandle(this));
-  }
+  };
 
-  async _project(point: Viro3DPoint) {
+  _project = async (point: Viro3DPoint) => {
     return await ViroSceneNavigatorModule.project(findNodeHandle(this), point);
-  }
+  };
 
-  async _unproject(point: Viro3DPoint) {
+  _unproject = async (point: Viro3DPoint) => {
     return await ViroSceneNavigatorModule.unproject(
       findNodeHandle(this),
       point
     );
-  }
+  };
 
   _renderSceneStackItems() {
     let views = [];
@@ -515,6 +539,7 @@ var styles = StyleSheet.create({
     alignItems: "center",
   },
 });
+
 
 var VRTVRSceneNavigator = requireNativeComponent<any>(
   "VRTVRSceneNavigator",

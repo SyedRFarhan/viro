@@ -4,6 +4,8 @@
  *
  */
 import { ViroAnimations } from "./components/Animation/ViroAnimations";
+import { StudioSceneNavigator, StudioARScene } from "./components/Studio";
+import { ViroVisionOSModule, isVisionOS, enterImmersiveSpace, exitImmersiveSpace } from "./components/VisionOS/ViroVisionOSModule";
 import { Viro3DObject } from "./components/Viro3DObject";
 import { Viro360Image } from "./components/Viro360Image";
 import { Viro360Video } from "./components/Viro360Video";
@@ -26,6 +28,11 @@ import {
   ViroTrackingStateConstants,
 } from "./components/ViroConstants";
 import { ViroController } from "./components/ViroController";
+import { ViroVirtualJoystick } from "./components/ViroVirtualJoystick";
+import { ViroVirtualButton } from "./components/ViroVirtualButton";
+import { ViroGameLoop } from "./components/ViroGameLoop";
+import { ViroGameLoopUtils } from "./components/ViroGameLoopUtils";
+import { useGameLoop, useLateUpdate, useFixedUpdate } from "./components/hooks/useGameLoop";
 import { ViroDirectionalLight } from "./components/ViroDirectionalLight";
 import { ViroFlexView } from "./components/ViroFlexView";
 import { ViroGeometry } from "./components/ViroGeometry";
@@ -39,6 +46,10 @@ import {
   ViroShaderModifier,
 } from "./components/Material/ViroMaterials";
 import { ViroMaterialVideo } from "./components/ViroMaterialVideo";
+import { ViroCameraTexture } from "./components/ViroCameraTexture";
+export type { ViroCameraPosition, ViroCameraReadyEvent } from "./components/ViroCameraTexture";
+import { ViroObjectDetector } from "./components/ViroObjectDetector";
+export type { ViroDetectorMode, ViroDetectedObject, ViroDetectionBoundingBox, ViroDetectionEvent, ViroDetectorReadyEvent, ViroDetectorErrorEvent } from "./components/ViroObjectDetector";
 import { ViroNode } from "./components/ViroNode";
 import { ViroOmniLight } from "./components/ViroOmniLight";
 import { ViroOrbitCamera } from "./components/ViroOrbitCamera";
@@ -59,7 +70,11 @@ import { ViroSpotLight } from "./components/ViroSpotLight";
 import { ViroText } from "./components/ViroText";
 import { ViroVideo } from "./components/ViroVideo";
 import { ViroVRSceneNavigator } from "./components/ViroVRSceneNavigator";
+import { ViroXRSceneNavigator } from "./components/ViroXRSceneNavigator";
 import { Viro3DSceneNavigator } from "./components/Viro3DSceneNavigator";
+import { hasOpenXRSupport, isQuest } from "./components/Utilities/ViroPlatform";
+import { useAnySourceHover } from "./components/Utilities/useAnySourceHover";
+import { useAnySourcePressed } from "./components/Utilities/useAnySourcePressed";
 import { ViroTextStyle } from "./components/Styles/ViroTextStyle";
 import { ViroStyle } from "./components/Styles/ViroStyle";
 import {
@@ -166,6 +181,11 @@ import {
   ViroGeospatialSetupStatusResult,
   // AR Anchor Types
   ViroARNodeReference,
+  // Quest / OpenXR Hand Tracking Types
+  ViroJoint,
+  ViroHandJoints,
+  ViroHandPinchEvent,
+  ViroHandUpdateEvent,
 } from "./components/Types/ViroEvents";
 import { ViroSurface } from "./components/ViroSurface";
 import { ViroSceneNavigator } from "./components/ViroSceneNavigator";
@@ -181,6 +201,17 @@ import {
   ViroWorldMappingStatusResult,
   ViroWorldMappingStatusChangedEvent,
 } from "./components/Types/ViroWorldMap";
+import { ViroQuestEntryPoint } from "./components/ViroQuestEntryPoint";
+import { VRQuestNavigatorBridge } from "./components/Utilities/VRQuestNavigatorBridge";
+import { VRModuleOpenXR, useVRViewTag, exitVRScene, setPassthroughStyle } from "./components/Utilities/VRModuleOpenXR";
+import type { VRModuleOpenXRType, ViroPassthroughStyle } from "./components/Utilities/VRModuleOpenXR";
+import { StreamingAudioManager } from "./components/Utilities/StreamingAudioManager";
+import { AppRegistry } from "react-native";
+
+// Auto-register the Quest VR entry point. VRActivity launches this component
+// as 'VRQuestScene'. Registering here means apps need no manual setup.
+// Apps that need a custom VR root can re-register after importing this package.
+AppRegistry.registerComponent("VRQuestScene", () => ViroQuestEntryPoint);
 
 export {
   ViroARImageMarker,
@@ -195,6 +226,13 @@ export {
   ViroButton,
   ViroCamera,
   ViroController,
+  ViroVirtualJoystick,
+  ViroVirtualButton,
+  ViroGameLoop,
+  ViroGameLoopUtils,
+  useGameLoop,
+  useLateUpdate,
+  useFixedUpdate,
   ViroDirectionalLight,
   ViroFlexView,
   ViroGeometry,
@@ -203,6 +241,8 @@ export {
   ViroMaterials,
   ViroARCamera,
   ViroMaterialVideo,
+  ViroCameraTexture,
+  ViroObjectDetector,
   ViroNode,
   ViroOmniLight,
   ViroOrbitCamera,
@@ -232,8 +272,22 @@ export {
   ViroText,
   ViroVideo,
   ViroVRSceneNavigator,
+  ViroXRSceneNavigator,
+  ViroQuestEntryPoint,
+  // Quest bridge — for custom VR roots and VRModuleOpenXR viewTag access
+  VRQuestNavigatorBridge,
+  VRModuleOpenXR,
+  useVRViewTag,
+  exitVRScene,
+  setPassthroughStyle,
   Viro3DSceneNavigator,
+  // Streaming audio
+  StreamingAudioManager,
   // Utilities
+  hasOpenXRSupport,
+  isQuest,
+  useAnySourceHover,
+  useAnySourcePressed,
   ViroARTrackingReasonConstants,
   ViroRecordingErrorConstants,
   ViroTrackingStateConstants,
@@ -357,4 +411,32 @@ export {
   ViroTrackingStateValue,
   ViroWorldMappingStatusResult,
   ViroWorldMappingStatusChangedEvent,
+  // Quest / OpenXR Hand Tracking Types
+  ViroJoint,
+  ViroHandJoints,
+  ViroHandPinchEvent,
+  ViroHandUpdateEvent,
+  // Studio Integration
+  StudioSceneNavigator,
+  StudioARScene,
+  // VisionOS
+  ViroVisionOSModule,
+  isVisionOS,
+  enterImmersiveSpace,
+  exitImmersiveSpace,
 };
+
+export type { VRModuleOpenXRType, ViroPassthroughStyle };
+export type { ImmersiveSpaceStyle } from "./components/VisionOS/ViroVisionOSModule";
+
+export type {
+  StudioSceneResponse,
+  StudioAsset,
+  StudioAnimation,
+  StudioCollisionBinding,
+  StudioSceneFunction,
+  StudioSceneMeta,
+  StudioProjectMeta,
+  StudioSceneNavigatorHandle,
+  StudioSceneNavigatorProps,
+} from "./components/Studio";

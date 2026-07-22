@@ -40,7 +40,7 @@ import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
-import com.facebook.react.uimanager.events.RCTEventEmitter;
+import com.viromedia.bridge.utility.ViroEventEmitter;
 import com.viro.core.ARAnchor;
 import com.viro.core.ARNode;
 import com.viro.core.ARScene;
@@ -116,6 +116,7 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
                     if (nav != null) {
                         nav.mGLInitialized = true;
                         nav.setViroContext();
+                        nav.refreshCameraBackground();
                     }
                 }
             });
@@ -123,6 +124,19 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
             if (navigator.mNeedsAutoFocusToggle) {
                 navigator.setAutoFocusEnabled(navigator.mAutoFocusEnabled);
                 navigator.mNeedsAutoFocusToggle = false;
+            }
+
+            // Apply frontCameraEnabled before the first ARCore config runs.
+            // This must happen after GL init but before any VRTARScene child
+            // calls setOcclusionMode (which triggers updateARCoreConfig).
+            if (navigator.mFrontCameraEnabled) {
+                for (int i = 0; i < navigator.getChildCount(); i++) {
+                    android.view.View child = navigator.getChildAt(i);
+                    if (child instanceof com.viromedia.bridge.component.node.VRTARScene) {
+                        ((com.viromedia.bridge.component.node.VRTARScene) child)
+                            .setFrontCameraEnabled(true);
+                    }
+                }
             }
 
             // Apply pending occlusion mode configuration
@@ -222,6 +236,9 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         // Apply current effective occlusion mode to newly added ARScenes
         if (child instanceof VRTARScene) {
             ((VRTARScene) child).setOcclusionMode(computeEffectiveOcclusionMode());
+            if (mFrontCameraEnabled) {
+                ((VRTARScene) child).setFrontCameraEnabled(true);
+            }
         }
     }
 
@@ -232,6 +249,25 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
     public void resetARSession() {
         ViroViewARCore arView = getARView();
         // No-op for now.
+    }
+
+    // First-mount ordering race in the renderer: on a cold AR mount the ARCore
+    // session can bind its camera texture before the GL thread creates that
+    // texture (onSurfaceCreated), so the passthrough stays black while 3D content
+    // still renders. Replaying pause->resume re-binds it against the now-valid
+    // surface. Call only from onSuccess (onAttachedToWindow / early onHostResume
+    // run before the texture exists). Proper fix belongs in the renderer.
+    private void refreshCameraBackground() {
+        ViroViewARCore arView = getARView();
+        if (arView == null) {
+            return;
+        }
+        android.app.Activity activity = mReactContext.getCurrentActivity();
+        if (activity == null) {
+            return;
+        }
+        arView.onActivityPaused(activity);
+        arView.onActivityResumed(activity);
     }
 
     @Override
@@ -311,9 +347,7 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         event.putString("type", "tabSwitch");
 
         try {
-            mReactContext
-                .getJSModule(RCTEventEmitter.class)
-                .receiveEvent(getId(), "onTabSwitch", event);
+            ViroEventEmitter.emit(mReactContext, getId(), "onTabSwitch", event);
             android.util.Log.i(TAG, "  Tab switch event emitted to React");
         } catch (Exception e) {
             android.util.Log.e(TAG, "  Failed to emit tab switch event: " + e.getMessage());
@@ -336,8 +370,13 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
 
     public void setAutoFocusEnabled(boolean enabled) {
         mAutoFocusEnabled = enabled;
-        if (mGLInitialized) {
-            ((ViroViewARCore)mViroView).setCameraAutoFocusEnabled(mAutoFocusEnabled);
+        // mGLInitialized can be true while the AR view has already been torn down (e.g. the
+        // renderer-start callback fires after a background/foreground transition or after the
+        // navigator was detached). Guard against a null view to avoid an NPE in
+        // setCameraAutoFocusEnabled (GitHub #478); defer until the view is available again.
+        ViroViewARCore arView = getARView();
+        if (mGLInitialized && arView != null) {
+            arView.setCameraAutoFocusEnabled(mAutoFocusEnabled);
         } else {
             mNeedsAutoFocusToggle = true;
         }
@@ -472,6 +511,18 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         }
     }
 
+    private boolean mFrontCameraEnabled = false;
+
+    public void setFrontCameraEnabled(boolean enabled) {
+        mFrontCameraEnabled = enabled;
+        for (int i = 0; i < getChildCount(); i++) {
+            android.view.View child = getChildAt(i);
+            if (child instanceof com.viromedia.bridge.component.node.VRTARScene) {
+                ((com.viromedia.bridge.component.node.VRTARScene) child).setFrontCameraEnabled(enabled);
+            }
+        }
+    }
+
     public void setDepthEnabled(boolean enabled) {
         mDepthEnabled = enabled;
         android.util.Log.i(TAG, "[OCCLUSION] setDepthEnabled: " + enabled + ", mGLInitialized: " + mGLInitialized);
@@ -522,6 +573,7 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
     private String mCloudAnchorProvider = "none";
     private String mRvApiKey = null;
     private String mRvProjectId = null;
+    private String mRvEndpoint = null;
     // Improvement 5: track whether credentials have been pushed to the native session
     // so setReactVisionConfig() is called exactly once per provider activation.
     private boolean mRvConfigApplied = false;
@@ -587,6 +639,7 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
                 if (ai.metaData != null) {
                     mRvApiKey = ai.metaData.getString("com.reactvision.RVApiKey");
                     mRvProjectId = ai.metaData.getString("com.reactvision.RVProjectId");
+                    mRvEndpoint = ai.metaData.getString("com.reactvision.RVEndpoint");
                     if (mRvApiKey != null && !mRvApiKey.isEmpty()) {
                         Log.i(TAG, "ReactVision API key found in AndroidManifest.xml");
                     } else {
@@ -636,7 +689,8 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         if (!"reactvision".equals(mCloudAnchorProvider)) return;
         if (arScene == null) return;
         if (mRvApiKey == null || mRvApiKey.isEmpty()) return;
-        arScene.setReactVisionConfig(mRvApiKey, mRvProjectId != null ? mRvProjectId : "");
+        arScene.setReactVisionConfig(mRvApiKey, mRvProjectId != null ? mRvProjectId : "",
+                mRvEndpoint != null ? mRvEndpoint : "");
         mRvConfigApplied = true;
     }
 
@@ -647,7 +701,8 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         if (mRvApiKey == null || mRvApiKey.isEmpty()) return;
         // setReactVisionConfig queues credentials on renderer thread first;
         // setGeospatialAnchorProvider queues provider init after it (FIFO).
-        arScene.setReactVisionConfig(mRvApiKey, mRvProjectId != null ? mRvProjectId : "");
+        arScene.setReactVisionConfig(mRvApiKey, mRvProjectId != null ? mRvProjectId : "",
+                mRvEndpoint != null ? mRvEndpoint : "");
         arScene.setGeospatialAnchorProvider("reactvision");
         mGeoProviderApplied = true;
     }
@@ -805,6 +860,7 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
                 if (ai.metaData != null) {
                     String rvApiKey   = ai.metaData.getString("com.reactvision.RVApiKey");
                     String rvProjectId = ai.metaData.getString("com.reactvision.RVProjectId");
+                    String rvEndpoint = ai.metaData.getString("com.reactvision.RVEndpoint");
                     if (rvApiKey != null && !rvApiKey.isEmpty()) {
                         Log.i(TAG, "ReactVision API key found in AndroidManifest.xml");
                         // Push credentials then activate the geospatial provider.
@@ -813,7 +869,8 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
                         ARScene arScene = getCurrentARScene();
                         if (arScene != null) {
                             arScene.setReactVisionConfig(rvApiKey,
-                                rvProjectId != null ? rvProjectId : "");
+                                rvProjectId != null ? rvProjectId : "",
+                                rvEndpoint != null ? rvEndpoint : "");
                             arScene.setGeospatialAnchorProvider("reactvision");
                         } else {
                             // Store for lazy application once the scene becomes available.
@@ -1262,6 +1319,24 @@ public class VRTARSceneNavigator extends VRT3DSceneNavigator {
         if (arScene == null) { if (callback != null) callback.onResult(false, "", "AR scene not available"); return; }
         ensureRvConfigApplied(arScene);
         arScene.rvFindNearbyCloudAnchors(lat, lng, radius, limit, callback);
+    }
+
+    public void rvGetProject(ARScene.RvCloudAnchorCallback callback) {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) { if (callback != null) callback.onResult(false, "", "AR scene not available"); return; }
+        if (mRvProjectId == null || mRvProjectId.isEmpty()) {
+            if (callback != null) callback.onResult(false, "", "com.reactvision.RVProjectId not set in AndroidManifest.xml");
+            return;
+        }
+        ensureRvConfigApplied(arScene);
+        arScene.rvGetProject(mRvProjectId, callback);
+    }
+
+    public void rvGetScene(String sceneId, ARScene.RvCloudAnchorCallback callback) {
+        ARScene arScene = getCurrentARScene();
+        if (arScene == null) { if (callback != null) callback.onResult(false, "", "AR scene not available"); return; }
+        ensureRvConfigApplied(arScene);
+        arScene.rvGetScene(sceneId, callback);
     }
 
     public void rvGetSceneAssets(String sceneId, ARScene.RvCloudAnchorCallback callback) {

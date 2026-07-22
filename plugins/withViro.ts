@@ -1,4 +1,4 @@
-import { ConfigPlugin, WarningAggregator } from "@expo/config-plugins";
+import { ConfigPlugin } from "@expo/config-plugins";
 import { withViroAndroid } from "./withViroAndroid";
 import { withViroIos } from "./withViroIos";
 
@@ -8,7 +8,7 @@ const READ_PHOTOS_USAGE = "Allow $(PRODUCT_NAME) to access your photos";
 const WRITE_PHOTOS_USAGE = "Allow $(PRODUCT_NAME) to save photos";
 const LOCATION_USAGE = "Allow $(PRODUCT_NAME) to use your location for AR experiences";
 
-export type XrMode = "GVR" | "AR" | "OVR_MOBILE";
+export type XrMode = "GVR" | "AR" | "OVR_MOBILE" | "QUEST";
 
 /**
  * Anchor provider type.
@@ -71,6 +71,14 @@ export interface ViroConfigurationOptions {
    * Written to AndroidManifest as com.reactvision.RVProjectId and to Info.plist as RVProjectId.
    */
   rvProjectId?: string;
+
+  /**
+   * Override the ReactVision platform base URL.
+   * Omit for production. Set to a staging URL for testing.
+   *
+   * Written to AndroidManifest as com.reactvision.RVEndpoint and to Info.plist as RVEndpoint.
+   */
+  rvEndpoint?: string;
 
   /**
    * Anchor provider for both cloud anchors and geospatial anchors.
@@ -152,6 +160,15 @@ export interface ViroConfigurationOptions {
   };
   android?: {
     xRMode?: XrMode[];
+    /**
+     * Meta Developer Portal App ID (numeric string).
+     * Written to AndroidManifest as com.oculus.app_id meta-data.
+     * Eliminates the "App Name Unavailable" popup on Meta Quest.
+     *
+     * Get your App ID from the Meta Developer Portal:
+     * https://developer.oculus.com/manage
+     */
+    questAppId?: string;
   };
 }
 
@@ -181,32 +198,8 @@ export const DEFAULTS = {
  * @returns expo configuration
  */
 const withViro: ConfigPlugin<ViroConfigurationOptions> = (config, props) => {
-  // Validate New Architecture is enabled
-  const newArchEnabled =
-    config.plugins?.some(
-      (plugin) =>
-        Array.isArray(plugin) &&
-        plugin[0] === "expo-dev-client" &&
-        plugin[1]?.newArchEnabled === true
-    ) || (config as any).newArchEnabled === true;
-
-  if (!newArchEnabled) {
-    WarningAggregator.addWarningAndroid(
-      "withViro",
-      "ViroReact requires React Native New Architecture (Fabric) to be enabled. " +
-        "Please enable New Architecture in your app configuration. " +
-        'Add "newArchEnabled": true to your app.json/app.config.js expo configuration, ' +
-        "or ensure your React Native project has New Architecture enabled."
-    );
-
-    WarningAggregator.addWarningIOS(
-      "withViro",
-      "ViroReact requires React Native New Architecture (Fabric) to be enabled. " +
-        "Please enable New Architecture in your app configuration. " +
-        'Add "newArchEnabled": true to your app.json/app.config.js expo configuration, ' +
-        "or ensure your React Native project has New Architecture enabled."
-    );
-  }
+  // New Architecture is the only architecture in Expo SDK 53+ (and the React
+  // Native versions ViroReact supports), so there is nothing to validate here.
 
   // Apply platform-specific configurations
   config = withViroIos(config, props);

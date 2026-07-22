@@ -14,6 +14,7 @@
 import { ViroBase } from "../ViroBase";
 import * as React from "react";
 import { NativeSyntheticEvent, requireNativeComponent } from "react-native";
+import { isQuest } from "../Utilities/ViroPlatform";
 import {
   ViroARAnchorFoundEvent,
   ViroARAnchorRemovedEvent,
@@ -45,6 +46,10 @@ export class ViroARObjectMarker extends ViroBase<Props> {
   }
 
   render() {
+    if (isQuest) {
+      console.warn("[Viro] ViroARObjectMarker is not supported on Quest and will not render.");
+      return null;
+    }
     // Uncomment this line to check for misnamed props
     //checkMisnamedProps("ViroARObjectMarker", this.props);
 

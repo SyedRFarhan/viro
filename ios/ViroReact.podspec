@@ -13,35 +13,59 @@ Pod::Spec.new do |s|
   s.requires_arc        = true
   s.platform            = :ios, '18.0'
   s.ios.deployment_target = '18.0'
-  
-  # Check for prebuilt library
-  lib_path = 'dist/lib/libViroReact.a'
-  has_prebuilt_lib = File.exist?(File.join(__dir__, lib_path))
+  s.visionos.deployment_target = '1.0'
 
-  if has_prebuilt_lib
-    # If prebuilt lib exists, only include headers in source_files and vendor the lib
-    s.source_files = ['ViroReact/**/*.h', 'dist/include/**/*.h']
-    s.public_header_files = ['ViroReact/**/*.h', 'dist/include/**/*.h']
+  # visionOS: CompositorServices drives the immersive render loop.
+  s.visionos.frameworks = ['Metal', 'MetalKit', 'CompositorServices', 'ARKit']
+
+  # iOS: frameworks required by source files compiled from the pod
+  # (VRTObjectDetectorView uses AVFoundation + Accelerate; CoreVideo for CVPixelBuffer)
+  s.ios.frameworks = ['AVFoundation', 'Accelerate', 'CoreVideo']
+
+  # Base source files
+  source_files_array = ['ViroReact/**/*.{h,m,mm,swift}']
+  header_files_array = ['ViroReact/**/*.h']
+
+  # Include dist files if they exist (for release builds)
+  if File.exist?(File.join(__dir__, 'dist/include'))
+    source_files_array << 'dist/include/**/*.{h,m,mm}'
+    header_files_array << 'dist/include/*.h'
+  end
+
+  lib_path = 'dist/lib/libViroReact.a'
+  if File.exist?(File.join(__dir__, lib_path))
+    # Release packages use the prebuilt bridge and expose headers only.
+    s.source_files = header_files_array
+    s.public_header_files = header_files_array
     s.vendored_libraries = lib_path
   else
-    # Otherwise fallback to building from source
-    source_files_array = ['ViroReact/**/*.{h,m,mm}']
-    if File.exist?(File.join(__dir__, 'dist/include'))
-      source_files_array << 'dist/include/**/*.{h,m,mm}'
-    end
+    # Repository builds compile the bridge from source.
     s.source_files = source_files_array
-    s.public_header_files = ['ViroReact/**/*.h', 'dist/include/**/*.h']
+    s.public_header_files = header_files_array
+    s.ios.exclude_files = ['ViroReact/VisionOS/**/*']
   end
 
   # React Native dependencies
   s.dependency 'React-Core'
   s.dependency 'ViroKit'
-  
+
+  # ONNX Runtime is distributed as a vendored dynamic xcframework (onnxruntime.xcframework).
+  # When the xcframework is present in ios/dist/Frameworks/, enable inference by setting:
+  #   GCC_PREPROCESSOR_DEFINITIONS = $(inherited) VIRO_ONNXRUNTIME_AVAILABLE=1
+  # Until then, VRTObjectDetectorView compiles with the camera pipeline active
+  # and inference returning empty results.
+  if File.exist?(File.join(__dir__, 'dist/Frameworks/onnxruntime.xcframework'))
+    s.vendored_frameworks = [
+      'dist/ViroRenderer/ViroKit.framework',
+      'dist/Frameworks/onnxruntime.xcframework'
+    ]
+    onnx_preprocessor_definition = ' VIRO_ONNXRUNTIME_AVAILABLE=1'
+  end
   # Fabric dependencies
   s.dependency 'React-RCTFabric'
   s.dependency 'React-Fabric'
   s.dependency 'React-FabricComponents'
-  
+
   # Fabric-specific build configuration
   s.pod_target_xcconfig = {
     'SWIFT_VERSION' => '5.0',
@@ -55,8 +79,8 @@ Pod::Spec.new do |s|
       '"$(PODS_ROOT)/ViroKit/dist/include"',
       '"$(PODS_ROOT)/ViroKit/Headers"'
     ].join(' '),
-    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) RCT_NEW_ARCH_ENABLED=1',
+    'GCC_PREPROCESSOR_DEFINITIONS' => "$(inherited) RCT_NEW_ARCH_ENABLED=1#{onnx_preprocessor_definition}",
     'OTHER_CPLUSPLUSFLAGS' => '$(inherited) -std=c++17'
   }
-  
+
 end

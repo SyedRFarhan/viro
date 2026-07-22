@@ -13,6 +13,7 @@
 
 import { ViroAnchor, ViroPlaneUpdatedMap } from "../Types/ViroEvents";
 import * as React from "react";
+import { isQuest } from "../Utilities/ViroPlatform";
 import { ViroMaterials } from "../Material/ViroMaterials";
 import { ViroNode } from "../ViroNode";
 import { ViroQuad } from "../ViroQuad";
@@ -416,6 +417,7 @@ export class ViroARPlaneSelector extends React.Component<Props, State> {
   // ---------------------------------------------------------------------------
 
   render() {
+    // Supported on Quest via XR_FB_scene plane anchors (room model). No longer gated.
     return <ViroNode>{this._renderPlanes()}</ViroNode>;
   }
 
@@ -536,6 +538,14 @@ ViroMaterials.createMaterials({
     diffuseColor: "rgba(0, 122, 255, 0.5)",
     blendMode: "Alpha",
     cullMode: "None",
-    writesToDepthBuffer: false,
+    // Phone: don't write depth, so overlapping/coplanar overlays blend cleanly.
+    // Quest: WRITE depth. On Quest's tiled GPU, many non-depth-writing transparent
+    // draws break the second (right) eye's render entirely — the whole eye goes
+    // black/garbage. Writing depth avoids that path and renders correctly in both
+    // eyes (device-confirmed). The plane overlays don't overlap, so depth-writing
+    // has no visible downside here. (Engine-level bug — non-depth-writing
+    // transparency at quantity breaking stereo — tracked in virocore
+    // VROGeometry::updateSubstrate notes / QUEST_SETUP.md.)
+    writesToDepthBuffer: isQuest,
   },
 });

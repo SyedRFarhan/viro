@@ -372,6 +372,13 @@ public:
     }
 
     /*
+     Notify the session that world mesh was enabled or disabled.
+     Platform implementations use this to activate depth sensing when the
+     world mesh needs it (e.g. ARCore must set DepthMode::Automatic).
+     */
+    virtual void onWorldMeshEnabled(bool enabled) {}
+
+    /*
      Get the current occlusion mode.
      */
     VROOcclusionMode getOcclusionMode() const {
@@ -572,8 +579,18 @@ public:
         std::function<void(bool success, std::string error)> callback) {
         if (callback) callback(false, "Not supported");
     }
+    virtual void rvGetScene(
+        const std::string& sceneId,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
     virtual void rvGetSceneAssets(
         const std::string& sceneId,
+        std::function<void(bool success, std::string jsonData, std::string error)> callback) {
+        if (callback) callback(false, "", "Not supported");
+    }
+    virtual void rvGetProject(
+        const std::string& projectId,
         std::function<void(bool success, std::string jsonData, std::string error)> callback) {
         if (callback) callback(false, "", "Not supported");
     }

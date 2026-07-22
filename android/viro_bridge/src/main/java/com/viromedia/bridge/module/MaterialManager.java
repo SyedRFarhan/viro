@@ -404,21 +404,6 @@ public class MaterialManager extends ReactContextBaseJavaModule {
 
                 nativeMaterial.setName(materialName);
 
-        // Parse shader modifiers
-        if (materialMap.hasKey("shaderModifiers") && materialMap.getType("shaderModifiers") == ReadableType.Map) {
-            ReadableMap shaderModifiers = materialMap.getMap("shaderModifiers");
-            ReadableMapKeySetIterator smIter = shaderModifiers.keySetIterator();
-            while (smIter.hasNextKey()) {
-                String entryPointName = smIter.nextKey();
-                ReadableArray codeLinesArray = shaderModifiers.getArray(entryPointName);
-                String[] codeLines = new String[codeLinesArray.size()];
-                for (int i = 0; i < codeLinesArray.size(); i++) {
-                    codeLines[i] = codeLinesArray.getString(i);
-                }
-                nativeMaterial.addShaderModifier(entryPointName, codeLines);
-            }
-        }
-
         if (chromaFilteringEnabled) {
             nativeMaterial.setChromaKeyFilteringEnabled(chromaFilteringEnabled);
             nativeMaterial.setChromaKeyFilteringColor(chromaKeyFilteringColor);

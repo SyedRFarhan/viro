@@ -11,7 +11,7 @@
  */
 import * as React from "react";
 import { NativeSyntheticEvent, ViewProps } from "react-native";
-import { ViroExitViroEvent } from "./Types/ViroEvents";
+import { ViroExitViroEvent, ViroHandUpdateEvent } from "./Types/ViroEvents";
 import { Viro3DPoint, ViroNativeRef, ViroScene, ViroSceneDictionary } from "./Types/ViroUtils";
 type State = {
     sceneDictionary: ViroSceneDictionary;
@@ -54,9 +54,23 @@ type Props = ViewProps & {
     bloomEnabled?: boolean;
     shadowsEnabled?: boolean;
     multisamplingEnabled?: boolean;
+    /** Enable XR_FB_passthrough mixed-reality camera feed (Quest 3 / Quest Pro). */
+    passthroughEnabled?: boolean;
+    /**
+     * Enable skeletal hand tracking (Quest — requires com.oculus.permission.HAND_TRACKING in manifest).
+     * Pinch and grab gestures fire the same onClick/onDrag events as controller buttons.
+     */
+    handTrackingEnabled?: boolean;
+    /**
+     * Per-frame skeletal hand joint data. Fires at display refresh rate (72/90 Hz).
+     * null for a hand means it is not currently tracked.
+     */
+    onHandUpdate?: (event: NativeSyntheticEvent<ViroHandUpdateEvent>) => void;
 };
 /**
  * ViroVRSceneNavigator is used to transition between multiple scenes.
+ * Intended for OVR / Google Cardboard VR mode on non-Quest Android devices.
+ * On Meta Quest use ViroXRSceneNavigator instead.
  */
 export declare class ViroVRSceneNavigator extends React.Component<Props, State> {
     _component: ViroNativeRef;
@@ -64,7 +78,7 @@ export declare class ViroVRSceneNavigator extends React.Component<Props, State> 
      * Called from native when either the user physically decides to exit vr (hits
      * the "X" buton).
      */
-    _onExitViro(_event: NativeSyntheticEvent<ViroExitViroEvent>): void;
+    _onExitViro: (_event: NativeSyntheticEvent<ViroExitViroEvent>) => void;
     constructor(props: Props);
     getRandomTag(): string;
     /**
@@ -81,7 +95,7 @@ export declare class ViroVRSceneNavigator extends React.Component<Props, State> 
      *
      * @todo: use Typescript function overloading rather than this inaccurate solution
      */
-    push(param1?: ViroScene | string, param2?: ViroScene): void;
+    push: (param1?: ViroScene | string, param2?: ViroScene) => void;
     /**
      * Replace the top scene in the stack with the given scene. The remainder of the back
      * history is kept in the same order as before.
@@ -93,7 +107,7 @@ export declare class ViroVRSceneNavigator extends React.Component<Props, State> 
      *
      * @todo: use Typescript function overloading rather than this inaccurate solution
      */
-    replace(param1?: ViroScene | string, param2?: ViroScene): void;
+    replace: (param1?: ViroScene | string, param2?: ViroScene) => void;
     /**
      * Jumps to a given scene that had been previously pushed. If the scene was not pushed, we
      * then push and jump to it. The back history is re-ordered such that jumped to scenes are
@@ -106,9 +120,9 @@ export declare class ViroVRSceneNavigator extends React.Component<Props, State> 
      *
      * @todo: use Typescript function overloading rather than this inaccurate solution
      */
-    jump(param1?: ViroScene | string, param2?: ViroScene): void;
-    pop(): void;
-    popN(n: number): void;
+    jump: (param1?: ViroScene | string, param2?: ViroScene) => void;
+    pop: () => void;
+    popN: (n: number) => void;
     /**
      * Increments the reference count for a scene within sceneDictionary that is
      * mapped to the given sceneKey. If no scenes are found / mapped, we create
@@ -136,9 +150,9 @@ export declare class ViroVRSceneNavigator extends React.Component<Props, State> 
     reorderHistory(sceneKey: string): void;
     popHistoryByN(n: number): void;
     getSceneIndex(sceneTag: string): number;
-    _recenterTracking(): void;
-    _project(point: Viro3DPoint): Promise<any>;
-    _unproject(point: Viro3DPoint): Promise<any>;
+    _recenterTracking: () => void;
+    _project: (point: Viro3DPoint) => Promise<any>;
+    _unproject: (point: Viro3DPoint) => Promise<any>;
     _renderSceneStackItems(): React.JSX.Element[];
     sceneNavigator: {
         push: (param1?: ViroScene | string, param2?: ViroScene) => void;
