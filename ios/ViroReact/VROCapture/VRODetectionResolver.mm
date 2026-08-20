@@ -235,9 +235,12 @@
     float arPx = arU * entry.arImageSize.width;
     float arPy = arV * entry.arImageSize.height;
 
-    // Camera-space 3D point using AR intrinsics
+    // Camera-space 3D point using AR intrinsics.
+    // Image v grows DOWN while ARKit camera-space +y points UP, so the y
+    // term must be negated — without it every resolved point is mirrored
+    // about the camera's horizontal axis (left-right mirrored in portrait).
     float camX = (arPx - cx) / fx * depth;
-    float camY = (arPy - cy) / fy * depth;
+    float camY = -(arPy - cy) / fy * depth;
     float camZ = -depth;  // ARKit: -Z is forward
 
     simd_float4 camPoint = simd_make_float4(camX, camY, camZ, 1.0f);
@@ -285,9 +288,10 @@
     float px = jpegU * landscapeWidth;
     float py = jpegV * landscapeHeight;
 
-    // Camera-space ray direction (normalized)
+    // Camera-space ray direction (normalized).
+    // Same y negation as sampleLiDARDepth: image v is down, camera +y is up.
     float camDirX = (px - cx) / fx;
-    float camDirY = (py - cy) / fy;
+    float camDirY = -(py - cy) / fy;
     float camDirZ = -1.0f;  // -Z is forward in ARKit
 
     simd_float3 camDir = simd_normalize(simd_make_float3(camDirX, camDirY, camDirZ));
