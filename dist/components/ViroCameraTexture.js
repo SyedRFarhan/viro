@@ -160,7 +160,7 @@ exports.ViroCameraTexture = ViroCameraTexture;
 // ---------------------------------------------------------------------------
 // Native component binding
 // ---------------------------------------------------------------------------
-const VRTCameraTexture = (0, react_native_1.requireNativeComponent)("VRTCameraTexture",
+const VRTCameraTexture = (0, react_native_1.requireNativeComponent)("VRTCameraTexture", 
 // @ts-ignore
 ViroCameraTexture, {
     nativeOnly: {

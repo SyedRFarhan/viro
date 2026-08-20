@@ -1,5 +1,56 @@
 # CHANGELOG
 
+## v2.58.1 — 17 August 2026
+
+### Fixed
+
+- **AR session recordings played sideways (iOS and Android).** `video.mp4` carried no rotation on either platform, so players showed the camera sensor's landscape frame however the phone was held — ARKit and ARCore both deliver the captured image in sensor orientation. Both recorders now tag the file for a quarter turn clockwise on playback. Fixed in `@reactvision/virocore` 2.58.1, which this release bundles.
+- **AR session recordings were unusable for analysis on iOS: the IMU was in the wrong units.** `session.jsonl` uses one schema for both platforms, but iOS wrote `imu.accel` and `pose.gravity` in G while Android wrote m/s² — the same field meaning two things, off by 9.81×. Anything integrating acceleration was wrong by exactly that factor. iOS now writes m/s². Measured against tinyvio on a real recording, this took tracking from **0% of frames to 96%**.
+- **iOS recordings held one more pose line than the video had frames.** ARKit can deliver the same frame twice; the duplicate added a pose line while the muxer dropped its video frame, and since the format pairs the two by array position, every pose after that point described the wrong frame. Duplicates are now dropped whole, and a pose line is only written once its frame has actually reached the encoder, so the pairing survives a dropped frame too. A recording that loses video entirely still keeps its full IMU/pose sidecar.
+- **AR session recordings had scrambled colour (Android).** Luma was intact — the video looked sharp and correctly framed — while chroma landed in the wrong bytes, painting large green/magenta blocks over it. The encoder was configured with an *abstract* pixel format (`COLOR_FormatYUV420Flexible`) and fed a tightly-packed planar I420 buffer, but most devices lay that memory out as NV12 semi-planar with a padded row stride. Frames now go through `MediaCodec.getInputImage()` and honour the encoder's real per-plane strides.
+
+  Note this affects `startRecording()` (the offline-analysis session capture), **not** `startVideoRecording()`, which records the rendered screen with audio and was never affected.
+
+### Migration
+
+- **No breaking changes.** Both items are bug fixes.
+- iOS `imu.accel`/`pose.gravity` are now m/s² rather than G, matching Android. The recording format only shipped in 2.58.0, so there is effectively no earlier iOS data to reconcile.
+- If you have tooling that decodes a recording's `video.mp4` for tracking or measurement, pass ffmpeg `-noautorotate`. The new rotation is container metadata only — the frames stay sensor-native so they keep matching the intrinsics in `session.jsonl` — but ffmpeg applies a display matrix by default, which would rotate the pixels while `ffprobe` still reports the unrotated size those intrinsics assume. Nothing errors; the geometry just comes out wrong. Recordings made before this release carry no matrix, so the flag is a no-op on them. Playback and preview paths want the rotation and need no change.
+- Pairs with `@reactvision/virocore` 2.58.1.
+
+## v2.58.0 — 16 August 2026
+
+### Added
+
+- **AR Session Recording** (`ViroARSceneNavigator`). `startRecording(outputDir)`/`stopRecording()`/`getRecordingStatus()` capture a session to local storage — `video.mp4` (the camera passthrough feed) + `session.jsonl` (raw IMU + the platform's own tracked pose as ground truth) — for **offline** analysis/replay via `tinyvio`, not in-app playback. A different feature from `ViroCameraTexture.startRecording()` (camera-feed-only MP4). iOS + Android.
+
+### Fixed
+
+- **The package could crash on first import when bundled with `react-native-web`.** Ten native-only components (`ViroARImageMarker`, `ViroARObjectMarker`, `ViroAnimatedImage`, `ViroCameraTexture`, `ViroController`, `ViroObjectDetector`, `ViroSceneNavigator`, `ViroVRSceneNavigator`, `ViroVirtualButton`, `ViroVirtualJoystick`) called `requireNativeComponent()` at module scope with no `.web.tsx` variant to substitute — and since `dist/index.js` is a single CommonJS barrel that `require()`s every component eagerly, importing *anything* from the package under a web bundle crashed immediately via whichever of the ten loaded first, regardless of which components an app actually used. All ten now have a minimal `.web.tsx` stub (renders `null`, dev-only warning).
+- **GLB/glTF models with sparse accessors or non-indexed (draw-arrays) primitives failed to load.** Both are legal per the glTF spec — a sparse-only accessor can leave its buffer view unset, and a primitive can omit `indices` entirely — but the loader rejected both. Fixed in `@reactvision/virocore` 2.58.0 (VIRO-3664).
+
+### Changed
+
+- **Android alert dialogs now follow Material 3** (#508). React Native's `Alert` builds an AppCompat dialog styled by the host activity's theme, and the RN/Expo template parent (`Theme.AppCompat`) renders it as Material 2. `ReactViroPackage` now overlays just `alertDialogTheme` with a Material 3-styled dialog theme (rounded corners, day/night colour sets), re-applied on every host resume so activity recreation keeps it. Only the alert dialog theme attribute is overlaid, so the rest of a host app's theme is untouched. *(Shipped in 2.58.0; documented retroactively.)*
+- **`docs/` moved out of the repository.** The package's markdown docs (`AR_SESSION_RECORDING.md`, `ViroObjectDetector.md`, `PLATFORM_EXTENSIONS.md`, `QUEST_SETUP.md`, `ViroCameraTexture.md`) are no longer tracked in this repo or shipped in the npm package — they're maintained privately alongside the workspace for internal/MCP tooling use. Older CHANGELOG entries that reference a `docs/*.md` path describe the state at that release; those files are no longer present in a fresh checkout or install.
+
+### Migration
+
+- **No breaking changes.** Everything in this release is additive or a bug fix.
+
+## v2.57.5 — 26 July 2026
+
+### Added
+
+- **`onGaze` prop for eye-gaze hover on Meta Quest Pro.** New optional event on all Viro nodes (`onGaze?: (isHovering, position, source) => void`) that fires when the node is hovered by the eye-gaze ray specifically, backed by `@reactvision/virocore` 2.57.5's `XR_EXT_eye_gaze_interaction` support. `onHover` still fires for every input source (controllers, hands, eye gaze); `onGaze` is limited to the eye-gaze source, and setting it alone is enough to enable hover on the node. No-op on devices without eye tracking (Quest 2 / 3 / 3S).
+
+### Fixed
+
+- **AR anchor retry no longer crashes when leaving a scene (Android, SIGSEGV).** `VRTNode`'s delayed anchor-retry (a 1s main-thread handler, up to 3×) could fire after its parent AR scene had been torn down, calling `createAnchoredNode()` on a freed native `VROARSceneController` and crashing (`SEGV_MAPERR` in `nativeCreateAnchoredNode`). The retry now bails if the parent scene is gone — checking the scene's teardown flag and zeroed native ref (which covers the dispose-before-flag window) — and `VRTARScene` cancels pending child anchor retries on teardown. `@reactvision/virocore` 2.57.5 adds a matching native null-ref guard as defense-in-depth.
+- **Screenshots and video recordings are now reliably written on Android (API 29+).** Media was written with a raw `File` into the public `Pictures/` directory, which fails with `EACCES` under scoped storage — so files silently weren't created, or (with `saveToCameraRoll` off) landed in app-private storage invisible to the gallery while still reporting success. Media now writes to app-specific external storage (always succeeds, no runtime storage permission) and, when `saveToCameraRoll` is set, is published to the device gallery via `MediaStore`. The recording permission gate was corrected to request only what's needed (`RECORD_AUDIO`; `WRITE_EXTERNAL_STORAGE` only on API ≤ 28) and to stop ignoring the grant result.
+- **Free-tier watermark is now burned into recorded video on Android.** Screenshots were already watermarked, but video — rendered directly into the encoder's surface — had no per-frame hook, so recordings went out unmarked. The bridge now hands the recorder a watermark bitmap, composited natively per frame by `@reactvision/virocore` 2.57.5, matching iOS and the Android photo path. Gated on free tier like the other paths.
+- **`getTransformAsync` / `getBoundingBoxAsync` / `getMorphTargets` no longer redbox or hang when a node isn't ready.** On iOS (`VRTNodeModule`) and Android (`NodeModule`) these logged an error and returned without settling the promise when the view tag wasn't a registered node yet — a normal mount / unmount / hot-reload race (hit, e.g., by `onProximity`) that redboxed in dev and left the awaited promise unsettled (leaked). They now reject with `view_not_ready` so callers can retry or ignore the transient quietly; the Android path also tests the view type before casting (was risking a `ClassCastException`).
+
 ## v2.57.4 — 9 July 2026
 
 - Stability improvements

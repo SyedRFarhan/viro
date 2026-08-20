@@ -85,7 +85,7 @@ function checkRNVersionForVR() {
  * via the intent bridge.
  */
 exports.ViroXRSceneNavigator = React.forwardRef(function ViroXRSceneNavigator(props, ref) {
-    const { initialScene, arInitialScene, vrInitialScene,
+    const { initialScene, arInitialScene, vrInitialScene, 
     // VR-only renderer config — forwarded via bridge on Quest
     hdrEnabled, pbrEnabled, bloomEnabled, shadowsEnabled, multisamplingEnabled, vrModeEnabled, passthroughEnabled, handTrackingEnabled, onExitViro, debug, ...rest } = props;
     // Inner ref used on the AR path to capture the ViroARSceneNavigator instance.
