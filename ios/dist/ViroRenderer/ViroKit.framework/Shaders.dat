@@ -1,5 +1,5 @@
 dependencies: \
-  /Users/syed/workspace/al/apps/labs/reactvision/virocore/ViroRenderer/Shaders.metal \
-  /private/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.3.7003.10.fjylxj/Metal.xctoolchain/usr/metal/32023/lib/clang/32023.864/include/metal/module.modulemap \
-  /Users/syed/workspace/al/apps/labs/reactvision/virocore/ViroRenderer/VROSharedStructures.h \
-  /Users/syed/workspace/al/apps/labs/reactvision/virocore/ViroRenderer/VRODefines.h
+  /Users/syed/workspace/al/viro-react/virocore/ViroRenderer/Shaders.metal \
+  /private/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.uTRwcr/Metal.xctoolchain/usr/metal/32023/lib/clang/32023.883/include/metal/module.modulemap \
+  /Users/syed/workspace/al/viro-react/virocore/ViroRenderer/VROSharedStructures.h \
+  /Users/syed/workspace/al/viro-react/virocore/ViroRenderer/VRODefines.h

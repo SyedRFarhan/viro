@@ -44,7 +44,7 @@ class VROExecutableAnimation;
 @property (nonatomic, copy) RCTDirectEventBlock onFinish;
 
 /*
- Implemented by subclasses: load the animation to be run. This is
+ Implemented by subclasses: load the animation to be run. This is 
  invoked just before each time we start the animation, so that the
  animation may be updated between loops.
  */
