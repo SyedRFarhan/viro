@@ -6,11 +6,12 @@
   "version": "2.61.50",
   "license": "MIT",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org",
+    "access": "restricted"
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/SyedRFarhan/viro.git"
+    "url": "git+https://github.com/SyedRFarhan/viro.git"
   },
   "description": "Maintained version of react-viro - New Architecture (Fabric) required",
   "scripts": {
