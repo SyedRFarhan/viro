@@ -1,5 +1,5 @@
 {
-  "name": "@syedrfarhan/react-viro",
+  "name": "@syedfarhan/react-viro",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
