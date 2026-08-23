@@ -2042,6 +2042,19 @@ RCT_EXPORT_METHOD(resolveDetections:(nonnull NSNumber *)reactTag
     }];
 }
 
+RCT_EXPORT_METHOD(setRenderFrameRate:(nonnull NSNumber *)reactTag
+                                 fps:(nonnull NSNumber *)fps) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+            RCTLogError(@"setRenderFrameRate: Invalid view returned from registry, expecting VRTARSceneNavigator, got: %@", view);
+            return;
+        }
+        [(VRTARSceneNavigator *)view setRenderFrameRate:[fps integerValue]];
+    }];
+}
+
 RCT_EXPORT_METHOD(getFrameData:(nonnull NSNumber *)reactTag
                        frameId:(NSString *)frameId
                       resolver:(RCTPromiseResolveBlock)resolve

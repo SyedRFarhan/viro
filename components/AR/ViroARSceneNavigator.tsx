@@ -1989,6 +1989,19 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
    * @param frameId - The frameId from a ViroFrameEvent
    * @platform ios
    */
+  /**
+   * [iOS Only] Cap the AR renderer's frame rate (thermal control).
+   * 0 = display max (ProMotion panels run up to 120 fps — the default).
+   * 30 roughly halves GPU render load on 60 Hz panels, quarters it on
+   * ProMotion. The camera feed is rendered through this loop, so the
+   * preview visibly runs at the capped rate.
+   *
+   * @platform ios
+   */
+  _setRenderFrameRate = (fps: number) => {
+    ViroARSceneNavigatorModule.setRenderFrameRate(findNodeHandle(this), fps);
+  };
+
   _getFrameData = async (frameId: string): Promise<ViroFrameDataResult> => {
     return await ViroARSceneNavigatorModule.getFrameData(
       findNodeHandle(this),
@@ -2176,6 +2189,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     stopFrameStream: this._stopFrameStream,
     resolveDetections: this._resolveDetections,
     getFrameData: this._getFrameData,
+    setRenderFrameRate: this._setRenderFrameRate,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,
     // Render Zoom API (Projection-Based)
@@ -2268,6 +2282,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     stopFrameStream: this._stopFrameStream,
     resolveDetections: this._resolveDetections,
     getFrameData: this._getFrameData,
+    setRenderFrameRate: this._setRenderFrameRate,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,
     // Render Zoom API (Projection-Based)

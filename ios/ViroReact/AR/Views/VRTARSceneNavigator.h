@@ -477,6 +477,11 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
 // Stop the frame pump timer (idempotent)
 - (void)stopFrameStreamTimer;
 
+// Cap the renderer's CADisplayLink rate (thermal control). 0 = display max
+// (ProMotion: up to 120). The link lives inside ViroKit; this reaches it via
+// KVC pinned to our own framework build.
+- (void)setRenderFrameRate:(NSInteger)fps;
+
 // On-demand image fetch for metadata-only streaming.
 // Returns: {frameId, timestamp, sessionId, imageData (base64), width, height}
 // or {frameId, error} if the frame was evicted from the ring buffer.

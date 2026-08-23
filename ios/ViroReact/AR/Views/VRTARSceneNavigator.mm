@@ -2801,6 +2801,32 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
     return [viewAR isPreferMonocularDepth];
 }
 
+#pragma mark - Render Frame Rate (thermal control)
+
+- (void)setRenderFrameRate:(NSInteger)fps {
+    if (!_vroView) {
+        RCTLogWarn(@"[ViroAR] setRenderFrameRate: AR view not initialized");
+        return;
+    }
+    // VROViewAR keeps its CADisplayLink in the private ivar _displayLink and
+    // never sets preferredFramesPerSecond (default 0 = display max, which is
+    // 120 on ProMotion panels). ViroKit.framework is built from our own
+    // virocore checkout, so KVC on that ivar is pinned to a known binary --
+    // if the framework is ever swapped for one without the ivar, the @catch
+    // makes this a logged no-op instead of a crash.
+    @try {
+        id link = [_vroView valueForKey:@"displayLink"];
+        if ([link isKindOfClass:[CADisplayLink class]]) {
+            ((CADisplayLink *)link).preferredFramesPerSecond = fps;
+            RCTLogInfo(@"[ViroAR] Render frame rate capped at %ld fps", (long)fps);
+        } else {
+            RCTLogWarn(@"[ViroAR] setRenderFrameRate: displayLink not found on view");
+        }
+    } @catch (NSException *exception) {
+        RCTLogWarn(@"[ViroAR] setRenderFrameRate failed: %@", exception.reason);
+    }
+}
+
 #pragma mark - Frame Streaming API Methods
 
 - (void)startFrameStream:(NSDictionary *)config {
