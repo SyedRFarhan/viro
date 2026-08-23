@@ -55,6 +55,7 @@ import {
   ViroFrameStreamConfig,
   ViroFrameEvent,
   ViroDetectionResolutionResult,
+  ViroFrameDataResult,
 } from "../Types/ViroEvents";
 import {
   Viro3DPoint,
@@ -1978,6 +1979,23 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     );
   };
 
+  /**
+   * [iOS Only] Fetch a frame's base64 JPEG on demand from the native ring
+   * buffer. Pairs with `includeImageData: false` in the stream config:
+   * frame events stay metadata-only and consumers fetch image bytes only for
+   * frames they actually use. The result carries `error` (and no `imageData`)
+   * when the frame has been evicted.
+   *
+   * @param frameId - The frameId from a ViroFrameEvent
+   * @platform ios
+   */
+  _getFrameData = async (frameId: string): Promise<ViroFrameDataResult> => {
+    return await ViroARSceneNavigatorModule.getFrameData(
+      findNodeHandle(this),
+      frameId
+    );
+  };
+
   // ===========================================================================
   // Camera Zoom API Methods
   // ===========================================================================
@@ -2157,6 +2175,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     startFrameStream: this._startFrameStream,
     stopFrameStream: this._stopFrameStream,
     resolveDetections: this._resolveDetections,
+    getFrameData: this._getFrameData,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,
     // Render Zoom API (Projection-Based)
@@ -2248,6 +2267,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     startFrameStream: this._startFrameStream,
     stopFrameStream: this._stopFrameStream,
     resolveDetections: this._resolveDetections,
+    getFrameData: this._getFrameData,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,
     // Render Zoom API (Projection-Based)

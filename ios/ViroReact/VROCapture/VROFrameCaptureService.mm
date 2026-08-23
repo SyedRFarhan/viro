@@ -13,6 +13,52 @@
 #import <CoreImage/CoreImage.h>
 #import <atomic>
 
+#pragma mark - Pixel Buffer Deep Copy
+
+/**
+ * Deep-copy a CVPixelBuffer into a freshly allocated buffer. Used to detach
+ * LiDAR depth maps from ARKit's internal pool before long-term storage in the
+ * frame ring buffer. Returns a +1 retained buffer, or NULL on failure.
+ */
+static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
+    if (!src) return NULL;
+    CVPixelBufferRef dst = NULL;
+    OSType fmt = CVPixelBufferGetPixelFormatType(src);
+    size_t width = CVPixelBufferGetWidth(src);
+    size_t height = CVPixelBufferGetHeight(src);
+    CVReturn rc = CVPixelBufferCreate(kCFAllocatorDefault, width, height, fmt, NULL, &dst);
+    if (rc != kCVReturnSuccess || !dst) return NULL;
+
+    CVPixelBufferLockBaseAddress(src, kCVPixelBufferLock_ReadOnly);
+    CVPixelBufferLockBaseAddress(dst, 0);
+    if (CVPixelBufferIsPlanar(src)) {
+        size_t planeCount = CVPixelBufferGetPlaneCount(src);
+        for (size_t i = 0; i < planeCount; i++) {
+            uint8_t *srcBase = (uint8_t *)CVPixelBufferGetBaseAddressOfPlane(src, i);
+            uint8_t *dstBase = (uint8_t *)CVPixelBufferGetBaseAddressOfPlane(dst, i);
+            size_t srcRowBytes = CVPixelBufferGetBytesPerRowOfPlane(src, i);
+            size_t dstRowBytes = CVPixelBufferGetBytesPerRowOfPlane(dst, i);
+            size_t rows = CVPixelBufferGetHeightOfPlane(src, i);
+            size_t rowBytes = MIN(srcRowBytes, dstRowBytes);
+            for (size_t r = 0; r < rows; r++) {
+                memcpy(dstBase + r * dstRowBytes, srcBase + r * srcRowBytes, rowBytes);
+            }
+        }
+    } else {
+        uint8_t *srcBase = (uint8_t *)CVPixelBufferGetBaseAddress(src);
+        uint8_t *dstBase = (uint8_t *)CVPixelBufferGetBaseAddress(dst);
+        size_t srcRowBytes = CVPixelBufferGetBytesPerRow(src);
+        size_t dstRowBytes = CVPixelBufferGetBytesPerRow(dst);
+        size_t rowBytes = MIN(srcRowBytes, dstRowBytes);
+        for (size_t r = 0; r < height; r++) {
+            memcpy(dstBase + r * dstRowBytes, srcBase + r * srcRowBytes, rowBytes);
+        }
+    }
+    CVPixelBufferUnlockBaseAddress(dst, 0);
+    CVPixelBufferUnlockBaseAddress(src, kCVPixelBufferLock_ReadOnly);
+    return dst;
+}
+
 #pragma mark - Helper Class for JPEG Encode Result
 
 @interface VROJpegEncodeResult : NSObject
@@ -43,6 +89,10 @@
     CIContext *_ciContext;
     VROFrameRingBuffer *_ringBuffer;
     NSUInteger _frameCounter;
+    // Unretained pointer identity of the last ARSession seen; a different
+    // instance means the session was torn down and replaced -> bump the ring
+    // buffer sessionId so JS invalidates stale frame references.
+    uintptr_t _lastSessionPtr;
 }
 
 - (instancetype)initWithRingBufferCapacity:(NSUInteger)capacity {
@@ -72,6 +122,9 @@
         _targetWidth = 640;
         _targetHeight = 480;
         _frameCounter = 0;
+        _includeImageDataInEvent = YES;
+        _verboseLogging = NO;
+        _lastSessionPtr = 0;
     }
     return self;
 }
@@ -83,6 +136,17 @@
 
     double timestamp = frame.timestamp;
 
+    // Session-instance change detection: nothing in the fork calls
+    // handleSessionReset from delegate callbacks (Viro's renderer owns the
+    // ARSession delegate), so this pointer check is the reset signal. It runs
+    // before rate limiting so a swap is never missed on a skipped frame.
+    uintptr_t sessionPtr = (uintptr_t)session;
+    if (_lastSessionPtr != 0 && sessionPtr != _lastSessionPtr) {
+        NSLog(@"[ViroFrameStream] ARSession instance changed - bumping ring buffer sessionId");
+        [self handleSessionReset];
+    }
+    _lastSessionPtr = sessionPtr;
+
     // Rate limit check
     double minInterval = 1.0 / _targetFPS;
     double elapsed = timestamp - _lastCaptureTime;
@@ -90,7 +154,7 @@
         // Only log occasionally to avoid spam
         static int skipCount = 0;
         skipCount++;
-        if (skipCount % 60 == 0) {
+        if (_verboseLogging && skipCount % 60 == 0) {
             NSLog(@"[ViroFrameStream DEBUG] Rate limit: skipped %d frames (interval=%.3fs, need=%.3fs)",
                   skipCount, elapsed, minInterval);
         }
@@ -100,12 +164,16 @@
     // Busy check (non-blocking) using atomic compare-exchange
     bool expected = false;
     if (!_isProcessing.compare_exchange_strong(expected, true)) {
-        NSLog(@"[ViroFrameStream DEBUG] Busy: still processing previous frame, dropping");
+        if (_verboseLogging) {
+            NSLog(@"[ViroFrameStream DEBUG] Busy: still processing previous frame, dropping");
+        }
         return;
     }
 
     _lastCaptureTime = timestamp;
-    NSLog(@"[ViroFrameStream DEBUG] Capturing frame #%lu at timestamp %.3f", (unsigned long)_frameCounter, timestamp);
+    if (_verboseLogging) {
+        NSLog(@"[ViroFrameStream DEBUG] Capturing frame #%lu at timestamp %.3f", (unsigned long)_frameCounter, timestamp);
+    }
 
     // Generate unique frameId
     NSString *frameId = [NSString stringWithFormat:@"%lu_%f",
@@ -179,6 +247,8 @@
     int targetHeight = _targetHeight;
     float jpegQuality = _jpegQuality;
     NSInteger sessionId = [_ringBuffer currentSessionId];
+    BOOL includeImage = _includeImageDataInEvent;
+    BOOL verbose = _verboseLogging;
 
     // Process on background queue
     dispatch_async(_processingQueue, ^{
@@ -197,7 +267,7 @@
                 return;
             }
 
-            NSLog(@"[ViroFrameStream DEBUG] JPEG encoded: %lu bytes, scale=%.3f, crop=(%.1f, %.1f), preRot=%dx%d, output=%dx%d, rotated=%@",
+            if (verbose) NSLog(@"[ViroFrameStream DEBUG] JPEG encoded: %lu bytes, scale=%.3f, crop=(%.1f, %.1f), preRot=%dx%d, output=%dx%d, rotated=%@",
                   (unsigned long)encodeResult.jpegData.length, encodeResult.scale,
                   encodeResult.cropX, encodeResult.cropY,
                   encodeResult.preRotationWidth, encodeResult.preRotationHeight,
@@ -265,7 +335,18 @@
                 jpegToAR_offsetX, jpegToAR_offsetY    // tx, ty
             );
 
-            // 4. Create ring buffer entry
+            // 4. Create ring buffer entry.
+            // Deep-copy the depth map first: frame.sceneDepth.depthMap belongs
+            // to ARKit's fixed internal buffer pool, and the ring holds entries
+            // for up to ~30s -- retaining pool buffers that long can starve the
+            // pool and stall depth production. The copy (~200 KB) frees ARKit's
+            // buffer within milliseconds of capture.
+            CVPixelBufferRef depthCopy = NULL;
+            if (depthBuffer) {
+                depthCopy = VROCopyPixelBuffer(depthBuffer);
+                CVPixelBufferRelease(depthBuffer);
+            }
+
             VROFrameEntry *entry = [[VROFrameEntry alloc] init];
             entry.frameId = frameId;
             entry.timestamp = timestamp;
@@ -288,21 +369,25 @@
             entry.scale = scale;
 
             entry.jpegData = encodeResult.jpegData;
-            entry.depthBuffer = depthBuffer;  // Transfer ownership
+            entry.depthBuffer = depthCopy;  // Transfer ownership of the copy
             entry.depthBufferSize = depthBufferSize;
 
             entry.featurePointsData = featurePointsData;
             entry.featurePointsCount = featurePointsCount;
 
             [self->_ringBuffer addEntry:entry];
-            NSLog(@"[ViroFrameStream DEBUG] Stored frame %@ in ring buffer (sessionId=%ld)", frameId, (long)sessionId);
+            if (verbose) {
+                NSLog(@"[ViroFrameStream DEBUG] Stored frame %@ in ring buffer (sessionId=%ld)", frameId, (long)sessionId);
+            }
 
             // 5. Build event payload (no depth data - too large)
             NSMutableDictionary *event = [NSMutableDictionary dictionary];
             event[@"frameId"] = frameId;
             event[@"timestamp"] = @(timestamp);
             event[@"sessionId"] = @(sessionId);
-            event[@"imageData"] = [encodeResult.jpegData base64EncodedStringWithOptions:0];
+            if (includeImage) {
+                event[@"imageData"] = [encodeResult.jpegData base64EncodedStringWithOptions:0];
+            }
             // Send portrait dimensions (what JS sees after rotation)
             event[@"width"] = @(outputWidth);
             event[@"height"] = @(outputHeight);
@@ -345,12 +430,14 @@
 
             // Emit to JS (non-blocking - event queued to main thread)
             if (self.onFrameReady) {
-                NSLog(@"[ViroFrameStream DEBUG] Emitting frame %@ to JS (%dx%d portrait, tracking=%@)",
-                      frameId, outputWidth, outputHeight, event[@"trackingState"]);
+                if (verbose) {
+                    NSLog(@"[ViroFrameStream DEBUG] Emitting frame %@ to JS (%dx%d portrait, tracking=%@)",
+                          frameId, outputWidth, outputHeight, event[@"trackingState"]);
+                }
                 dispatch_async(dispatch_get_main_queue(), ^{
                     self.onFrameReady(event);
                 });
-            } else {
+            } else if (verbose) {
                 NSLog(@"[ViroFrameStream DEBUG] Frame %@ ready but no onFrameReady callback set!", frameId);
             }
         }
@@ -515,6 +602,21 @@
 
 - (VROFrameEntry *)frameEntryForId:(NSString *)frameId {
     return [_ringBuffer entryForFrameId:frameId];
+}
+
+- (NSDictionary *)frameDataForId:(NSString *)frameId {
+    VROFrameEntry *entry = [_ringBuffer entryForFrameId:frameId];
+    if (!entry || !entry.jpegData) {
+        return nil;
+    }
+    return @{
+        @"frameId": entry.frameId,
+        @"timestamp": @(entry.timestamp),
+        @"sessionId": @(entry.sessionId),
+        @"imageData": [entry.jpegData base64EncodedStringWithOptions:0],
+        @"width": @((int)entry.jpegSize.width),
+        @"height": @((int)entry.jpegSize.height),
+    };
 }
 
 #pragma mark - Session Management

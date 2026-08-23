@@ -2042,6 +2042,38 @@ RCT_EXPORT_METHOD(resolveDetections:(nonnull NSNumber *)reactTag
     }];
 }
 
+RCT_EXPORT_METHOD(getFrameData:(nonnull NSNumber *)reactTag
+                       frameId:(NSString *)frameId
+                      resolver:(RCTPromiseResolveBlock)resolve
+                      rejecter:(RCTPromiseRejectBlock)reject) {
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        @try {
+            VRTView *view = (VRTView *)viewRegistry[reactTag];
+            if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+                reject(@"invalid_view", @"Invalid view returned from registry, expecting VRTARSceneNavigator", nil);
+                return;
+            }
+
+            VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+
+            if (!component.rootVROView) {
+                resolve(@{
+                    @"frameId": frameId ?: @"",
+                    @"error": @"AR view has been unmounted"
+                });
+                return;
+            }
+
+            [component getFrameData:frameId completionHandler:^(NSDictionary *result) {
+                resolve(result);
+            }];
+        } @catch (NSException *exception) {
+            reject(@"frame_data_error", [NSString stringWithFormat:@"Error fetching frame data: %@", exception.reason], nil);
+        }
+    }];
+}
+
 #pragma mark - Scan Wave Methods (Imperative API)
 
 RCT_EXPORT_METHOD(triggerScanWave:(nonnull NSNumber *)reactTag

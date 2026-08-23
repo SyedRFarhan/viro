@@ -48,6 +48,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// JPEG compression quality (0.0-1.0, default: 0.7)
 @property (nonatomic, assign) float jpegQuality;
 
+/// When YES (default), each onFrameReady event carries the base64 JPEG in
+/// `imageData`. When NO, events are metadata-only (~300 bytes) and consumers
+/// fetch image bytes on demand via frameDataForId: -- only frames that are
+/// actually sent pay the bridge cost.
+@property (nonatomic, assign) BOOL includeImageDataInEvent;
+
+/// Per-frame debug logging (default: NO). The hot path logs several lines per
+/// captured frame; keep this off outside active native debugging.
+@property (nonatomic, assign) BOOL verboseLogging;
+
 #pragma mark - Callback
 
 /// Called when a frame is ready, with event dictionary suitable for JS
@@ -71,6 +81,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Retrieve frame entry by ID for detection resolution
 /// Returns nil if frame not found or evicted from ring buffer
 - (VROFrameEntry * _Nullable)frameEntryForId:(NSString *)frameId;
+
+/// On-demand image fetch for metadata-only streaming: returns the frame's
+/// base64 JPEG plus identifying metadata, or nil if the frame was evicted.
+- (NSDictionary * _Nullable)frameDataForId:(NSString *)frameId;
 
 #pragma mark - Session Management
 

@@ -91,7 +91,11 @@ static NSString * const kRVWatermarkURL =
     BOOL _worldMappingStatusInitialized;
 
     // Frame streaming timer
-    NSTimer *_frameStreamTimer;
+    // Frame pump: a GCD timer on a background queue. The old NSTimer ran in
+    // the main run loop's default mode, which pauses during UITrackingRunLoopMode
+    // -- the frame stream silently stalled for the duration of any continuous
+    // touch gesture. It also polled at a fixed 30 Hz regardless of target fps.
+    dispatch_source_t _frameStreamTimerSource;
 
     // depthEnabled: activate depth sensing without occlusion rendering
     BOOL _depthEnabled;
@@ -2810,12 +2814,7 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         _frameCaptureService.onFrameReady = ^(NSDictionary *frameData) {
             VRTARSceneNavigator *strongSelf = weakSelf;
             if (strongSelf && strongSelf.onFrameUpdate) {
-                NSLog(@"[ViroFrameStream DEBUG] Forwarding frame to JS via onFrameUpdate");
                 strongSelf.onFrameUpdate(frameData);
-            } else {
-                NSLog(@"[ViroFrameStream DEBUG] onFrameUpdate is nil! strongSelf=%@, onFrameUpdate=%@",
-                      strongSelf ? @"exists" : @"nil",
-                      strongSelf.onFrameUpdate ? @"exists" : @"nil");
             }
         };
     }
@@ -2826,6 +2825,9 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
     _frameCaptureService.targetHeight = config[@"height"] ? [config[@"height"] intValue] : 480;
     _frameCaptureService.targetFPS = config[@"fps"] ? [config[@"fps"] floatValue] : 5.0f;
     _frameCaptureService.jpegQuality = config[@"quality"] ? [config[@"quality"] floatValue] : 0.7f;
+    _frameCaptureService.includeImageDataInEvent =
+        config[@"includeImageData"] ? [config[@"includeImageData"] boolValue] : YES;
+    _frameCaptureService.verboseLogging = config[@"verbose"] ? [config[@"verbose"] boolValue] : NO;
 
     RCTLogInfo(@"[ViroFrameStream] Frame stream started: %dx%d @ %.1f FPS, quality: %.2f",
                _frameCaptureService.targetWidth,
@@ -2833,23 +2835,39 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
                _frameCaptureService.targetFPS,
                _frameCaptureService.jpegQuality);
 
-    // Start timer to pump ARFrames to capture service
-    // Poll at 30 FPS - the capture service's rate limiting will filter to target FPS
-    [_frameStreamTimer invalidate];
-    _frameStreamTimer = [NSTimer scheduledTimerWithTimeInterval:1.0/30.0
-                                                         target:self
-                                                       selector:@selector(frameStreamTimerFired:)
-                                                       userInfo:nil
-                                                        repeats:YES];
-    RCTLogInfo(@"[ViroFrameStream] Timer started (30 FPS polling)");
+    // Pump ARFrames to the capture service with a GCD timer at the target
+    // fps (the render-loop hook in willRenderFrame also feeds the service; the
+    // service's rate limiter dedupes whichever pump fires first). GCD timers
+    // keep firing during touch tracking, unlike default-mode NSTimers, and at
+    // fps=1 this is 1 wakeup/s instead of 30.
+    [self stopFrameStreamTimer];
+    float fps = _frameCaptureService.targetFPS > 0 ? _frameCaptureService.targetFPS : 5.0f;
+    uint64_t intervalNs = (uint64_t)(NSEC_PER_SEC / fps);
+    dispatch_queue_t timerQueue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, timerQueue);
+    dispatch_source_set_timer(source, dispatch_time(DISPATCH_TIME_NOW, intervalNs),
+                              intervalNs, intervalNs / 5); // 20% leeway
+    __weak VRTARSceneNavigator *weakTimerSelf = self;
+    dispatch_source_set_event_handler(source, ^{
+        [weakTimerSelf pumpFrameStream];
+    });
+    dispatch_resume(source);
+    _frameStreamTimerSource = source;
+    RCTLogInfo(@"[ViroFrameStream] Frame pump timer started (%.1f fps)", fps);
+}
+
+- (void)stopFrameStreamTimer {
+    if (_frameStreamTimerSource) {
+        dispatch_source_cancel(_frameStreamTimerSource);
+        _frameStreamTimerSource = nil;
+    }
 }
 
 - (void)stopFrameStream {
     RCTLogInfo(@"[ViroFrameStream] Stopping frame stream");
 
-    // Invalidate timer first
-    [_frameStreamTimer invalidate];
-    _frameStreamTimer = nil;
+    // Stop the pump first
+    [self stopFrameStreamTimer];
 
     if (_frameCaptureService) {
         _frameCaptureService.enabled = NO;
@@ -2858,7 +2876,7 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
 
 #pragma mark - Frame Stream Timer
 
-- (void)frameStreamTimerFired:(NSTimer *)timer {
+- (void)pumpFrameStream {
     if (!_frameCaptureService || !_frameCaptureService.enabled) {
         return;
     }
@@ -2950,6 +2968,29 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
             }
         });
     });
+}
+
+- (void)getFrameData:(NSString *)frameId
+   completionHandler:(void (^)(NSDictionary * _Nonnull result))completionHandler {
+    if (!completionHandler) {
+        return;
+    }
+    if (!_frameCaptureService) {
+        completionHandler(@{
+            @"frameId": frameId ?: @"",
+            @"error": @"Frame capture service not initialized"
+        });
+        return;
+    }
+    NSDictionary *data = [_frameCaptureService frameDataForId:frameId];
+    if (!data) {
+        completionHandler(@{
+            @"frameId": frameId ?: @"",
+            @"error": @"Frame not found in ring buffer (may have been evicted)"
+        });
+        return;
+    }
+    completionHandler(data);
 }
 
 #pragma mark - VRORenderDelegate Frame Streaming Hook
@@ -3312,6 +3353,13 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
     [session runWithConfiguration:newConfig
                           options:ARSessionRunOptionResetTracking | ARSessionRunOptionRemoveExistingAnchors];
 
+    // The world origin just moved: every frame in the capture ring buffer now
+    // carries poses from the dead origin. Bump the sessionId so JS invalidates
+    // its frame references.
+    if (_frameCaptureService) {
+        [_frameCaptureService handleSessionReset];
+    }
+
     _worldMapOpInFlight = VRTWorldMapOpNone;
 
     RCTLogInfo(@"[ViroAR] World map loaded for session: %@ from path: %@", sessionId, filePath);
@@ -3414,8 +3462,7 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
 
 - (void)invalidate {
     // Stop frame stream timer
-    [_frameStreamTimer invalidate];
-    _frameStreamTimer = nil;
+    [self stopFrameStreamTimer];
 
     if (_vroView) {
         // pause the view before removing it.

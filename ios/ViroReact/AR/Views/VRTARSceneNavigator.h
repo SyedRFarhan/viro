@@ -466,11 +466,22 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
 @property (nonatomic, strong, nullable) VROFrameCaptureService *frameCaptureService;
 
 // Start streaming AR frames with the given configuration
-// Config keys: enabled (BOOL), width (int), height (int), fps (float), quality (float)
+// Config keys: enabled (BOOL), width (int), height (int), fps (float),
+// quality (float), includeImageData (BOOL, default YES; NO = metadata-only
+// events, fetch bytes via getFrameData:), verbose (BOOL, default NO)
 - (void)startFrameStream:(NSDictionary *)config;
 
 // Stop streaming AR frames
 - (void)stopFrameStream;
+
+// Stop the frame pump timer (idempotent)
+- (void)stopFrameStreamTimer;
+
+// On-demand image fetch for metadata-only streaming.
+// Returns: {frameId, timestamp, sessionId, imageData (base64), width, height}
+// or {frameId, error} if the frame was evicted from the ring buffer.
+- (void)getFrameData:(NSString *)frameId
+   completionHandler:(void (^)(NSDictionary * _Nonnull result))completionHandler;
 
 // Resolve 2D detection points to 3D world coordinates using capture-time data
 // Points array: [{x: 0-1, y: 0-1}, ...]

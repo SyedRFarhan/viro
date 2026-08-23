@@ -883,6 +883,31 @@ export type ViroFrameStreamConfig = {
   fps: number;
   /** JPEG compression quality (0.0-1.0, default: 0.7) */
   quality: number;
+  /**
+   * When true (default), every frame event carries the base64 JPEG in
+   * `imageData`. When false, events are metadata-only (~300 bytes) and image
+   * bytes are fetched on demand via getFrameData(frameId) -- only frames that
+   * are actually used pay the bridge cost.
+   */
+  includeImageData?: boolean;
+  /** Per-frame native debug logging (default: false). */
+  verbose?: boolean;
+};
+
+/**
+ * Result of an on-demand getFrameData(frameId) fetch.
+ * `imageData` is absent when the frame was evicted from the native ring
+ * buffer (see `error`).
+ */
+export type ViroFrameDataResult = {
+  frameId: string;
+  /** Base64 JPEG. Absent when the frame is no longer available. */
+  imageData?: string;
+  timestamp?: number;
+  sessionId?: number;
+  width?: number;
+  height?: number;
+  error?: string;
 };
 
 /**
