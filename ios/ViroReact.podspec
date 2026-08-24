@@ -87,6 +87,13 @@ Pod::Spec.new do |s|
   # Fabric-specific build configuration
   s.pod_target_xcconfig = {
     'SWIFT_VERSION' => '5.0',
+    # ViroKit.framework carries a modulemap whose umbrella closure includes
+    # C++ headers (std::shared_ptr et al). With clang modules on (the pod
+    # default), any #import <ViroKit/...> from this pod attempts a module
+    # build of that closure in an ObjC context and dies on '<memory>' not
+    # found. The fork's own xcodeproj resolves these imports textually; do
+    # the same here. (iOS compiles no Swift in this pod - VisionOS only.)
+    'CLANG_ENABLE_MODULES' => 'NO',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'HEADER_SEARCH_PATHS' => [
       '"$(PODS_TARGET_SRCROOT)/ViroReact"',
