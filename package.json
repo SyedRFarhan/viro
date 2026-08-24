@@ -3,7 +3,7 @@
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "version": "2.61.53",
+  "version": "2.61.54",
   "license": "MIT",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
@@ -56,6 +56,9 @@
     "ios/dist/ViroRenderer/ViroKit.framework",
     "ios/dist/ViroRenderer/ViroKit.podspec",
     "ios/ViroReact",
+    "ios/*.h",
+    "ios/*.m",
+    "ios/*.mm",
     "ios/ViroReact.podspec",
     "ios/ViroReact.xcodeproj",
     "ios/ViroReact.xcworkspace",

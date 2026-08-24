@@ -22,9 +22,13 @@ Pod::Spec.new do |s|
   # (VRTObjectDetectorView uses AVFoundation + Accelerate; CoreVideo for CVPixelBuffer)
   s.ios.frameworks = ['AVFoundation', 'Accelerate', 'CoreVideo']
 
-  # Base source files
-  source_files_array = ['ViroReact/**/*.{h,m,mm,swift}']
-  header_files_array = ['ViroReact/**/*.h']
+  # Base source files. The top-level ios/*.{h,m,mm} pairs (VRT3DSceneNavigator,
+  # VRTGeometry, VRTManagedAnimation, VRTUIImageWrapper, VRTVRSceneNavigator, ...)
+  # are part of the bridge too -- in the prebuilt era their symbols came from
+  # libViroReact.a and their headers from dist/include, so ViroReact/** alone
+  # was enough. Source builds need them matched explicitly.
+  source_files_array = ['ViroReact/**/*.{h,m,mm,swift}', '*.{h,m,mm}']
+  header_files_array = ['ViroReact/**/*.h', '*.h']
 
   # Include dist files if they exist (for release builds)
   if File.exist?(File.join(__dir__, 'dist/include'))
