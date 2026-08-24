@@ -36,13 +36,15 @@ Pod::Spec.new do |s|
     header_files_array << 'dist/include/*.h'
   end
 
-  # The prebuilt bridge is OPT-IN ONLY. It froze at the v2.61.50 build and
-  # silently shadowed every later bridge source change in consumer builds
-  # (three EAS builds shipped stale native code before this was found,
-  # Aug 23 2026). Default is always compile-from-source; set
-  # VIRO_PREBUILT_BRIDGE=1 to vendor a lib you have JUST rebuilt.
+  # Consumers use the prebuilt bridge (like upstream, whose npm package is
+  # dist-only; the source branch below never worked in consumer pod builds
+  # -- clang-module/textual-include conflicts around ViroKit's C++ headers).
+  # The staleness trap this once caused (lib frozen at v2.61.50 while three
+  # releases shipped around it, Aug 23 2026) is closed by the prepack gate:
+  # `npm publish` refuses to pack unless dist/lib/.source-hash matches the
+  # current bridge sources. Rebuild with `npm run build:bridge`.
   lib_path = 'dist/lib/libViroReact.a'
-  if ENV['VIRO_PREBUILT_BRIDGE'] == '1' && File.exist?(File.join(__dir__, lib_path))
+  if File.exist?(File.join(__dir__, lib_path))
     # Prebuilt bridge: headers only, link the static lib.
     s.source_files = header_files_array
     s.public_header_files = header_files_array
