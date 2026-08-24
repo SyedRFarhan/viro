@@ -2815,7 +2815,7 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
     // if the framework is ever swapped for one without the ivar, the @catch
     // makes this a logged no-op instead of a crash.
     @try {
-        id link = [_vroView valueForKey:@"displayLink"];
+        id link = [(NSObject *)_vroView valueForKey:@"displayLink"];
         if ([link isKindOfClass:[CADisplayLink class]]) {
             ((CADisplayLink *)link).preferredFramesPerSecond = fps;
             RCTLogInfo(@"[ViroAR] Render frame rate capped at %ld fps", (long)fps);

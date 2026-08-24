@@ -51,7 +51,16 @@ Pod::Spec.new do |s|
     # Repository builds compile the bridge from source.
     s.source_files = source_files_array
     s.public_header_files = header_files_array
-    s.ios.exclude_files = ['ViroReact/VisionOS/**/*']
+    # Dead sources the ViroReact.xcodeproj target never compiled (the glob is
+    # broader than the curated target list): VRTButton.mm and VROHUDManager.mm
+    # import headers that do not exist anywhere in the tree; VROTextManager.mm
+    # is orphaned. Keep this list in sync with the xcodeproj when adding files.
+    s.ios.exclude_files = [
+      'ViroReact/VisionOS/**/*',
+      'ViroReact/Views/VRTButton.mm',
+      'ViroReact/VROHUDManager.mm',
+      'ViroReact/VROTextManager.mm',
+    ]
   end
 
   # React Native dependencies
