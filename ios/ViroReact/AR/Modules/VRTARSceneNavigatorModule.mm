@@ -2048,7 +2048,9 @@ RCT_EXPORT_METHOD(setRenderFrameRate:(nonnull NSNumber *)reactTag
                                         NSDictionary<NSNumber *, UIView *> *viewRegistry) {
         VRTView *view = (VRTView *)viewRegistry[reactTag];
         if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
-            RCTLogError(@"setRenderFrameRate: Invalid view returned from registry, expecting VRTARSceneNavigator, got: %@", view);
+            // Warn, not error: callers may race view registration (an early
+            // call during mount) and retry later; a red box is overkill.
+            RCTLogWarn(@"setRenderFrameRate: view not registered yet (got: %@)", view);
             return;
         }
         [(VRTARSceneNavigator *)view setRenderFrameRate:[fps integerValue]];
