@@ -499,10 +499,16 @@ RCT_EXPORT_METHOD(stopRecording:(nonnull NSNumber *)reactTag
     [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
                                         NSDictionary<NSNumber *, UIView *> *viewRegistry) {
         VRTView *view = (VRTView *)viewRegistry[reactTag];
+        // Resolve a result object, not nil: <= 2.61.61 resolved nil on the
+        // success path, which JS callers misread as failure. Consumers
+        // written against that era treat a nil resolve as a void ack and
+        // verify via getRecordingStatus; both work against this shape.
         if ([view isKindOfClass:[VRTARSceneNavigator class]]) {
             [(VRTARSceneNavigator *)view stopRecording];
+            resolve(@{ @"success": @YES });
+        } else {
+            resolve(@{ @"success": @NO, @"error": @"Invalid view type" });
         }
-        resolve(nil);
     }];
 }
 
