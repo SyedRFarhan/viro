@@ -550,10 +550,13 @@ class ViroARSceneNavigatorClass extends React.Component {
      *
      * @param outputDir - A directory that will contain video.mp4 + session.jsonl. Created if
      *                    it doesn't exist.
+     * @param options - recordVideo:false writes session.jsonl only (pose-only
+     *                  mode) — for a caller whose video already comes from
+     *                  startVideoRecording running in parallel. Default true.
      * @returns Promise resolving to { success: boolean, error?: string }.
      */
-    _startRecording = async (outputDir) => {
-        return await ViroARSceneNavigatorModule.startRecording((0, react_native_1.findNodeHandle)(this), outputDir);
+    _startRecording = async (outputDir, options = {}) => {
+        return await ViroARSceneNavigatorModule.startRecording((0, react_native_1.findNodeHandle)(this), outputDir, options);
     };
     /**
      * Stops the recording started by startRecording and finalizes video.mp4 + session.jsonl.

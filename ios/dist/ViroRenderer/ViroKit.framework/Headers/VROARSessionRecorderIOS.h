@@ -82,7 +82,10 @@ private:
     AVAssetWriterInput *_videoWriterInput;
     AVAssetWriterInputPixelBufferAdaptor *_videoAdaptor;
     bool _loggedPixelFormatMismatch;
-    // Writer failed; skip video for the rest of the session, keep session.jsonl.
+    // What the config asked for; reported in the header line as `video`.
+    bool _recordVideo;
+    // Video is off — by config (pose-only mode) or after a writer failure;
+    // either way session.jsonl keeps recording.
     bool _videoDisabled;
     // Geometry the writer was created with, for reporting append mismatches.
     size_t _videoWidth;

@@ -1245,6 +1245,7 @@ static NSString *rvMatrixToCsv(const VROMatrix4f &m) {
 }
 
 - (void)startRecording:(NSString *)outputDir
+            recordVideo:(BOOL)recordVideo
       completionHandler:(RecordingStartCompletionHandler)completionHandler {
     if (!_vroView) {
         if (completionHandler) {
@@ -1264,6 +1265,7 @@ static NSString *rvMatrixToCsv(const VROMatrix4f &m) {
 
     VROARRecordingConfig config;
     config.outputDir = std::string([outputDir UTF8String]);
+    config.recordVideo = recordVideo;
 
     arSession->startRecording(config,
         [completionHandler] {

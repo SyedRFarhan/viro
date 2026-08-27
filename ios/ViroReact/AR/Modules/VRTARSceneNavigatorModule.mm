@@ -450,8 +450,12 @@ RCT_EXPORT_METHOD(hostCloudAnchor:(nonnull NSNumber *)reactTag
 
 RCT_EXPORT_METHOD(startRecording:(nonnull NSNumber *)reactTag
                         outputDir:(NSString *)outputDir
+                          options:(NSDictionary *)options
                           resolve:(RCTPromiseResolveBlock)resolve
                            reject:(RCTPromiseRejectBlock)reject) {
+    // recordVideo:false = pose-only mode: session.jsonl without video.mp4,
+    // for a caller whose video already comes from the rendered-take recorder.
+    BOOL recordVideo = options[@"recordVideo"] == nil ? YES : [options[@"recordVideo"] boolValue];
     [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
                                         NSDictionary<NSNumber *, UIView *> *viewRegistry) {
         @try {
@@ -470,6 +474,7 @@ RCT_EXPORT_METHOD(startRecording:(nonnull NSNumber *)reactTag
             }
 
             [component startRecording:outputDir
+                          recordVideo:recordVideo
                      completionHandler:^(BOOL success, NSString *error) {
                 NSMutableDictionary *result = [NSMutableDictionary new];
                 [result setObject:@(success) forKey:@"success"];

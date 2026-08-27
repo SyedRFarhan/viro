@@ -139,6 +139,14 @@ enum class VROARRecordingStatus {
  */
 struct VROARRecordingConfig {
     std::string outputDir;
+    /*
+     When false, session.jsonl (header/imu/pose) is written but video.mp4 is
+     not — pose-only mode, for a caller whose video already comes from a
+     separate recorder running in parallel (e.g. the rendered-take path).
+     With no video to pair against by array position, a pose is written for
+     every ARFrame.
+     */
+    bool recordVideo = true;
 };
 
 /*

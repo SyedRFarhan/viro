@@ -273,7 +273,10 @@ typedef void (^AddAnchorCompletionHandler)(BOOL success,
 typedef void (^RecordingStartCompletionHandler)(BOOL success,
                                                  NSString * _Nullable error);
 
+// recordVideo:NO = pose-only mode — session.jsonl without video.mp4, for a
+// caller whose video already comes from the rendered-take recorder.
 - (void)startRecording:(NSString *)outputDir
+            recordVideo:(BOOL)recordVideo
       completionHandler:(RecordingStartCompletionHandler)completionHandler;
 
 - (void)stopRecording;
