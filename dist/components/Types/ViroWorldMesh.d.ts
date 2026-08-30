@@ -129,6 +129,47 @@ export type ViroWorldMeshConfig = {
      * @default 0.15
      */
     coverageBirthCellSize?: number;
+    /**
+     * Per-face flat shading: the faceted triangulated-mesh look (and what
+     * the edge lines detect). false = smooth film. Note: flat shading
+     * de-indexes the geometry (3 vertices/triangle) — consider a lower
+     * coverageMaxTriangles.
+     * @default true
+     */
+    coverageFlatShading?: boolean;
+    /**
+     * Per-face brightness variation (0 disables) — the subtle mosaic
+     * tile-to-tile tone shift of a reconstruction overlay.
+     * @default 0.06
+     */
+    coverageFacetJitter?: number;
+    /**
+     * Hairline triangle-edge line strength (0 disables). Only visible with
+     * coverageFlatShading.
+     * @default 0.35
+     */
+    coverageEdgeIntensity?: number;
+    /**
+     * Triangle-edge line color, [r, g, b] 0-1.
+     * @default [1, 1, 1]
+     */
+    coverageEdgeColor?: [number, number, number];
+    /**
+     * Glow strength at the mesh's OPEN boundary — the scan's growth
+     * frontier (0 disables).
+     * @default 0.9
+     */
+    coverageBoundaryIntensity?: number;
+    /**
+     * Growth-frontier glow color, [r, g, b] 0-1.
+     * @default [0.75, 0.95, 1.0]
+     */
+    coverageBoundaryColor?: [number, number, number];
+    /**
+     * Frontier glow breathing rate (radians/second; 0 = steady).
+     * @default 2.6
+     */
+    coverageBoundaryPulseSpeed?: number;
 };
 /**
  * Statistics about the current world mesh state.

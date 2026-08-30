@@ -2766,6 +2766,33 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         if (worldMeshConfig[@"coverageBirthCellSize"]) {
             _worldMeshConfigCpp.coverageBirthCellSize = [worldMeshConfig[@"coverageBirthCellSize"] floatValue];
         }
+        if (worldMeshConfig[@"coverageFlatShading"]) {
+            _worldMeshConfigCpp.coverageFlatShading = [worldMeshConfig[@"coverageFlatShading"] boolValue];
+        }
+        if (worldMeshConfig[@"coverageFacetJitter"]) {
+            _worldMeshConfigCpp.coverageFacetJitter = [worldMeshConfig[@"coverageFacetJitter"] floatValue];
+        }
+        if (worldMeshConfig[@"coverageEdgeIntensity"]) {
+            _worldMeshConfigCpp.coverageEdgeIntensity = [worldMeshConfig[@"coverageEdgeIntensity"] floatValue];
+        }
+        NSArray *edgeColor = worldMeshConfig[@"coverageEdgeColor"];
+        if ([edgeColor isKindOfClass:[NSArray class]] && edgeColor.count >= 3) {
+            _worldMeshConfigCpp.coverageEdgeColorR = [edgeColor[0] floatValue];
+            _worldMeshConfigCpp.coverageEdgeColorG = [edgeColor[1] floatValue];
+            _worldMeshConfigCpp.coverageEdgeColorB = [edgeColor[2] floatValue];
+        }
+        if (worldMeshConfig[@"coverageBoundaryIntensity"]) {
+            _worldMeshConfigCpp.coverageBoundaryIntensity = [worldMeshConfig[@"coverageBoundaryIntensity"] floatValue];
+        }
+        NSArray *boundaryColor = worldMeshConfig[@"coverageBoundaryColor"];
+        if ([boundaryColor isKindOfClass:[NSArray class]] && boundaryColor.count >= 3) {
+            _worldMeshConfigCpp.coverageBoundaryColorR = [boundaryColor[0] floatValue];
+            _worldMeshConfigCpp.coverageBoundaryColorG = [boundaryColor[1] floatValue];
+            _worldMeshConfigCpp.coverageBoundaryColorB = [boundaryColor[2] floatValue];
+        }
+        if (worldMeshConfig[@"coverageBoundaryPulseSpeed"]) {
+            _worldMeshConfigCpp.coverageBoundaryPulseSpeed = [worldMeshConfig[@"coverageBoundaryPulseSpeed"] floatValue];
+        }
     }
 
     // Apply to AR scene if ready

@@ -105,6 +105,22 @@ struct VROWorldMeshConfig {
     double coverageUpdateIntervalMs = 500.0; // geometry rebuild cadence
     int coverageMaxTriangles = 150000;       // stride-decimate the visual above this
     float coverageBirthCellSize = 0.15f;     // voxel size for newness tracking (meters)
+
+    // Polycam's overlay reads as a triangulated RECONSTRUCTION, not a
+    // smooth film — that texture comes from the three knobs below.
+    bool coverageFlatShading = true;         // per-face normals: the faceted mosaic look
+                                             // (false = smooth vertex normals, the v1 film)
+    float coverageFacetJitter = 0.06f;       // per-face brightness variation (0 disables)
+    float coverageEdgeIntensity = 0.35f;     // hairline triangle-edge lines (0 disables)
+    float coverageEdgeColorR = 1.0f;         // edge line color
+    float coverageEdgeColorG = 1.0f;
+    float coverageEdgeColorB = 1.0f;
+    float coverageBoundaryIntensity = 0.9f;  // glow at the mesh's OPEN boundary — the
+                                             // growth frontier of the scan (0 disables)
+    float coverageBoundaryColorR = 0.75f;    // frontier glow color
+    float coverageBoundaryColorG = 0.95f;
+    float coverageBoundaryColorB = 1.0f;
+    float coverageBoundaryPulseSpeed = 2.6f; // frontier breathing rate (radians/sec; 0 = steady)
 };
 
 /**
