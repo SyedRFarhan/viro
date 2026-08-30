@@ -31,6 +31,7 @@
 #include <chrono>
 #include <functional>
 #include <map>
+#include <unordered_map>
 #include <mutex>
 #include <cstdint>
 #include "VROVector3f.h"
@@ -43,6 +44,8 @@ class VROPhysicsShape;
 class VROPencil;
 class VROScene;
 class VROGeometry;
+class VRONode;
+class VROMaterial;
 class btRigidBody;
 class btDefaultMotionState;
 
@@ -76,6 +79,32 @@ struct VROWorldMeshConfig {
     bool debugDrawDepthTest = true;        // Depth-test wireframe against scene (occluded by real surfaces)
     int debugDrawMaxTriangles = 1000;      // Triangle cap for wireframe debug draw
     float debugDrawLineThickness = 0.001f; // Line thickness for wireframe (meters)
+
+    // ─── Coverage visualization (Polycam-style scan skin) ────────────────
+    // The live mesh rendered as REAL translucent geometry — GPU-resident
+    // between rebuilds, unlike the per-frame pencil wireframe above —
+    // shaded by surface orientation, with a reveal glow on newly captured
+    // area and a subtle moving shimmer. Every styling parameter below is
+    // read LIVE by shader uniform binders each frame: changing the config
+    // at runtime restyles the skin with no geometry or material rebuild
+    // (and therefore no native rebuild to tune the look from JS).
+    bool coverageDrawEnabled = false;
+    float coverageColorR = 0.42f;            // base skin color (cool blue-white)
+    float coverageColorG = 0.78f;
+    float coverageColorB = 1.0f;
+    float coverageOpacity = 0.45f;           // skin translucency
+    float coverageShadingStrength = 0.7f;    // 0 = flat paint, 1 = full hemisphere relief
+    float coverageRevealColorR = 0.85f;      // glow color for freshly captured area
+    float coverageRevealColorG = 1.0f;
+    float coverageRevealColorB = 1.0f;
+    float coverageRevealIntensity = 0.8f;    // 0 disables the reveal glow
+    float coverageRevealDurationSec = 1.6f;  // glow decay time constant (seconds)
+    float coverageShimmerIntensity = 0.12f;  // 0 disables the moving sheen
+    float coverageShimmerSpeed = 1.6f;       // sheen animation speed (radians/sec)
+    float coverageShimmerScale = 2.2f;       // sheen spatial frequency (1/meters)
+    double coverageUpdateIntervalMs = 500.0; // geometry rebuild cadence
+    int coverageMaxTriangles = 150000;       // stride-decimate the visual above this
+    float coverageBirthCellSize = 0.15f;     // voxel size for newness tracking (meters)
 };
 
 /**
@@ -311,6 +340,13 @@ public:
      */
     static std::shared_ptr<VROGeometry> buildOcclusionGeometry(std::shared_ptr<VROARDepthMesh> mesh);
 
+    /**
+     * Coverage skin: the scene whose root the coverage node attaches to.
+     * Set by VROARScene when the world mesh is created; without it the
+     * coverage visualization silently stays off.
+     */
+    void setCoverageScene(std::shared_ptr<VROScene> scene);
+
 private:
     std::weak_ptr<VROPhysicsWorld> _physicsWorld;
 
@@ -377,6 +413,39 @@ private:
      * Called on the render thread after a mesh is successfully applied.
      */
     void notifySubscribers(std::shared_ptr<VROARDepthMesh> mesh);
+
+    // ─── Coverage skin (Polycam-style) ───────────────────────────────────
+    std::weak_ptr<VROScene> _coverageScene;
+    std::shared_ptr<VRONode> _coverageNode;
+    std::shared_ptr<VROMaterial> _coverageMaterial;
+    double _coverageStartMs = 0.0;        // uniform time base (float precision)
+    double _lastCoverageBuildMs = 0.0;
+    int _lastCoverageTriangles = -1;
+    // Voxel cell → first-seen time (seconds since _coverageStartMs). Feeds
+    // the per-vertex birth channel so the shader can glow fresh area.
+    // Bounded by scanned volume (~a few thousand cells per room at 15cm).
+    std::unordered_map<uint64_t, float> _cellBirthSec;
+
+    /**
+     * Rebuild the coverage skin from a freshly applied mesh, rate-limited
+     * by coverageUpdateIntervalMs and skipped when the mesh is unchanged.
+     * Tears the node down when the feature is disabled.
+     */
+    void updateCoverageVisual(std::shared_ptr<VROARDepthMesh> mesh);
+
+    /**
+     * Build the visible coverage geometry: smooth per-vertex normals for
+     * hemisphere shading, per-vertex birth time (seconds) in texcoord U
+     * for the reveal glow.
+     */
+    std::shared_ptr<VROGeometry> buildCoverageGeometry(std::shared_ptr<VROARDepthMesh> mesh);
+
+    /**
+     * Create the (single, reused) coverage material: translucent, unlit,
+     * with a Surface shader modifier whose uniforms are bound to the live
+     * config every frame — styling changes need no rebuild of anything.
+     */
+    std::shared_ptr<VROMaterial> createCoverageMaterial();
 
     /**
      * Return a decimated copy of mesh with at most maxTriangles triangles,

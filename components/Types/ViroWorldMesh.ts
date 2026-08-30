@@ -70,6 +70,82 @@ export type ViroWorldMeshConfig = {
    * @default false
    */
   debugDrawEnabled?: boolean;
+
+  // ─── Coverage skin (Polycam-style scan visualization) ──────────────────
+  // The live world mesh rendered as real translucent geometry: shaded by
+  // surface orientation, freshly captured area glows and settles (the
+  // "reveal"), with a subtle travelling shimmer. Every parameter below is
+  // read live by the shader each frame — restyle at runtime from JS with
+  // no native rebuild.
+
+  /**
+   * Render the scan-coverage skin over captured surfaces.
+   * @default false
+   */
+  coverageDrawEnabled?: boolean;
+  /**
+   * Base skin color as [r, g, b], each 0-1.
+   * @default [0.42, 0.78, 1.0] (cool blue-white)
+   */
+  coverageColor?: [number, number, number];
+  /**
+   * Skin translucency (0 invisible - 1 solid).
+   * @default 0.45
+   */
+  coverageOpacity?: number;
+  /**
+   * Hemisphere-relief shading strength: 0 = flat paint, 1 = full relief
+   * (up-facing surfaces bright, sides mid, down-facing dim).
+   * @default 0.7
+   */
+  coverageShadingStrength?: number;
+  /**
+   * Glow color for freshly captured area, [r, g, b] 0-1.
+   * @default [0.85, 1.0, 1.0]
+   */
+  coverageRevealColor?: [number, number, number];
+  /**
+   * Reveal glow strength; 0 disables the reveal.
+   * @default 0.8
+   */
+  coverageRevealIntensity?: number;
+  /**
+   * Reveal glow decay time constant in milliseconds.
+   * @default 1600
+   */
+  coverageRevealDurationMs?: number;
+  /**
+   * Travelling sheen strength; 0 disables the shimmer.
+   * @default 0.12
+   */
+  coverageShimmerIntensity?: number;
+  /**
+   * Sheen animation speed (radians/second).
+   * @default 1.6
+   */
+  coverageShimmerSpeed?: number;
+  /**
+   * Sheen spatial frequency (1/meters).
+   * @default 2.2
+   */
+  coverageShimmerScale?: number;
+  /**
+   * Minimum time between coverage geometry rebuilds (ms). Between
+   * rebuilds the skin is a static GPU buffer.
+   * @default 500
+   */
+  coverageUpdateIntervalMs?: number;
+  /**
+   * Stride-decimate the coverage visual above this triangle count.
+   * @default 150000
+   */
+  coverageMaxTriangles?: number;
+  /**
+   * Voxel size (meters) for tracking which area is newly captured
+   * (feeds the reveal glow).
+   * @default 0.15
+   */
+  coverageBirthCellSize?: number;
 };
 
 /**

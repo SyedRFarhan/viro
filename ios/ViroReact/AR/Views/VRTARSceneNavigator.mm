@@ -2717,6 +2717,55 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         if (worldMeshConfig[@"debugDrawEnabled"]) {
             _worldMeshConfigCpp.debugDrawEnabled = [worldMeshConfig[@"debugDrawEnabled"] boolValue];
         }
+
+        // ─── Coverage skin (Polycam-style) — every knob JS-tunable so the
+        //     look never needs another native rebuild. Colors are [r,g,b]
+        //     arrays of 0-1 floats. ───
+        if (worldMeshConfig[@"coverageDrawEnabled"]) {
+            _worldMeshConfigCpp.coverageDrawEnabled = [worldMeshConfig[@"coverageDrawEnabled"] boolValue];
+        }
+        NSArray *coverageColor = worldMeshConfig[@"coverageColor"];
+        if ([coverageColor isKindOfClass:[NSArray class]] && coverageColor.count >= 3) {
+            _worldMeshConfigCpp.coverageColorR = [coverageColor[0] floatValue];
+            _worldMeshConfigCpp.coverageColorG = [coverageColor[1] floatValue];
+            _worldMeshConfigCpp.coverageColorB = [coverageColor[2] floatValue];
+        }
+        if (worldMeshConfig[@"coverageOpacity"]) {
+            _worldMeshConfigCpp.coverageOpacity = [worldMeshConfig[@"coverageOpacity"] floatValue];
+        }
+        if (worldMeshConfig[@"coverageShadingStrength"]) {
+            _worldMeshConfigCpp.coverageShadingStrength = [worldMeshConfig[@"coverageShadingStrength"] floatValue];
+        }
+        NSArray *revealColor = worldMeshConfig[@"coverageRevealColor"];
+        if ([revealColor isKindOfClass:[NSArray class]] && revealColor.count >= 3) {
+            _worldMeshConfigCpp.coverageRevealColorR = [revealColor[0] floatValue];
+            _worldMeshConfigCpp.coverageRevealColorG = [revealColor[1] floatValue];
+            _worldMeshConfigCpp.coverageRevealColorB = [revealColor[2] floatValue];
+        }
+        if (worldMeshConfig[@"coverageRevealIntensity"]) {
+            _worldMeshConfigCpp.coverageRevealIntensity = [worldMeshConfig[@"coverageRevealIntensity"] floatValue];
+        }
+        if (worldMeshConfig[@"coverageRevealDurationMs"]) {
+            _worldMeshConfigCpp.coverageRevealDurationSec = [worldMeshConfig[@"coverageRevealDurationMs"] floatValue] / 1000.0f;
+        }
+        if (worldMeshConfig[@"coverageShimmerIntensity"]) {
+            _worldMeshConfigCpp.coverageShimmerIntensity = [worldMeshConfig[@"coverageShimmerIntensity"] floatValue];
+        }
+        if (worldMeshConfig[@"coverageShimmerSpeed"]) {
+            _worldMeshConfigCpp.coverageShimmerSpeed = [worldMeshConfig[@"coverageShimmerSpeed"] floatValue];
+        }
+        if (worldMeshConfig[@"coverageShimmerScale"]) {
+            _worldMeshConfigCpp.coverageShimmerScale = [worldMeshConfig[@"coverageShimmerScale"] floatValue];
+        }
+        if (worldMeshConfig[@"coverageUpdateIntervalMs"]) {
+            _worldMeshConfigCpp.coverageUpdateIntervalMs = [worldMeshConfig[@"coverageUpdateIntervalMs"] doubleValue];
+        }
+        if (worldMeshConfig[@"coverageMaxTriangles"]) {
+            _worldMeshConfigCpp.coverageMaxTriangles = [worldMeshConfig[@"coverageMaxTriangles"] intValue];
+        }
+        if (worldMeshConfig[@"coverageBirthCellSize"]) {
+            _worldMeshConfigCpp.coverageBirthCellSize = [worldMeshConfig[@"coverageBirthCellSize"] floatValue];
+        }
     }
 
     // Apply to AR scene if ready
