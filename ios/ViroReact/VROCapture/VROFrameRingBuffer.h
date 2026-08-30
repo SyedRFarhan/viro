@@ -83,6 +83,27 @@ NS_ASSUME_NONNULL_BEGIN
 /// Encoded JPEG data (base64 encoded for JS event)
 @property (nonatomic, strong, nullable) NSData *jpegData;
 
+#pragma mark - Hi-Res Variant (Optional, shallow retention)
+
+/// High-resolution JPEG of the SAME frame (same aspect, same crop
+/// proportions — jpegToARTransform is identical; only dimensions and
+/// intrinsics differ). Kept only for the most recent hiResRingDepth
+/// frames: recon banking pulls the latest frame, so a shallow window
+/// bounds memory (~400KB x depth) while the small JPEG ring stays deep.
+@property (nonatomic, strong, nullable) NSData *hiResJpegData;
+
+/// Hi-res output dimensions (portrait, post-rotation)
+@property (nonatomic, assign) CGSize hiResSize;
+
+/// Hi-res JPEG-space intrinsics (LANDSCAPE space, like intrinsicsJPEG)
+@property (nonatomic, assign) matrix_float3x3 hiResIntrinsicsJPEG;
+
+#pragma mark - Exposure
+
+/// ARCamera exposure duration (seconds) — the motion-blur signal.
+/// Long exposures in dim rooms are what smear texture bakes.
+@property (nonatomic, assign) double exposureDuration;
+
 #pragma mark - LiDAR Depth (Optional)
 
 /// LiDAR depth buffer for this frame (if available on Pro devices)

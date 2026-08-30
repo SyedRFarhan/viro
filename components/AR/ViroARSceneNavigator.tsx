@@ -55,6 +55,7 @@ import {
   ViroFrameStreamConfig,
   ViroFrameEvent,
   ViroDetectionResolutionResult,
+  ViroFrameDataOptions,
   ViroFrameDataResult,
 } from "../Types/ViroEvents";
 import {
@@ -2016,6 +2017,22 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     );
   };
 
+  /**
+   * getFrameData with options (fork >= 2.61.65): variant 'hires' returns
+   * the high-resolution keyframe encode; includeDepth attaches the frame's
+   * LiDAR depth map (AR-image space) with sampling metadata.
+   */
+  _getFrameDataWithOptions = async (
+    frameId: string,
+    options?: ViroFrameDataOptions
+  ): Promise<ViroFrameDataResult> => {
+    return await ViroARSceneNavigatorModule.getFrameDataWithOptions(
+      findNodeHandle(this),
+      frameId,
+      options ?? {}
+    );
+  };
+
   // ===========================================================================
   // Camera Zoom API Methods
   // ===========================================================================
@@ -2196,6 +2213,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     stopFrameStream: this._stopFrameStream,
     resolveDetections: this._resolveDetections,
     getFrameData: this._getFrameData,
+    getFrameDataWithOptions: this._getFrameDataWithOptions,
     setRenderFrameRate: this._setRenderFrameRate,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,
@@ -2289,6 +2307,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     stopFrameStream: this._stopFrameStream,
     resolveDetections: this._resolveDetections,
     getFrameData: this._getFrameData,
+    getFrameDataWithOptions: this._getFrameDataWithOptions,
     setRenderFrameRate: this._setRenderFrameRate,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,

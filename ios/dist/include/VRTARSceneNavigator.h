@@ -489,6 +489,10 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
 // Returns: {frameId, timestamp, sessionId, imageData (base64), width, height}
 // or {frameId, error} if the frame was evicted from the ring buffer.
 - (void)getFrameData:(NSString *)frameId
+             options:(NSDictionary * _Nullable)options
+   completionHandler:(void (^)(NSDictionary * _Nonnull result))completionHandler;
+
+- (void)getFrameData:(NSString *)frameId
    completionHandler:(void (^)(NSDictionary * _Nonnull result))completionHandler;
 
 // Resolve 2D detection points to 3D world coordinates using capture-time data

@@ -48,6 +48,22 @@ NS_ASSUME_NONNULL_BEGIN
 /// JPEG compression quality (0.0-1.0, default: 0.7)
 @property (nonatomic, assign) float jpegQuality;
 
+#pragma mark - Hi-Res Variant (recon/texturing keyframes)
+
+/// Also encode a high-resolution JPEG of each streamed frame (default: NO).
+/// Same aspect and crop proportions as the small stream; retained only for
+/// the newest hiResRingDepth frames.
+@property (nonatomic, assign) BOOL hiResEnabled;
+
+/// Long-side cap for the hi-res variant (default: 1920)
+@property (nonatomic, assign) int hiResMaxDimension;
+
+/// JPEG quality for the hi-res variant (default: 0.85)
+@property (nonatomic, assign) float hiResQuality;
+
+/// How many recent frames keep their hi-res JPEG (default: 4)
+@property (nonatomic, assign) int hiResRingDepth;
+
 /// When YES (default), each onFrameReady event carries the base64 JPEG in
 /// `imageData`. When NO, events are metadata-only (~300 bytes) and consumers
 /// fetch image bytes on demand via frameDataForId: -- only frames that are
@@ -85,6 +101,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// On-demand image fetch for metadata-only streaming: returns the frame's
 /// base64 JPEG plus identifying metadata, or nil if the frame was evicted.
 - (NSDictionary * _Nullable)frameDataForId:(NSString *)frameId;
+
+/// Frame data with options:
+///   variant: "hires" -> the hi-res JPEG (error if evicted/never encoded)
+///   includeDepth: YES -> LiDAR depth as base64 float32 (AR-image space)
+///     plus arIntrinsics/arImageSize/jpegToARTransform for sampling it.
+- (NSDictionary * _Nullable)frameDataForId:(NSString *)frameId
+                                   options:(NSDictionary * _Nullable)options;
 
 #pragma mark - Session Management
 

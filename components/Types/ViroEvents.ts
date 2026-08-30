@@ -892,6 +892,35 @@ export type ViroFrameStreamConfig = {
   includeImageData?: boolean;
   /** Per-frame native debug logging (default: false). */
   verbose?: boolean;
+
+  // ── Hi-res keyframe variant (fork >= 2.61.65) ─────────────────────────
+  // A second, high-resolution JPEG of each streamed frame — same aspect
+  // and crop proportions as the small stream (jpegToARTransform is
+  // identical; only dimensions/intrinsics differ) — kept for only the
+  // newest hiResRingDepth frames. For reconstruction/texturing keyframes:
+  // the shared stream stays small for the detector while banking pulls
+  // sharp frames via getFrameDataWithOptions(frameId, {variant:'hires'}).
+
+  /** Enable the eager hi-res second encode (default: false). */
+  hiResEnabled?: boolean;
+  /** Long-side cap of the hi-res variant in pixels (default: 1920). */
+  hiResMaxDimension?: number;
+  /** JPEG quality of the hi-res variant (default: 0.85). */
+  hiResQuality?: number;
+  /** How many recent frames keep their hi-res JPEG (default: 4). */
+  hiResRingDepth?: number;
+};
+
+/** Options for getFrameDataWithOptions (fork >= 2.61.65). */
+export type ViroFrameDataOptions = {
+  /** 'hires' returns the high-resolution variant (errors if unavailable). */
+  variant?: "hires";
+  /**
+   * Include this frame's LiDAR depth map: base64 float32 meters in
+   * AR-IMAGE space (not JPEG space) plus arIntrinsics / arImage size /
+   * jpegToARTransform for sampling it.
+   */
+  includeDepth?: boolean;
 };
 
 /**
@@ -908,6 +937,23 @@ export type ViroFrameDataResult = {
   width?: number;
   height?: number;
   error?: string;
+
+  // ── getFrameDataWithOptions extras (fork >= 2.61.65) ──────────────────
+  /** ARCamera exposure duration (seconds) — the motion-blur signal. */
+  exposureDuration?: number;
+  rotatedToPortrait?: boolean;
+  /** Flat 9 row-major JPEG-space intrinsics for the RETURNED variant. */
+  intrinsics?: number[];
+  /** Base64 float32 depth (meters), AR-image space, row-major, unpadded. */
+  depthData?: string;
+  depthWidth?: number;
+  depthHeight?: number;
+  /** Flat 9 row-major AR-image-space intrinsics (for depth sampling). */
+  arIntrinsics?: number[];
+  arImageWidth?: number;
+  arImageHeight?: number;
+  /** Flat 9 affine: landscape JPEG UV -> AR image UV. */
+  jpegToARTransform?: number[];
 };
 
 /**

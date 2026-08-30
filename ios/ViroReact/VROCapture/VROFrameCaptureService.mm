@@ -85,6 +85,9 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
 @implementation VROFrameCaptureService {
     dispatch_queue_t _processingQueue;
     std::atomic<bool> _isProcessing;
+    // FrameIds whose entries still hold a hi-res JPEG (oldest first).
+    // Touched only on the serial _processingQueue.
+    NSMutableArray<NSString *> *_hiResFrameIds;
     double _lastCaptureTime;
     CIContext *_ciContext;
     VROFrameRingBuffer *_ringBuffer;
@@ -121,6 +124,11 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
         _targetFPS = 5;
         _targetWidth = 640;
         _targetHeight = 480;
+        _hiResEnabled = NO;
+        _hiResMaxDimension = 1920;
+        _hiResQuality = 0.85f;
+        _hiResRingDepth = 4;
+        _hiResFrameIds = [NSMutableArray array];
         _frameCounter = 0;
         _includeImageDataInEvent = YES;
         _verboseLogging = NO;
@@ -191,6 +199,7 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
     matrix_float3x3 arIntrinsics = frame.camera.intrinsics;
     simd_float4x4 cameraTransform = frame.camera.transform;
     ARTrackingState trackingState = frame.camera.trackingState;
+    double exposureDuration = frame.camera.exposureDuration;
 
     // V2.3 FIX: Use CVPixelBuffer dimensions as SINGLE SOURCE OF TRUTH
     // This ensures arImageSize matches exactly what we encode
@@ -246,6 +255,10 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
     int targetWidth = _targetWidth;
     int targetHeight = _targetHeight;
     float jpegQuality = _jpegQuality;
+    BOOL hiResEnabled = _hiResEnabled;
+    int hiResMaxDimension = _hiResMaxDimension;
+    float hiResQuality = _hiResQuality;
+    int hiResRingDepth = _hiResRingDepth;
     NSInteger sessionId = [_ringBuffer currentSessionId];
     BOOL includeImage = _includeImageDataInEvent;
     BOOL verbose = _verboseLogging;
@@ -258,6 +271,24 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
                                                             targetWidth:targetWidth
                                                            targetHeight:targetHeight
                                                                 quality:jpegQuality];
+
+            // Hi-res variant of the SAME frame, while the full-res camera
+            // buffer is still in hand. Target dims share the small stream's
+            // aspect, so the cover-crop is proportional: jpegToARTransform
+            // is identical and only intrinsics/dimensions differ.
+            VROJpegEncodeResult *hiResResult = nil;
+            if (hiResEnabled && encodeResult && encodeResult.jpegData) {
+                float longSide = (float)MAX(targetWidth, targetHeight);
+                float k = (float)hiResMaxDimension / MAX(longSide, 1.0f);
+                if (k > 1.01f) {
+                    int hiW = (int)lroundf(targetWidth * k);
+                    int hiH = (int)lroundf(targetHeight * k);
+                    hiResResult = [self encodeJPEGWithCrop:pixelBuffer
+                                               targetWidth:hiW
+                                              targetHeight:hiH
+                                                   quality:hiResQuality];
+                }
+            }
             CVPixelBufferRelease(pixelBuffer);
 
             if (!encodeResult || !encodeResult.jpegData) {
@@ -374,8 +405,32 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
 
             entry.featurePointsData = featurePointsData;
             entry.featurePointsCount = featurePointsCount;
+            entry.exposureDuration = exposureDuration;
+
+            if (hiResResult && hiResResult.jpegData) {
+                entry.hiResJpegData = hiResResult.jpegData;
+                entry.hiResSize = CGSizeMake(hiResResult.outputWidth, hiResResult.outputHeight);
+                matrix_float3x3 hiResIntrinsics = arIntrinsics;
+                hiResIntrinsics.columns[0][0] *= hiResResult.scale;
+                hiResIntrinsics.columns[1][1] *= hiResResult.scale;
+                hiResIntrinsics.columns[2][0] = arIntrinsics.columns[2][0] * hiResResult.scale - hiResResult.cropX;
+                hiResIntrinsics.columns[2][1] = arIntrinsics.columns[2][1] * hiResResult.scale - hiResResult.cropY;
+                entry.hiResIntrinsicsJPEG = hiResIntrinsics;
+            }
 
             [self->_ringBuffer addEntry:entry];
+
+            // Shallow hi-res retention: recon banking always pulls the
+            // LATEST frame, so only the newest few need to stay heavy.
+            if (entry.hiResJpegData) {
+                [self->_hiResFrameIds addObject:frameId];
+                while ((int)self->_hiResFrameIds.count > MAX(hiResRingDepth, 1)) {
+                    NSString *oldId = self->_hiResFrameIds.firstObject;
+                    [self->_hiResFrameIds removeObjectAtIndex:0];
+                    VROFrameEntry *oldEntry = [self->_ringBuffer entryForFrameId:oldId];
+                    oldEntry.hiResJpegData = nil;
+                }
+            }
             if (verbose) {
                 NSLog(@"[ViroFrameStream DEBUG] Stored frame %@ in ring buffer (sessionId=%ld)", frameId, (long)sessionId);
             }
@@ -392,6 +447,7 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
             event[@"width"] = @(outputWidth);
             event[@"height"] = @(outputHeight);
             event[@"rotatedToPortrait"] = @(rotatedToPortrait);
+            event[@"exposureDuration"] = @(exposureDuration);
 
             event[@"intrinsics"] = @{
                 @"fx": @(intrinsicsJPEG.columns[0][0]),
@@ -617,6 +673,83 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
         @"width": @((int)entry.jpegSize.width),
         @"height": @((int)entry.jpegSize.height),
     };
+}
+
+static NSArray *VROFlattenIntrinsicsRowMajor(matrix_float3x3 m) {
+    // Row-major flat 9: [fx, 0, cx, 0, fy, cy, 0, 0, 1] — the layout the
+    // app banks and the reconstruction service parses.
+    return @[
+        @(m.columns[0][0]), @(m.columns[1][0]), @(m.columns[2][0]),
+        @(m.columns[0][1]), @(m.columns[1][1]), @(m.columns[2][1]),
+        @(m.columns[0][2]), @(m.columns[1][2]), @(m.columns[2][2]),
+    ];
+}
+
+- (NSDictionary *)frameDataForId:(NSString *)frameId
+                         options:(NSDictionary *)options {
+    VROFrameEntry *entry = [_ringBuffer entryForFrameId:frameId];
+    if (!entry) {
+        return nil;
+    }
+    BOOL wantHiRes = [options[@"variant"] isEqual:@"hires"];
+    BOOL includeDepth = [options[@"includeDepth"] boolValue];
+
+    NSMutableDictionary *result = [NSMutableDictionary dictionary];
+    result[@"frameId"] = entry.frameId;
+    result[@"timestamp"] = @(entry.timestamp);
+    result[@"sessionId"] = @(entry.sessionId);
+    result[@"exposureDuration"] = @(entry.exposureDuration);
+    result[@"rotatedToPortrait"] = @(entry.rotatedToPortrait);
+
+    if (wantHiRes) {
+        if (!entry.hiResJpegData) {
+            result[@"error"] = @"hi-res variant unavailable (disabled, evicted, or frame predates hiResEnabled)";
+            return result;
+        }
+        result[@"imageData"] = [entry.hiResJpegData base64EncodedStringWithOptions:0];
+        result[@"width"] = @((int)entry.hiResSize.width);
+        result[@"height"] = @((int)entry.hiResSize.height);
+        result[@"intrinsics"] = VROFlattenIntrinsicsRowMajor(entry.hiResIntrinsicsJPEG);
+    } else {
+        if (!entry.jpegData) {
+            result[@"error"] = @"frame JPEG evicted";
+            return result;
+        }
+        result[@"imageData"] = [entry.jpegData base64EncodedStringWithOptions:0];
+        result[@"width"] = @((int)entry.jpegSize.width);
+        result[@"height"] = @((int)entry.jpegSize.height);
+        result[@"intrinsics"] = VROFlattenIntrinsicsRowMajor(entry.intrinsicsJPEG);
+    }
+
+    if (includeDepth && entry.depthBuffer) {
+        // LiDAR depth, AR-image space (NOT JPEG space): float32 meters,
+        // row-major, no padding. Sample it via jpegToARTransform +
+        // arIntrinsics — both included below.
+        CVPixelBufferRef depth = entry.depthBuffer;
+        CVPixelBufferLockBaseAddress(depth, kCVPixelBufferLock_ReadOnly);
+        size_t dw = CVPixelBufferGetWidth(depth);
+        size_t dh = CVPixelBufferGetHeight(depth);
+        size_t stride = CVPixelBufferGetBytesPerRow(depth);
+        const uint8_t *base = (const uint8_t *)CVPixelBufferGetBaseAddress(depth);
+        NSMutableData *packed = [NSMutableData dataWithLength:dw * dh * sizeof(float)];
+        uint8_t *dst = (uint8_t *)packed.mutableBytes;
+        for (size_t row = 0; row < dh; row++) {
+            memcpy(dst + row * dw * sizeof(float), base + row * stride, dw * sizeof(float));
+        }
+        CVPixelBufferUnlockBaseAddress(depth, kCVPixelBufferLock_ReadOnly);
+        result[@"depthData"] = [packed base64EncodedStringWithOptions:0];
+        result[@"depthWidth"] = @((int)dw);
+        result[@"depthHeight"] = @((int)dh);
+        result[@"arIntrinsics"] = VROFlattenIntrinsicsRowMajor(entry.intrinsicsAR);
+        result[@"arImageWidth"] = @((int)entry.arImageSize.width);
+        result[@"arImageHeight"] = @((int)entry.arImageSize.height);
+        result[@"jpegToARTransform"] = @[
+            @(entry.jpegToARTransform.a), @(entry.jpegToARTransform.b), @(0),
+            @(entry.jpegToARTransform.c), @(entry.jpegToARTransform.d), @(0),
+            @(entry.jpegToARTransform.tx), @(entry.jpegToARTransform.ty), @(1),
+        ];
+    }
+    return result;
 }
 
 #pragma mark - Session Management

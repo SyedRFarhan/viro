@@ -713,6 +713,25 @@ export type ViroFrameStreamConfig = {
     includeImageData?: boolean;
     /** Per-frame native debug logging (default: false). */
     verbose?: boolean;
+    /** Enable the eager hi-res second encode (default: false). */
+    hiResEnabled?: boolean;
+    /** Long-side cap of the hi-res variant in pixels (default: 1920). */
+    hiResMaxDimension?: number;
+    /** JPEG quality of the hi-res variant (default: 0.85). */
+    hiResQuality?: number;
+    /** How many recent frames keep their hi-res JPEG (default: 4). */
+    hiResRingDepth?: number;
+};
+/** Options for getFrameDataWithOptions (fork >= 2.61.65). */
+export type ViroFrameDataOptions = {
+    /** 'hires' returns the high-resolution variant (errors if unavailable). */
+    variant?: "hires";
+    /**
+     * Include this frame's LiDAR depth map: base64 float32 meters in
+     * AR-IMAGE space (not JPEG space) plus arIntrinsics / arImage size /
+     * jpegToARTransform for sampling it.
+     */
+    includeDepth?: boolean;
 };
 /**
  * Result of an on-demand getFrameData(frameId) fetch.
@@ -728,6 +747,21 @@ export type ViroFrameDataResult = {
     width?: number;
     height?: number;
     error?: string;
+    /** ARCamera exposure duration (seconds) — the motion-blur signal. */
+    exposureDuration?: number;
+    rotatedToPortrait?: boolean;
+    /** Flat 9 row-major JPEG-space intrinsics for the RETURNED variant. */
+    intrinsics?: number[];
+    /** Base64 float32 depth (meters), AR-image space, row-major, unpadded. */
+    depthData?: string;
+    depthWidth?: number;
+    depthHeight?: number;
+    /** Flat 9 row-major AR-image-space intrinsics (for depth sampling). */
+    arIntrinsics?: number[];
+    arImageWidth?: number;
+    arImageHeight?: number;
+    /** Flat 9 affine: landscape JPEG UV -> AR image UV. */
+    jpegToARTransform?: number[];
 };
 /**
  * AR tracking state for frame events.

@@ -2944,6 +2944,16 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
     _frameCaptureService.includeImageDataInEvent =
         config[@"includeImageData"] ? [config[@"includeImageData"] boolValue] : YES;
     _frameCaptureService.verboseLogging = config[@"verbose"] ? [config[@"verbose"] boolValue] : NO;
+    // Hi-res keyframe variant (recon/texturing): eager second encode of
+    // each streamed frame, retained only for the newest few frames.
+    _frameCaptureService.hiResEnabled =
+        config[@"hiResEnabled"] ? [config[@"hiResEnabled"] boolValue] : NO;
+    _frameCaptureService.hiResMaxDimension =
+        config[@"hiResMaxDimension"] ? [config[@"hiResMaxDimension"] intValue] : 1920;
+    _frameCaptureService.hiResQuality =
+        config[@"hiResQuality"] ? [config[@"hiResQuality"] floatValue] : 0.85f;
+    _frameCaptureService.hiResRingDepth =
+        config[@"hiResRingDepth"] ? [config[@"hiResRingDepth"] intValue] : 4;
 
     RCTLogInfo(@"[ViroFrameStream] Frame stream started: %dx%d @ %.1f FPS, quality: %.2f",
                _frameCaptureService.targetWidth,
@@ -3084,6 +3094,30 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
             }
         });
     });
+}
+
+- (void)getFrameData:(NSString *)frameId
+             options:(NSDictionary * _Nullable)options
+   completionHandler:(void (^)(NSDictionary * _Nonnull result))completionHandler {
+    if (!completionHandler) {
+        return;
+    }
+    if (!_frameCaptureService) {
+        completionHandler(@{
+            @"frameId": frameId ?: @"",
+            @"error": @"Frame capture service not initialized"
+        });
+        return;
+    }
+    NSDictionary *data = [_frameCaptureService frameDataForId:frameId options:options];
+    if (!data) {
+        completionHandler(@{
+            @"frameId": frameId ?: @"",
+            @"error": @"Frame not found in ring buffer (may have been evicted)"
+        });
+        return;
+    }
+    completionHandler(data);
 }
 
 - (void)getFrameData:(NSString *)frameId
