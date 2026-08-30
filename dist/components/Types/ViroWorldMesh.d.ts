@@ -241,6 +241,12 @@ export type ViroWorldMeshSnapshot = {
     anchors?: Array<{
         anchorId: string;
         position: [number, number, number];
+        /**
+         * Full anchor transform, 16 floats COLUMN-MAJOR (simd's natural
+         * flattening — same convention as ar_pose). Vertices are anchor-local;
+         * world = transform * [x, y, z, 1]. Present from fork 2.61.64.
+         */
+        transform?: number[];
         vertexCount: number;
         faceCount: number;
         /** Base64-encoded Float32 array of vertex positions. */

@@ -993,6 +993,17 @@ static NSString * const kRVWatermarkURL =
                                           @(transform.columns[3][1]),
                                           @(transform.columns[3][2])];
 
+                    // Full anchor transform, 16 floats COLUMN-MAJOR (simd's
+                    // natural flattening, same convention as ar_pose). The
+                    // position array above drops the rotation — world-space
+                    // reassembly of the anchor-local vertices needs all 16.
+                    NSMutableArray *transformArray = [NSMutableArray arrayWithCapacity:16];
+                    for (int col = 0; col < 4; col++) {
+                        for (int row = 0; row < 4; row++) {
+                            [transformArray addObject:@(transform.columns[col][row])];
+                        }
+                    }
+
                     // Encode vertices as base64
                     NSData *vertexData = [NSData dataWithBytes:geometry.vertices.buffer.contents
                                                        length:geometry.vertices.buffer.length];
@@ -1019,6 +1030,7 @@ static NSString * const kRVWatermarkURL =
                     [meshAnchorDicts addObject:@{
                         @"anchorId": meshAnchor.identifier.UUIDString,
                         @"position": position,
+                        @"transform": transformArray,
                         @"vertexCount": @(vertCount),
                         @"faceCount": @(faceCount),
                         @"verticesBase64": verticesBase64,
