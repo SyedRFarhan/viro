@@ -117,6 +117,10 @@ public:
     // Persistent mesh from ARMeshAnchor (LiDAR, iOS 13.4+)
     std::shared_ptr<VROARDepthMesh> generateMeshAnchorMesh() override;
 
+    // Per-anchor variant with content digests — the coverage skin's
+    // incremental update path.
+    std::vector<VROARMeshChunk> generateMeshAnchorChunks() override;
+
     // Plane-based fallback mesh (non-LiDAR / non-Depth-API)
     std::shared_ptr<VROARDepthMesh> generatePlaneMesh() override;
 

@@ -36,9 +36,11 @@
 #include <cstdint>
 #include "VROVector3f.h"
 #include "VROMatrix4f.h"
+// Full definition needed: the incremental coverage path takes
+// VROARFrame::VROARMeshChunk by value in its signature.
+#include "VROARFrame.h"
 
 class VROARDepthMesh;
-class VROARFrame;
 class VROPhysicsWorld;
 class VROPhysicsShape;
 class VROPencil;
@@ -446,19 +448,54 @@ private:
     // Bounded by scanned volume (~a few thousand cells per room at 15cm).
     std::unordered_map<uint64_t, float> _cellBirthSec;
 
+    // ── Incremental (per-anchor) coverage state ──
+    // One child node per ARMeshAnchor; only anchors whose digest changed
+    // rebuild. The edge registry counts triangle-uses of position-quantized
+    // edges ACROSS anchors, so a chunk-border edge shared by two anchors
+    // reads count 2 (interior) and only true open boundary reads 1.
+    struct VROCoverageChunk {
+        std::shared_ptr<VRONode> node;
+        uint64_t digest = 0;
+        std::vector<uint64_t> edges;   // one entry per triangle-use
+    };
+    std::map<std::string, VROCoverageChunk> _coverageChunks;
+    std::unordered_map<uint64_t, int> _coverageEdgeUse;
+
+    /**
+     * Route a fresh mesh update to the right coverage path: incremental
+     * per-anchor chunks when the frame has them, whole-mesh fallback
+     * otherwise; tears everything down when the feature is off.
+     */
+    void dispatchCoverageUpdate(const std::unique_ptr<VROARFrame>& frame,
+                                std::shared_ptr<VROARDepthMesh> mergedMesh);
+
     /**
      * Rebuild the coverage skin from a freshly applied mesh, rate-limited
      * by coverageUpdateIntervalMs and skipped when the mesh is unchanged.
-     * Tears the node down when the feature is disabled.
+     * Fallback path for sources without per-anchor chunks (depth / plane).
      */
     void updateCoverageVisual(std::shared_ptr<VROARDepthMesh> mesh);
 
     /**
+     * Incremental path: rebuild only anchors whose content digest changed
+     * (plus neighbors whose open-boundary status those changes flipped),
+     * drop nodes for removed anchors. This is what makes new area appear
+     * the moment ARKit delivers it — no whole-mesh rebuild.
+     */
+    void updateCoverageVisualChunks(const std::vector<VROARFrame::VROARMeshChunk>& chunks);
+
+    /** Remove every coverage node and clear all incremental state. */
+    void teardownCoverage();
+
+    /**
      * Build the visible coverage geometry: smooth per-vertex normals for
      * hemisphere shading, per-vertex birth time (seconds) in texcoord U
-     * for the reveal glow.
+     * for the reveal glow. boundaryOverride, when given, supplies
+     * per-vertex open-boundary flags computed against the cross-anchor
+     * edge registry; without it, boundary is detected locally (weld).
      */
-    std::shared_ptr<VROGeometry> buildCoverageGeometry(std::shared_ptr<VROARDepthMesh> mesh);
+    std::shared_ptr<VROGeometry> buildCoverageGeometry(std::shared_ptr<VROARDepthMesh> mesh,
+                                                       const std::vector<uint8_t>* boundaryOverride = nullptr);
 
     /**
      * Create the (single, reused) coverage material: translucent, unlit,

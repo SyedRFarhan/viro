@@ -1004,26 +1004,60 @@ static NSString * const kRVWatermarkURL =
                         }
                     }
 
-                    // Encode vertices as base64
-                    NSData *vertexData = [NSData dataWithBytes:geometry.vertices.buffer.contents
-                                                       length:geometry.vertices.buffer.length];
+                    // Tight, stride-aware copies. MTLBuffer.length is the
+                    // PAGE-ALIGNED allocation, not the data size — raw
+                    // buffer copies shipped up to ~30% garbage tail bytes
+                    // per anchor (and forced the server to truncate by the
+                    // declared counts). Copy exactly count elements.
+                    ARGeometrySource *vs = geometry.vertices;
+                    NSMutableData *vertexData = [NSMutableData dataWithLength:(NSUInteger)vertCount * 12];
+                    {
+                        const uint8_t *src = (const uint8_t *)vs.buffer.contents + vs.offset;
+                        float *dst = (float *)vertexData.mutableBytes;
+                        for (int i = 0; i < vertCount; i++) {
+                            const float *p = (const float *)(src + (NSUInteger)i * vs.stride);
+                            dst[i * 3] = p[0]; dst[i * 3 + 1] = p[1]; dst[i * 3 + 2] = p[2];
+                        }
+                    }
                     NSString *verticesBase64 = [vertexData base64EncodedStringWithOptions:0];
 
-                    // Encode face indices as base64
-                    NSData *indexData = [NSData dataWithBytes:geometry.faces.buffer.contents
-                                                      length:geometry.faces.buffer.length];
+                    // Indices: exactly faceCount*3, ALWAYS as int32 — ARKit
+                    // may store 16-bit indices, and the server decodes int32.
+                    ARGeometryElement *fe = geometry.faces;
+                    NSMutableData *indexData = [NSMutableData dataWithLength:(NSUInteger)faceCount * 3 * 4];
+                    {
+                        const uint8_t *src = (const uint8_t *)fe.buffer.contents;
+                        NSUInteger bpi = fe.bytesPerIndex;
+                        uint32_t *dst = (uint32_t *)indexData.mutableBytes;
+                        for (NSUInteger i = 0; i < (NSUInteger)faceCount * 3; i++) {
+                            dst[i] = (bpi == 4) ? *(const uint32_t *)(src + i * 4)
+                                                : (uint32_t)(*(const uint16_t *)(src + i * 2));
+                        }
+                    }
                     NSString *indicesBase64 = [indexData base64EncodedStringWithOptions:0];
 
-                    // Encode normals as base64
-                    NSData *normalData = [NSData dataWithBytes:geometry.normals.buffer.contents
-                                                       length:geometry.normals.buffer.length];
+                    ARGeometrySource *ns = geometry.normals;
+                    NSMutableData *normalData = [NSMutableData dataWithLength:(NSUInteger)ns.count * 12];
+                    {
+                        const uint8_t *src = (const uint8_t *)ns.buffer.contents + ns.offset;
+                        float *dst = (float *)normalData.mutableBytes;
+                        for (NSUInteger i = 0; i < ns.count; i++) {
+                            const float *p = (const float *)(src + i * ns.stride);
+                            dst[i * 3] = p[0]; dst[i * 3 + 1] = p[1]; dst[i * 3 + 2] = p[2];
+                        }
+                    }
                     NSString *normalsBase64 = [normalData base64EncodedStringWithOptions:0];
 
-                    // Encode classifications as base64
+                    // Classifications: one uint8 per face.
                     NSString *classificationsBase64 = @"";
                     if (geometry.classification) {
-                        NSData *classData = [NSData dataWithBytes:geometry.classification.buffer.contents
-                                                           length:geometry.classification.buffer.length];
+                        ARGeometrySource *cs = geometry.classification;
+                        NSMutableData *classData = [NSMutableData dataWithLength:cs.count];
+                        const uint8_t *src = (const uint8_t *)cs.buffer.contents + cs.offset;
+                        uint8_t *dst = (uint8_t *)classData.mutableBytes;
+                        for (NSUInteger i = 0; i < cs.count; i++) {
+                            dst[i] = src[i * cs.stride];
+                        }
                         classificationsBase64 = [classData base64EncodedStringWithOptions:0];
                     }
 

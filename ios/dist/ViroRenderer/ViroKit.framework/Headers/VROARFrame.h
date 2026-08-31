@@ -188,6 +188,22 @@ public:
     }
 
     /**
+     * One entry per ARMeshAnchor: the anchor's world-space mesh plus a
+     * content digest (counts + transform + sampled vertices) that changes
+     * whenever the anchor's geometry does. Lets consumers (the coverage
+     * skin) update incrementally instead of rebuilding the whole fused
+     * mesh. Empty on platforms without mesh anchors.
+     */
+    struct VROARMeshChunk {
+        std::string id;
+        std::shared_ptr<VROARDepthMesh> mesh;
+        uint64_t digest;
+    };
+    virtual std::vector<VROARMeshChunk> generateMeshAnchorChunks() {
+        return {};
+    }
+
+    /**
      * Generate a mesh by triangulating all detected AR plane anchors.
      * Fallback path for non-LiDAR iOS and non-Depth-API Android devices.
      * Plane anchors are persistent within the AR session, so the mesh degrades
