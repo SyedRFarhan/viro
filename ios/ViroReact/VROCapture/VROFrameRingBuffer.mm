@@ -19,6 +19,10 @@
         CVPixelBufferRelease(_depthBuffer);
         _depthBuffer = nil;
     }
+    if (_confidenceBuffer) {
+        CVPixelBufferRelease(_confidenceBuffer);
+        _confidenceBuffer = nil;
+    }
 }
 
 @end

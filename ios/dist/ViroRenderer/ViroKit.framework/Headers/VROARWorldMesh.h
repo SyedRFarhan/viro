@@ -32,6 +32,7 @@
 #include <functional>
 #include <map>
 #include <unordered_map>
+#include <set>
 #include <mutex>
 #include <cstdint>
 #include "VROVector3f.h"
@@ -126,7 +127,21 @@ struct VROWorldMeshConfig {
     float coverageBoundaryFill = 0.0f;       // 0 = thin rim at open edges (v1 look);
                                              // 1 = solid frontier patches (Polycam's blue fill)
     float coverageEdgeDash = 0.0f;           // 0 = solid hairline edges; >0 = dashed
-                                             // wireframe, value = dash frequency (1/meters)
+                                             // wireframe, value = dashes per triangle edge
+    float coverageEdgeWidth = 0.02f;         // wireframe line width, bary-space floor
+                                             // (0.02 ≈ 1px; Polycam ≈ 0.035)
+    float coverageRevealOpacityBoost = 0.5f; // how much the reveal RAISES alpha:
+                                             // alpha = opacity*(1 + boost*reveal). High
+                                             // values (4-8) make fresh mesh a solid
+                                             // sheet that dissolves as it settles
+    float coverageUnscannedColorR = 0.05f;   // tint over directions with NO mesh —
+    float coverageUnscannedColorG = 0.08f;   // Polycam's "not scanned yet" dimming
+    float coverageUnscannedColorB = 0.16f;
+    float coverageUnscannedOpacity = 0.0f;   // 0 disables the unscanned tint entirely
+    bool coverageFreezeOnDisable = false;    // keep the last coverage chunks rendered
+                                             // (frozen) when the mesh is disabled —
+                                             // pairs with turning ARKit scene
+                                             // reconstruction off to save power
 };
 
 /**
@@ -460,6 +475,18 @@ private:
     };
     std::map<std::string, VROCoverageChunk> _coverageChunks;
     std::unordered_map<uint64_t, int> _coverageEdgeUse;
+    // Chunk ids kept as a FROZEN display after a freeze-on-disable: excluded
+    // from removal when live anchors (new UUIDs) take over on re-enable.
+    std::set<std::string> _frozenChunkIds;
+    // The unscanned tint: an inside-out sphere drawn AFTER the chunks with
+    // depth testing — mesh occludes it, so tint shows only where nothing
+    // was scanned. Chunk-path (LiDAR) only; the sparse non-LiDAR fallback
+    // meshes would leave the whole screen tinted.
+    std::shared_ptr<VRONode> _coverageTintNode;
+    std::shared_ptr<VROMaterial> _coverageTintMaterial;
+
+    /** Create/update/remove the unscanned-tint sphere per config. */
+    void ensureCoverageTint();
 
     /**
      * Route a fresh mesh update to the right coverage path: incremental

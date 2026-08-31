@@ -2033,6 +2033,18 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     );
   };
 
+  /**
+   * Static AR capabilities of THIS device (fork >= 2.61.69). Gate
+   * LiDAR-only features (coverage skin, world-mesh banking, depth) up
+   * front instead of discovering empty results at runtime.
+   */
+  _getARCapabilities = async (): Promise<{
+    sceneReconstruction: boolean;
+    sceneDepth: boolean;
+  }> => {
+    return await ViroARSceneNavigatorModule.getARCapabilities();
+  };
+
   // ===========================================================================
   // Camera Zoom API Methods
   // ===========================================================================
@@ -2214,6 +2226,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     resolveDetections: this._resolveDetections,
     getFrameData: this._getFrameData,
     getFrameDataWithOptions: this._getFrameDataWithOptions,
+    getARCapabilities: this._getARCapabilities,
     setRenderFrameRate: this._setRenderFrameRate,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,
@@ -2308,6 +2321,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     resolveDetections: this._resolveDetections,
     getFrameData: this._getFrameData,
     getFrameDataWithOptions: this._getFrameDataWithOptions,
+    getARCapabilities: this._getARCapabilities,
     setRenderFrameRate: this._setRenderFrameRate,
     // View Transform Zoom API
     setViewZoom: this._setViewZoom,

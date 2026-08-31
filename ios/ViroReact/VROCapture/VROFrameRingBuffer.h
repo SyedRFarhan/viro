@@ -104,12 +104,35 @@ NS_ASSUME_NONNULL_BEGIN
 /// Long exposures in dim rooms are what smear texture bakes.
 @property (nonatomic, assign) double exposureDuration;
 
+#pragma mark - Lighting stats (luma histogram of the AR frame)
+
+/// YES when the luma histogram was computed for this frame.
+@property (nonatomic, assign) BOOL hasLightStats;
+/// Mean luma, normalized 0-1 over the format's nominal range.
+@property (nonatomic, assign) float lumaMean;
+/// 5th / 95th percentile luma, normalized 0-1.
+@property (nonatomic, assign) float lumaP05;
+@property (nonatomic, assign) float lumaP95;
+/// Fraction of sampled pixels at/above the clip threshold (blown highlights).
+@property (nonatomic, assign) float clippedFraction;
+/// Fraction of sampled pixels at/below the crush threshold (lost shadows).
+@property (nonatomic, assign) float crushedFraction;
+/// ARCamera exposureOffset (EV from calibrated) — darkness strain signal.
+@property (nonatomic, assign) double exposureOffset;
+/// ARKit light estimate riders (0 when no estimate).
+@property (nonatomic, assign) float ambientIntensity;
+@property (nonatomic, assign) float ambientColorTemperature;
+
 #pragma mark - LiDAR Depth (Optional)
 
 /// LiDAR depth buffer for this frame (if available on Pro devices)
 /// NOTE: Depth is aligned to AR image space, NOT JPEG space!
 /// Must use jpegToARTransform to map JPEG UV → AR UV before sampling.
 @property (nonatomic, assign, nullable) CVPixelBufferRef depthBuffer;
+
+/// LiDAR depth confidence (ARConfidenceLevel per pixel, uint8), deep copy.
+/// Same dimensions as depthBuffer. NULL when unavailable.
+@property (nonatomic, assign, nullable) CVPixelBufferRef confidenceBuffer;
 
 /// Depth buffer dimensions
 @property (nonatomic, assign) CGSize depthBufferSize;

@@ -201,6 +201,79 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
     ARTrackingState trackingState = frame.camera.trackingState;
     double exposureDuration = frame.camera.exposureDuration;
 
+    // ── Lighting stats: stride-sampled luma histogram of plane 0 ──
+    // ARKit delivers bi-planar YCbCr: plane 0 is already luma — no RGB
+    // conversion, no allocation beyond a stack histogram. Thresholds are
+    // derived from the pixel FORMAT (420f full range vs 420v video range);
+    // assuming full range would make a video-range buffer read as "never
+    // clipped, always slightly crushed".
+    BOOL hasLightStats = NO;
+    float lumaMean = 0, lumaP05 = 0, lumaP95 = 0, clippedFraction = 0, crushedFraction = 0;
+    {
+        OSType format = CVPixelBufferGetPixelFormatType(pixelBuffer);
+        BOOL fullRange = (format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange);
+        if (fullRange || format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) {
+            CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+            const uint8_t *luma = (const uint8_t *)CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0);
+            if (luma) {
+                size_t lw = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0);
+                size_t lh = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0);
+                size_t lbpr = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0);
+                uint32_t hist[256] = {0};
+                uint32_t samples = 0;
+                for (size_t r = 0; r < lh; r += 8) {
+                    const uint8_t *row = luma + r * lbpr;
+                    for (size_t c = 0; c < lw; c += 8) {
+                        hist[row[c]]++;
+                        samples++;
+                    }
+                }
+                CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+                if (samples > 0) {
+                    const int rangeLo = fullRange ? 0 : 16;
+                    const int rangeHi = fullRange ? 255 : 235;
+                    const int clipAt  = fullRange ? 250 : 230;
+                    const int crushAt = fullRange ? 6 : 21;
+                    const float span = (float)(rangeHi - rangeLo);
+                    uint64_t sum = 0;
+                    uint32_t clipped = 0, crushed = 0;
+                    for (int v = 0; v < 256; v++) {
+                        sum += (uint64_t)hist[v] * (uint64_t)v;
+                        if (v >= clipAt) clipped += hist[v];
+                        if (v <= crushAt) crushed += hist[v];
+                    }
+                    uint32_t p05Target = (uint32_t)(samples * 0.05);
+                    uint32_t p95Target = (uint32_t)(samples * 0.95);
+                    uint32_t running = 0;
+                    int p05 = rangeLo, p95 = rangeHi;
+                    BOOL got05 = NO;
+                    for (int v = 0; v < 256; v++) {
+                        running += hist[v];
+                        if (!got05 && running >= p05Target) { p05 = v; got05 = YES; }
+                        if (running >= p95Target) { p95 = v; break; }
+                    }
+                    auto norm = [&](float v) { return MAX(0.f, MIN(1.f, (v - rangeLo) / span)); };
+                    lumaMean = norm((float)sum / (float)samples);
+                    lumaP05 = norm((float)p05);
+                    lumaP95 = norm((float)p95);
+                    clippedFraction = (float)clipped / (float)samples;
+                    crushedFraction = (float)crushed / (float)samples;
+                    hasLightStats = YES;
+                }
+            } else {
+                CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+            }
+        }
+    }
+    // Free riders off the same ARFrame: auto-exposure strain and the light
+    // estimate (color temperature is exposed nowhere else in the fork).
+    double exposureOffset = 0;
+    if (@available(iOS 13.0, *)) {
+        exposureOffset = frame.camera.exposureOffset;
+    }
+    float ambientIntensity = frame.lightEstimate ? (float)frame.lightEstimate.ambientIntensity : 0.f;
+    float ambientColorTemperature = frame.lightEstimate ? (float)frame.lightEstimate.ambientColorTemperature : 0.f;
+
     // V2.3 FIX: Use CVPixelBuffer dimensions as SINGLE SOURCE OF TRUTH
     // This ensures arImageSize matches exactly what we encode
     size_t srcWidth = CVPixelBufferGetWidth(pixelBuffer);
@@ -209,6 +282,7 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
 
     // Capture LiDAR depth if available (iOS 14.0+ on Pro devices)
     CVPixelBufferRef depthBuffer = nil;
+    CVPixelBufferRef confidenceBuffer = nil;
     CGSize depthBufferSize = CGSizeZero;
     if (@available(iOS 14.0, *)) {
         if (frame.sceneDepth.depthMap) {
@@ -218,6 +292,13 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
                 CVPixelBufferGetWidth(depthBuffer),
                 CVPixelBufferGetHeight(depthBuffer)
             );
+            // Per-pixel ARConfidenceLevel (uint8) — lets the server weight
+            // or reject unreliable depth (glass, dark corners) in the
+            // occlusion test and any future TSDF fusion.
+            if (frame.sceneDepth.confidenceMap) {
+                confidenceBuffer = frame.sceneDepth.confidenceMap;
+                CVPixelBufferRetain(confidenceBuffer);
+            }
         }
     }
 
@@ -294,6 +375,7 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
             if (!encodeResult || !encodeResult.jpegData) {
                 NSLog(@"[ViroFrameStream DEBUG] JPEG encode FAILED for frame %@", frameId);
                 if (depthBuffer) CVPixelBufferRelease(depthBuffer);
+                if (confidenceBuffer) CVPixelBufferRelease(confidenceBuffer);
                 self->_isProcessing = false;
                 return;
             }
@@ -377,6 +459,11 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
                 depthCopy = VROCopyPixelBuffer(depthBuffer);
                 CVPixelBufferRelease(depthBuffer);
             }
+            CVPixelBufferRef confidenceCopy = NULL;
+            if (confidenceBuffer) {
+                confidenceCopy = VROCopyPixelBuffer(confidenceBuffer);
+                CVPixelBufferRelease(confidenceBuffer);
+            }
 
             VROFrameEntry *entry = [[VROFrameEntry alloc] init];
             entry.frameId = frameId;
@@ -406,6 +493,16 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
             entry.featurePointsData = featurePointsData;
             entry.featurePointsCount = featurePointsCount;
             entry.exposureDuration = exposureDuration;
+            entry.confidenceBuffer = confidenceCopy;  // Transfer ownership
+            entry.hasLightStats = hasLightStats;
+            entry.lumaMean = lumaMean;
+            entry.lumaP05 = lumaP05;
+            entry.lumaP95 = lumaP95;
+            entry.clippedFraction = clippedFraction;
+            entry.crushedFraction = crushedFraction;
+            entry.exposureOffset = exposureOffset;
+            entry.ambientIntensity = ambientIntensity;
+            entry.ambientColorTemperature = ambientColorTemperature;
 
             if (hiResResult && hiResResult.jpegData) {
                 entry.hiResJpegData = hiResResult.jpegData;
@@ -448,6 +545,19 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
             event[@"height"] = @(outputHeight);
             event[@"rotatedToPortrait"] = @(rotatedToPortrait);
             event[@"exposureDuration"] = @(exposureDuration);
+            // Lighting stats (optional — older JS just sees undefined).
+            if (hasLightStats) {
+                event[@"lumaMean"] = @(lumaMean);
+                event[@"lumaP05"] = @(lumaP05);
+                event[@"lumaP95"] = @(lumaP95);
+                event[@"clippedFraction"] = @(clippedFraction);
+                event[@"crushedFraction"] = @(crushedFraction);
+            }
+            event[@"exposureOffset"] = @(exposureOffset);
+            if (ambientIntensity > 0) {
+                event[@"ambientIntensity"] = @(ambientIntensity);
+                event[@"ambientColorTemperature"] = @(ambientColorTemperature);
+            }
 
             event[@"intrinsics"] = @{
                 @"fx": @(intrinsicsJPEG.columns[0][0]),
@@ -699,6 +809,18 @@ static NSArray *VROFlattenIntrinsicsRowMajor(matrix_float3x3 m) {
     result[@"timestamp"] = @(entry.timestamp);
     result[@"sessionId"] = @(entry.sessionId);
     result[@"exposureDuration"] = @(entry.exposureDuration);
+    if (entry.hasLightStats) {
+        result[@"lumaMean"] = @(entry.lumaMean);
+        result[@"lumaP05"] = @(entry.lumaP05);
+        result[@"lumaP95"] = @(entry.lumaP95);
+        result[@"clippedFraction"] = @(entry.clippedFraction);
+        result[@"crushedFraction"] = @(entry.crushedFraction);
+    }
+    result[@"exposureOffset"] = @(entry.exposureOffset);
+    if (entry.ambientIntensity > 0) {
+        result[@"ambientIntensity"] = @(entry.ambientIntensity);
+        result[@"ambientColorTemperature"] = @(entry.ambientColorTemperature);
+    }
     result[@"rotatedToPortrait"] = @(entry.rotatedToPortrait);
 
     if (wantHiRes) {
@@ -740,6 +862,25 @@ static NSArray *VROFlattenIntrinsicsRowMajor(matrix_float3x3 m) {
         result[@"depthData"] = [packed base64EncodedStringWithOptions:0];
         result[@"depthWidth"] = @((int)dw);
         result[@"depthHeight"] = @((int)dh);
+        // Depth confidence (ARConfidenceLevel per pixel, uint8, row-major,
+        // unpadded, same dims as depthData). 0=low 1=medium 2=high.
+        if (entry.confidenceBuffer) {
+            CVPixelBufferRef conf = entry.confidenceBuffer;
+            CVPixelBufferLockBaseAddress(conf, kCVPixelBufferLock_ReadOnly);
+            size_t cw = CVPixelBufferGetWidth(conf);
+            size_t ch = CVPixelBufferGetHeight(conf);
+            size_t cstride = CVPixelBufferGetBytesPerRow(conf);
+            const uint8_t *cbase = (const uint8_t *)CVPixelBufferGetBaseAddress(conf);
+            if (cbase && cw == dw && ch == dh) {
+                NSMutableData *cpacked = [NSMutableData dataWithLength:cw * ch];
+                uint8_t *cdst = (uint8_t *)cpacked.mutableBytes;
+                for (size_t row = 0; row < ch; row++) {
+                    memcpy(cdst + row * cw, cbase + row * cstride, cw);
+                }
+                result[@"depthConfidenceData"] = [cpacked base64EncodedStringWithOptions:0];
+            }
+            CVPixelBufferUnlockBaseAddress(conf, kCVPixelBufferLock_ReadOnly);
+        }
         result[@"arIntrinsics"] = VROFlattenIntrinsicsRowMajor(entry.intrinsicsAR);
         result[@"arImageWidth"] = @((int)entry.arImageSize.width);
         result[@"arImageHeight"] = @((int)entry.arImageSize.height);

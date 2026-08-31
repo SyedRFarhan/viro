@@ -26,6 +26,7 @@
 //
 
 #import <React/RCTUIManager.h>
+#import <ARKit/ARKit.h>
 #import "VRTARSceneNavigatorModule.h"
 #import "VRTARSceneNavigator.h"
 #import <React/RCTUIManagerUtils.h>
@@ -2098,6 +2099,29 @@ RCT_EXPORT_METHOD(getFrameData:(nonnull NSNumber *)reactTag
             reject(@"frame_data_error", [NSString stringWithFormat:@"Error fetching frame data: %@", exception.reason], nil);
         }
     }];
+}
+
+// Static device capabilities — no view needed. Lets JS gate LiDAR-only
+// features (coverage skin, capture-mesh banking, depth) up front instead
+// of discovering empty results at runtime.
+RCT_EXPORT_METHOD(getARCapabilities:(RCTPromiseResolveBlock)resolve
+                           rejecter:(RCTPromiseRejectBlock)reject) {
+    BOOL sceneReconstruction = NO;
+    BOOL sceneDepth = NO;
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 130400
+    if (@available(iOS 13.4, *)) {
+        sceneReconstruction = [ARWorldTrackingConfiguration
+            supportsSceneReconstruction:ARSceneReconstructionMesh];
+    }
+#endif
+    if (@available(iOS 14.0, *)) {
+        sceneDepth = [ARWorldTrackingConfiguration
+            supportsFrameSemantics:ARFrameSemanticSceneDepth];
+    }
+    resolve(@{
+        @"sceneReconstruction": @(sceneReconstruction),
+        @"sceneDepth": @(sceneDepth),
+    });
 }
 
 RCT_EXPORT_METHOD(getFrameDataWithOptions:(nonnull NSNumber *)reactTag

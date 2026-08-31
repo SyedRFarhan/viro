@@ -184,6 +184,38 @@ export type ViroWorldMeshConfig = {
      * @default 0
      */
     coverageEdgeDash?: number;
+    /**
+     * Wireframe line width — the barycentric-space floor (0.02 ≈ 1px on a
+     * mid-distance triangle; Polycam's look ≈ 0.035).
+     * @default 0.02
+     */
+    coverageEdgeWidth?: number;
+    /**
+     * How much the reveal raises ALPHA: opacity * (1 + boost * reveal).
+     * High values (4-8) make freshly scanned mesh a solid sheet (Polycam's
+     * blue wash) that dissolves into the wireframe as it settles.
+     * @default 0.5
+     */
+    coverageRevealOpacityBoost?: number;
+    /**
+     * Tint over directions with NO scanned mesh (Polycam's "not scanned"
+     * dimming), [r, g, b] 0-1. Rendered only on LiDAR devices.
+     * @default [0.05, 0.08, 0.16]
+     */
+    coverageUnscannedColor?: [number, number, number];
+    /**
+     * Unscanned-tint strength; 0 disables the tint entirely.
+     * @default 0
+     */
+    coverageUnscannedOpacity?: number;
+    /**
+     * Keep the last coverage chunks rendered (frozen) when the world mesh
+     * is disabled — pairs with the runtime scene-reconstruction toggle so
+     * the display survives a power-saving off/on cycle. Duplicated geometry
+     * where a later rescan overlaps frozen chunks is accepted.
+     * @default false
+     */
+    coverageFreezeOnDisable?: boolean;
 };
 /**
  * Statistics about the current world mesh state.

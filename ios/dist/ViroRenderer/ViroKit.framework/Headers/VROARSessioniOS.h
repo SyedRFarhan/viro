@@ -66,6 +66,15 @@ public:
     void setScene(std::shared_ptr<VROScene> scene);
     void setDelegate(std::shared_ptr<VROARSessionDelegate> delegate);
     bool setAnchorDetection(std::set<VROAnchorDetection> types);
+
+    /*
+     Toggle ARKit scene reconstruction at runtime — the actual power/thermal
+     switch behind the world mesh. Disabling makes ARKit DELETE all existing
+     mesh anchors (Apple-documented); pair with coverageFreezeOnDisable to
+     keep the rendered coverage as a frozen display, and snapshot the mesh
+     before disabling if the geometry should be banked.
+     */
+    void onWorldMeshEnabled(bool enabled) override;
     void setCloudAnchorProvider(VROCloudAnchorProvider provider);
 
     void loadARImageDatabase(std::shared_ptr<VROARImageDatabase> arImageDatabase) {

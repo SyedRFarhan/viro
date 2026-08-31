@@ -954,6 +954,26 @@ export type ViroFrameDataResult = {
   arImageHeight?: number;
   /** Flat 9 affine: landscape JPEG UV -> AR image UV. */
   jpegToARTransform?: number[];
+
+  // ── Lighting stats (fork >= 2.61.69): Y-plane histogram truth ─────────
+  /** Mean luma, 0-1 over the pixel format's nominal range. */
+  lumaMean?: number;
+  /** 5th / 95th percentile luma, 0-1. */
+  lumaP05?: number;
+  lumaP95?: number;
+  /** Fraction of sampled pixels at/above the clip threshold (blown). */
+  clippedFraction?: number;
+  /** Fraction of sampled pixels at/below the crush threshold (lost). */
+  crushedFraction?: number;
+  /** ARCamera exposureOffset (EV from calibrated) — darkness strain. */
+  exposureOffset?: number;
+  /** ARKit light estimate riders (absent when no estimate). */
+  ambientIntensity?: number;
+  ambientColorTemperature?: number;
+
+  /** Depth confidence (fork >= 2.61.69): base64 uint8 per depth pixel,
+      row-major, unpadded, same dims as depthData. 0=low 1=med 2=high. */
+  depthConfidenceData?: string;
 };
 
 /**

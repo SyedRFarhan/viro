@@ -2845,6 +2845,24 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         if (worldMeshConfig[@"coverageEdgeDash"]) {
             _worldMeshConfigCpp.coverageEdgeDash = [worldMeshConfig[@"coverageEdgeDash"] floatValue];
         }
+        if (worldMeshConfig[@"coverageEdgeWidth"]) {
+            _worldMeshConfigCpp.coverageEdgeWidth = [worldMeshConfig[@"coverageEdgeWidth"] floatValue];
+        }
+        if (worldMeshConfig[@"coverageRevealOpacityBoost"]) {
+            _worldMeshConfigCpp.coverageRevealOpacityBoost = [worldMeshConfig[@"coverageRevealOpacityBoost"] floatValue];
+        }
+        NSArray *unscannedColor = worldMeshConfig[@"coverageUnscannedColor"];
+        if ([unscannedColor isKindOfClass:[NSArray class]] && unscannedColor.count >= 3) {
+            _worldMeshConfigCpp.coverageUnscannedColorR = [unscannedColor[0] floatValue];
+            _worldMeshConfigCpp.coverageUnscannedColorG = [unscannedColor[1] floatValue];
+            _worldMeshConfigCpp.coverageUnscannedColorB = [unscannedColor[2] floatValue];
+        }
+        if (worldMeshConfig[@"coverageUnscannedOpacity"]) {
+            _worldMeshConfigCpp.coverageUnscannedOpacity = [worldMeshConfig[@"coverageUnscannedOpacity"] floatValue];
+        }
+        if (worldMeshConfig[@"coverageFreezeOnDisable"]) {
+            _worldMeshConfigCpp.coverageFreezeOnDisable = [worldMeshConfig[@"coverageFreezeOnDisable"] boolValue];
+        }
     }
 
     // Apply to AR scene if ready
