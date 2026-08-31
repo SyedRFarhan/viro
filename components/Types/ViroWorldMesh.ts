@@ -233,6 +233,14 @@ export type ViroWorldMeshConfig = {
    * @default false
    */
   coverageFreezeOnDisable?: boolean;
+  /**
+   * Diagnostic: paint fragments with the raw fragment-stage normal
+   * (normal * 0.5 + 0.5) instead of the scan skin. Mid-grey everywhere
+   * means a zero normal is reaching the fragment shader — the signature
+   * of the dead hemisphere-shading/facet-jitter bug. (fork >= 2.61.70)
+   * @default false
+   */
+  coverageDebugNormals?: boolean;
 };
 
 /**

@@ -721,6 +721,18 @@ export type ViroFrameStreamConfig = {
     hiResQuality?: number;
     /** How many recent frames keep their hi-res JPEG (default: 4). */
     hiResRingDepth?: number;
+    /**
+     * Container format of the hi-res variant (fork >= 2.61.70): 'heic'
+     * halves bytes at equal quality (hardware encoder); silently falls
+     * back to JPEG when unavailable. Check the `format` field on the
+     * getFrameDataWithOptions result for what a frame actually holds.
+     * @default 'jpeg'
+     */
+    hiResFormat?: "jpeg" | "heic";
+    /** Run throttled on-device text recognition (default: false). */
+    textLegibilityEnabled?: boolean;
+    /** Minimum interval between OCR samples in ms (default: 1000). */
+    textLegibilityIntervalMs?: number;
 };
 /** Options for getFrameDataWithOptions (fork >= 2.61.65). */
 export type ViroFrameDataOptions = {
@@ -732,6 +744,13 @@ export type ViroFrameDataOptions = {
      * jpegToARTransform for sampling it.
      */
     includeDepth?: boolean;
+    /**
+     * Depth encoding (fork >= 2.61.70): 'uint16mm' packs uint16
+     * millimeters (0 = no data, clamped to 65.535m) at half the bytes.
+     * The result's `depthFormat` field reports what was returned.
+     * @default 'float32'
+     */
+    depthFormat?: "float32" | "uint16mm";
 };
 /**
  * Result of an on-demand getFrameData(frameId) fetch.
@@ -779,6 +798,22 @@ export type ViroFrameDataResult = {
     /** Depth confidence (fork >= 2.61.69): base64 uint8 per depth pixel,
         row-major, unpadded, same dims as depthData. 0=low 1=med 2=high. */
     depthConfidenceData?: string;
+    /** Laplacian variance of the sampled luma plane (squared 8-bit luma
+        units). Higher = sharper; motion blur and defocus both crush it.
+        Rides with the lighting stats. */
+    sharpness?: number;
+    /** Container format of imageData: 'heic' only for hi-res frames
+        encoded with hiResFormat: 'heic'. Absent on old clients. */
+    format?: "jpeg" | "heic";
+    /** Encoding of depthData ('float32' meters | 'uint16mm'). Absent on
+        old clients (always float32 there). */
+    depthFormat?: "float32" | "uint16mm";
+    /** Text legibility (present only when this frame was OCR-sampled). */
+    textBlockCount?: number;
+    textMeanConfidence?: number;
+    textMaxConfidence?: number;
+    /** Tallest text observation's height, normalized 0-1 upright. */
+    textMaxHeight?: number;
 };
 /**
  * AR tracking state for frame events.
@@ -827,6 +862,33 @@ export type ViroFrameEvent = {
     jpegToARTransform: number[];
     /** Current AR tracking state */
     trackingState: ViroFrameTrackingState;
+    /** ARCamera exposure duration (seconds) — the motion-blur proxy. */
+    exposureDuration?: number;
+    /** Mean / p05 / p95 luma, 0-1 over the format's nominal range. */
+    lumaMean?: number;
+    lumaP05?: number;
+    lumaP95?: number;
+    /** Fractions at the clip / crush thresholds (glare, lost shadows). */
+    clippedFraction?: number;
+    crushedFraction?: number;
+    /** ARCamera exposureOffset (EV from calibrated). */
+    exposureOffset?: number;
+    /** ARKit light estimate riders (absent when no estimate). */
+    ambientIntensity?: number;
+    ambientColorTemperature?: number;
+    /** Laplacian variance of the sampled luma plane — the direct blur
+        measurement (rides with the lighting stats). */
+    sharpness?: number;
+    /** Latest throttled OCR sample (textLegibilityEnabled). The sample is
+        usually a slightly older frame — textSampleAgeMs says how much. */
+    textBlockCount?: number;
+    textMeanConfidence?: number;
+    textMaxConfidence?: number;
+    /** Tallest text observation's height, normalized 0-1 upright — the
+        "big enough to read" signal for hold-closer coaching. */
+    textMaxHeight?: number;
+    textSampleFrameId?: string;
+    textSampleAgeMs?: number;
 };
 /**
  * Resolution method used for 2D→3D detection mapping.

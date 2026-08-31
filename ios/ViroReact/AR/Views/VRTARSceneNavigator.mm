@@ -2845,6 +2845,9 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         if (worldMeshConfig[@"coverageEdgeDash"]) {
             _worldMeshConfigCpp.coverageEdgeDash = [worldMeshConfig[@"coverageEdgeDash"] floatValue];
         }
+        if (worldMeshConfig[@"coverageDebugNormals"]) {
+            _worldMeshConfigCpp.coverageDebugNormals = [worldMeshConfig[@"coverageDebugNormals"] boolValue];
+        }
         if (worldMeshConfig[@"coverageEdgeWidth"]) {
             _worldMeshConfigCpp.coverageEdgeWidth = [worldMeshConfig[@"coverageEdgeWidth"] floatValue];
         }
@@ -3012,6 +3015,13 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         config[@"hiResQuality"] ? [config[@"hiResQuality"] floatValue] : 0.85f;
     _frameCaptureService.hiResRingDepth =
         config[@"hiResRingDepth"] ? [config[@"hiResRingDepth"] intValue] : 4;
+    _frameCaptureService.hiResFormat =
+        [config[@"hiResFormat"] isKindOfClass:[NSString class]] ? config[@"hiResFormat"] : nil;
+    // Throttled on-device OCR: legibility stats in frame events (2.61.70).
+    _frameCaptureService.textLegibilityEnabled =
+        config[@"textLegibilityEnabled"] ? [config[@"textLegibilityEnabled"] boolValue] : NO;
+    _frameCaptureService.textLegibilityIntervalMs =
+        config[@"textLegibilityIntervalMs"] ? [config[@"textLegibilityIntervalMs"] intValue] : 1000;
 
     RCTLogInfo(@"[ViroFrameStream] Frame stream started: %dx%d @ %.1f FPS, quality: %.2f",
                _frameCaptureService.targetWidth,

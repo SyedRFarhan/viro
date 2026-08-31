@@ -11,6 +11,8 @@
 #import "VROFrameRingBuffer.h"
 #import <UIKit/UIKit.h>
 #import <CoreImage/CoreImage.h>
+#import <ImageIO/ImageIO.h>
+#import <Vision/Vision.h>
 #import <atomic>
 
 #pragma mark - Pixel Buffer Deep Copy
@@ -74,10 +76,34 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
 @property (nonatomic, assign) int outputHeight;
 /// Whether the image was rotated 90° CCW for portrait
 @property (nonatomic, assign) BOOL rotatedToPortrait;
+/// Whether jpegData actually holds HEIC bytes (HEIC requested + supported)
+@property (nonatomic, assign) BOOL isHeic;
 @end
 
 @implementation VROJpegEncodeResult
 @end
+
+#pragma mark - HEIC Encoding
+
+/**
+ * Encode a UIImage as HEIC via ImageIO (hardware encoder on A10+).
+ * Returns nil when HEIC encoding is unavailable — caller falls back to JPEG.
+ */
+static NSData *VROEncodeHEIC(UIImage *image, float quality) {
+    CGImageRef cgImage = image.CGImage;
+    if (!cgImage) return nil;
+    NSMutableData *data = [NSMutableData data];
+    CGImageDestinationRef dest = CGImageDestinationCreateWithData(
+        (__bridge CFMutableDataRef)data, (__bridge CFStringRef)@"public.heic", 1, NULL);
+    if (!dest) return nil;
+    NSDictionary *opts = @{
+        (__bridge NSString *)kCGImageDestinationLossyCompressionQuality: @(quality)
+    };
+    CGImageDestinationAddImage(dest, cgImage, (__bridge CFDictionaryRef)opts);
+    BOOL ok = CGImageDestinationFinalize(dest);
+    CFRelease(dest);
+    return (ok && data.length > 0) ? data : nil;
+}
 
 
 #pragma mark - VROFrameCaptureService Implementation
@@ -96,6 +122,22 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
     // instance means the session was torn down and replaced -> bump the ring
     // buffer sessionId so JS invalidates stale frame references.
     uintptr_t _lastSessionPtr;
+
+    // ── Text legibility (throttled Vision OCR) ──
+    // OCR runs on its own utility queue (it takes 30-200ms; never block the
+    // capture path). Latest completed sample lives in the ivars below and is
+    // ONLY touched on _processingQueue — OCR completion hops there to store,
+    // event building reads there. _ocrBusy/_lastOcrTime are capture-thread.
+    dispatch_queue_t _ocrQueue;
+    std::atomic<bool> _ocrBusy;
+    double _lastOcrTime;
+    BOOL _latestHasTextStats;
+    int _latestTextBlockCount;
+    float _latestTextMeanConfidence;
+    float _latestTextMaxConfidence;
+    float _latestTextMaxHeight;
+    double _latestTextTimestamp;
+    NSString *_latestTextFrameId;
 }
 
 - (instancetype)initWithRingBufferCapacity:(NSUInteger)capacity {
@@ -129,10 +171,21 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
         _hiResQuality = 0.85f;
         _hiResRingDepth = 4;
         _hiResFrameIds = [NSMutableArray array];
+        _hiResFormat = nil;  // nil == "jpeg"
         _frameCounter = 0;
         _includeImageDataInEvent = YES;
         _verboseLogging = NO;
         _lastSessionPtr = 0;
+
+        _textLegibilityEnabled = NO;
+        _textLegibilityIntervalMs = 1000;
+        _ocrQueue = dispatch_queue_create(
+            "com.viro.frameCaptureService.ocr", DISPATCH_QUEUE_SERIAL);
+        dispatch_set_target_queue(
+            _ocrQueue, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
+        _ocrBusy = false;
+        _lastOcrTime = 0;
+        _latestHasTextStats = NO;
     }
     return self;
 }
@@ -209,6 +262,7 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
     // clipped, always slightly crushed".
     BOOL hasLightStats = NO;
     float lumaMean = 0, lumaP05 = 0, lumaP95 = 0, clippedFraction = 0, crushedFraction = 0;
+    float sharpness = 0;
     {
         OSType format = CVPixelBufferGetPixelFormatType(pixelBuffer);
         BOOL fullRange = (format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange);
@@ -221,14 +275,33 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
                 size_t lbpr = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0);
                 uint32_t hist[256] = {0};
                 uint32_t samples = 0;
+                // Laplacian variance rides the same sampled walk: cross
+                // neighbors at ±1 FULL-RES pixel around each stride-8 sample.
+                // Motion blur and defocus both crush high-frequency energy,
+                // so this is the direct blur measurement (exposureDuration
+                // is only a proxy). Units: squared 8-bit luma.
+                double lapSum = 0, lapSum2 = 0;
+                uint32_t lapN = 0;
                 for (size_t r = 0; r < lh; r += 8) {
                     const uint8_t *row = luma + r * lbpr;
                     for (size_t c = 0; c < lw; c += 8) {
                         hist[row[c]]++;
                         samples++;
+                        if (r >= 1 && r + 1 < lh && c >= 1 && c + 1 < lw) {
+                            float lap = 4.0f * (float)row[c]
+                                      - (float)row[c - 1] - (float)row[c + 1]
+                                      - (float)(row - lbpr)[c] - (float)(row + lbpr)[c];
+                            lapSum += lap;
+                            lapSum2 += (double)lap * (double)lap;
+                            lapN++;
+                        }
                     }
                 }
                 CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+                if (lapN > 0) {
+                    double lapMean = lapSum / (double)lapN;
+                    sharpness = (float)MAX(0.0, lapSum2 / (double)lapN - lapMean * lapMean);
+                }
                 if (samples > 0) {
                     const int rangeLo = fullRange ? 0 : 16;
                     const int rangeHi = fullRange ? 255 : 235;
@@ -332,6 +405,29 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
         featurePointsData = pointsData;
     }
 
+    // ── Throttled on-device OCR (text legibility) ──
+    // Runs on its own utility queue against a +1 retained camera buffer;
+    // results land on _processingQueue (sole owner of the _latestText*
+    // ivars) and are written back onto the sampled frame's ring entry.
+    if (_textLegibilityEnabled) {
+        double ocrIntervalSec = MAX(_textLegibilityIntervalMs, 100) / 1000.0;
+        bool ocrExpected = false;
+        if (timestamp - _lastOcrTime >= ocrIntervalSec &&
+            _ocrBusy.compare_exchange_strong(ocrExpected, true)) {
+            _lastOcrTime = timestamp;
+            CVPixelBufferRetain(pixelBuffer);
+            CVPixelBufferRef ocrBuffer = pixelBuffer;
+            NSString *ocrFrameId = frameId;
+            BOOL ocrVerbose = _verboseLogging;
+            dispatch_async(_ocrQueue, ^{
+                [self runTextLegibilityOnBuffer:ocrBuffer
+                                        frameId:ocrFrameId
+                                      timestamp:timestamp
+                                        verbose:ocrVerbose];
+            });
+        }
+    }
+
     // Capture config values for async block
     int targetWidth = _targetWidth;
     int targetHeight = _targetHeight;
@@ -340,6 +436,7 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
     int hiResMaxDimension = _hiResMaxDimension;
     float hiResQuality = _hiResQuality;
     int hiResRingDepth = _hiResRingDepth;
+    BOOL hiResWantHeic = [_hiResFormat isEqualToString:@"heic"];
     NSInteger sessionId = [_ringBuffer currentSessionId];
     BOOL includeImage = _includeImageDataInEvent;
     BOOL verbose = _verboseLogging;
@@ -364,10 +461,11 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
                 if (k > 1.01f) {
                     int hiW = (int)lroundf(targetWidth * k);
                     int hiH = (int)lroundf(targetHeight * k);
-                    hiResResult = [self encodeJPEGWithCrop:pixelBuffer
-                                               targetWidth:hiW
-                                              targetHeight:hiH
-                                                   quality:hiResQuality];
+                    hiResResult = [self encodeWithCrop:pixelBuffer
+                                           targetWidth:hiW
+                                          targetHeight:hiH
+                                               quality:hiResQuality
+                                               useHeic:hiResWantHeic];
                 }
             }
             CVPixelBufferRelease(pixelBuffer);
@@ -503,9 +601,11 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
             entry.exposureOffset = exposureOffset;
             entry.ambientIntensity = ambientIntensity;
             entry.ambientColorTemperature = ambientColorTemperature;
+            entry.sharpness = sharpness;
 
             if (hiResResult && hiResResult.jpegData) {
                 entry.hiResJpegData = hiResResult.jpegData;
+                entry.hiResFormat = hiResResult.isHeic ? @"heic" : @"jpeg";
                 entry.hiResSize = CGSizeMake(hiResResult.outputWidth, hiResResult.outputHeight);
                 matrix_float3x3 hiResIntrinsics = arIntrinsics;
                 hiResIntrinsics.columns[0][0] *= hiResResult.scale;
@@ -552,11 +652,23 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
                 event[@"lumaP95"] = @(lumaP95);
                 event[@"clippedFraction"] = @(clippedFraction);
                 event[@"crushedFraction"] = @(crushedFraction);
+                event[@"sharpness"] = @(sharpness);
             }
             event[@"exposureOffset"] = @(exposureOffset);
             if (ambientIntensity > 0) {
                 event[@"ambientIntensity"] = @(ambientIntensity);
                 event[@"ambientColorTemperature"] = @(ambientColorTemperature);
+            }
+            // Latest OCR sample (throttled — usually a slightly older frame;
+            // textSampleAgeMs says how much older). Read on _processingQueue,
+            // the sole owner of the _latestText* ivars.
+            if (self->_latestHasTextStats) {
+                event[@"textBlockCount"] = @(self->_latestTextBlockCount);
+                event[@"textMeanConfidence"] = @(self->_latestTextMeanConfidence);
+                event[@"textMaxConfidence"] = @(self->_latestTextMaxConfidence);
+                event[@"textMaxHeight"] = @(self->_latestTextMaxHeight);
+                event[@"textSampleFrameId"] = self->_latestTextFrameId ?: @"";
+                event[@"textSampleAgeMs"] = @(MAX(0.0, (timestamp - self->_latestTextTimestamp) * 1000.0));
             }
 
             event[@"intrinsics"] = @{
@@ -621,6 +733,18 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
                                 targetWidth:(int)targetWidth
                                targetHeight:(int)targetHeight
                                     quality:(float)quality {
+    return [self encodeWithCrop:pixelBuffer
+                    targetWidth:targetWidth
+                   targetHeight:targetHeight
+                        quality:quality
+                        useHeic:NO];
+}
+
+- (VROJpegEncodeResult *)encodeWithCrop:(CVPixelBufferRef)pixelBuffer
+                            targetWidth:(int)targetWidth
+                           targetHeight:(int)targetHeight
+                                quality:(float)quality
+                                useHeic:(BOOL)useHeic {
 
     // Safety check for nil pixelBuffer
     if (!pixelBuffer) {
@@ -700,14 +824,23 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
         return nil;
     }
 
-    NSData *jpegData = UIImageJPEGRepresentation(rotatedImage, quality);
-    if (!jpegData) {
-        NSLog(@"[ViroFrameStream DEBUG] encodeJPEGWithCrop: Failed to encode JPEG");
+    NSData *encodedData = nil;
+    BOOL isHeic = NO;
+    if (useHeic) {
+        encodedData = VROEncodeHEIC(rotatedImage, quality);
+        isHeic = (encodedData != nil);
+    }
+    if (!encodedData) {
+        encodedData = UIImageJPEGRepresentation(rotatedImage, quality);
+    }
+    if (!encodedData) {
+        NSLog(@"[ViroFrameStream DEBUG] encodeWithCrop: Failed to encode image");
         return nil;
     }
 
     VROJpegEncodeResult *result = [[VROJpegEncodeResult alloc] init];
-    result.jpegData = jpegData;
+    result.jpegData = encodedData;
+    result.isHeic = isHeic;
     result.scale = scale;
     result.cropX = cropX;
     result.cropY = cropY;
@@ -764,6 +897,78 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
     return rotatedImage;
 }
 
+#pragma mark - Text Legibility (Vision OCR)
+
+/**
+ * Fast-path Vision text recognition on a +1 retained camera buffer.
+ * Runs on _ocrQueue; stores the completed sample via _processingQueue
+ * (sole owner of the _latestText* ivars) and writes it back onto the
+ * sampled frame's ring entry when that entry still exists.
+ */
+- (void)runTextLegibilityOnBuffer:(CVPixelBufferRef)buffer
+                          frameId:(NSString *)frameId
+                        timestamp:(double)timestamp
+                          verbose:(BOOL)verbose {
+    int blockCount = 0;
+    float meanConf = 0, maxConf = 0, maxHeight = 0;
+    BOOL ok = NO;
+    if (@available(iOS 13.0, *)) {
+        @autoreleasepool {
+            VNRecognizeTextRequest *request = [[VNRecognizeTextRequest alloc] init];
+            request.recognitionLevel = VNRequestTextRecognitionLevelFast;
+            request.usesLanguageCorrection = NO;
+            // The camera buffer is landscape (sensor-native); .Right presents
+            // it upright for a portrait-held device — the same 90° the JPEG
+            // rotation applies. Bounding boxes come back in UPRIGHT space.
+            VNImageRequestHandler *handler =
+                [[VNImageRequestHandler alloc] initWithCVPixelBuffer:buffer
+                                                         orientation:kCGImagePropertyOrientationRight
+                                                             options:@{}];
+            NSError *error = nil;
+            if ([handler performRequests:@[request] error:&error]) {
+                ok = YES;
+                float confSum = 0;
+                for (VNRecognizedTextObservation *obs in request.results) {
+                    VNRecognizedText *top = [obs topCandidates:1].firstObject;
+                    if (!top) continue;
+                    blockCount++;
+                    float conf = (float)top.confidence;
+                    confSum += conf;
+                    maxConf = MAX(maxConf, conf);
+                    maxHeight = MAX(maxHeight, (float)obs.boundingBox.size.height);
+                }
+                meanConf = blockCount > 0 ? confSum / (float)blockCount : 0.f;
+            } else if (verbose) {
+                NSLog(@"[ViroFrameStream DEBUG] Text legibility OCR failed: %@", error);
+            }
+        }
+    }
+    CVPixelBufferRelease(buffer);
+    self->_ocrBusy = false;
+    if (!ok) return;
+    if (verbose) {
+        NSLog(@"[ViroFrameStream DEBUG] OCR frame %@: %d blocks, meanConf=%.2f maxH=%.3f",
+              frameId, blockCount, meanConf, maxHeight);
+    }
+    dispatch_async(_processingQueue, ^{
+        self->_latestHasTextStats = YES;
+        self->_latestTextBlockCount = blockCount;
+        self->_latestTextMeanConfidence = meanConf;
+        self->_latestTextMaxConfidence = maxConf;
+        self->_latestTextMaxHeight = maxHeight;
+        self->_latestTextTimestamp = timestamp;
+        self->_latestTextFrameId = frameId;
+        VROFrameEntry *entry = [self->_ringBuffer entryForFrameId:frameId];
+        if (entry) {
+            entry.hasTextStats = YES;
+            entry.textBlockCount = blockCount;
+            entry.textMeanConfidence = meanConf;
+            entry.textMaxConfidence = maxConf;
+            entry.textMaxHeight = maxHeight;
+        }
+    });
+}
+
 #pragma mark - Frame Retrieval
 
 - (VROFrameEntry *)frameEntryForId:(NSString *)frameId {
@@ -815,6 +1020,13 @@ static NSArray *VROFlattenIntrinsicsRowMajor(matrix_float3x3 m) {
         result[@"lumaP95"] = @(entry.lumaP95);
         result[@"clippedFraction"] = @(entry.clippedFraction);
         result[@"crushedFraction"] = @(entry.crushedFraction);
+        result[@"sharpness"] = @(entry.sharpness);
+    }
+    if (entry.hasTextStats) {
+        result[@"textBlockCount"] = @(entry.textBlockCount);
+        result[@"textMeanConfidence"] = @(entry.textMeanConfidence);
+        result[@"textMaxConfidence"] = @(entry.textMaxConfidence);
+        result[@"textMaxHeight"] = @(entry.textMaxHeight);
     }
     result[@"exposureOffset"] = @(entry.exposureOffset);
     if (entry.ambientIntensity > 0) {
@@ -832,6 +1044,9 @@ static NSArray *VROFlattenIntrinsicsRowMajor(matrix_float3x3 m) {
         result[@"width"] = @((int)entry.hiResSize.width);
         result[@"height"] = @((int)entry.hiResSize.height);
         result[@"intrinsics"] = VROFlattenIntrinsicsRowMajor(entry.hiResIntrinsicsJPEG);
+        // "jpeg" | "heic" — what imageData actually holds. Old entries
+        // (nil hiResFormat) and the small stream are always JPEG.
+        result[@"format"] = entry.hiResFormat ?: @"jpeg";
     } else {
         if (!entry.jpegData) {
             result[@"error"] = @"frame JPEG evicted";
@@ -841,27 +1056,50 @@ static NSArray *VROFlattenIntrinsicsRowMajor(matrix_float3x3 m) {
         result[@"width"] = @((int)entry.jpegSize.width);
         result[@"height"] = @((int)entry.jpegSize.height);
         result[@"intrinsics"] = VROFlattenIntrinsicsRowMajor(entry.intrinsicsJPEG);
+        result[@"format"] = @"jpeg";
     }
 
     if (includeDepth && entry.depthBuffer) {
-        // LiDAR depth, AR-image space (NOT JPEG space): float32 meters,
-        // row-major, no padding. Sample it via jpegToARTransform +
-        // arIntrinsics — both included below.
+        // LiDAR depth, AR-image space (NOT JPEG space), row-major, no
+        // padding. Sample it via jpegToARTransform + arIntrinsics — both
+        // included below. Default float32 meters; depthFormat "uint16mm"
+        // packs uint16 millimeters (0 = no data, clamped to 65.535m) at
+        // half the bytes for upload-bound consumers.
+        BOOL wantU16 = [options[@"depthFormat"] isEqual:@"uint16mm"];
         CVPixelBufferRef depth = entry.depthBuffer;
         CVPixelBufferLockBaseAddress(depth, kCVPixelBufferLock_ReadOnly);
         size_t dw = CVPixelBufferGetWidth(depth);
         size_t dh = CVPixelBufferGetHeight(depth);
         size_t stride = CVPixelBufferGetBytesPerRow(depth);
         const uint8_t *base = (const uint8_t *)CVPixelBufferGetBaseAddress(depth);
-        NSMutableData *packed = [NSMutableData dataWithLength:dw * dh * sizeof(float)];
-        uint8_t *dst = (uint8_t *)packed.mutableBytes;
-        for (size_t row = 0; row < dh; row++) {
-            memcpy(dst + row * dw * sizeof(float), base + row * stride, dw * sizeof(float));
+        NSMutableData *packed;
+        if (wantU16) {
+            packed = [NSMutableData dataWithLength:dw * dh * sizeof(uint16_t)];
+            uint16_t *dst = (uint16_t *)packed.mutableBytes;
+            for (size_t row = 0; row < dh; row++) {
+                const float *srcRow = (const float *)(base + row * stride);
+                for (size_t col = 0; col < dw; col++) {
+                    float d = srcRow[col];
+                    uint16_t mm = 0;
+                    if (d > 0.f && isfinite(d)) {
+                        float mmf = roundf(d * 1000.f);
+                        mm = (uint16_t)MIN(65535.f, MAX(1.f, mmf));
+                    }
+                    dst[row * dw + col] = mm;
+                }
+            }
+        } else {
+            packed = [NSMutableData dataWithLength:dw * dh * sizeof(float)];
+            uint8_t *dst = (uint8_t *)packed.mutableBytes;
+            for (size_t row = 0; row < dh; row++) {
+                memcpy(dst + row * dw * sizeof(float), base + row * stride, dw * sizeof(float));
+            }
         }
         CVPixelBufferUnlockBaseAddress(depth, kCVPixelBufferLock_ReadOnly);
         result[@"depthData"] = [packed base64EncodedStringWithOptions:0];
         result[@"depthWidth"] = @((int)dw);
         result[@"depthHeight"] = @((int)dh);
+        result[@"depthFormat"] = wantU16 ? @"uint16mm" : @"float32";
         // Depth confidence (ARConfidenceLevel per pixel, uint8, row-major,
         // unpadded, same dims as depthData). 0=low 1=medium 2=high.
         if (entry.confidenceBuffer) {

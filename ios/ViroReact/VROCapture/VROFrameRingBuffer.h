@@ -98,6 +98,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Hi-res JPEG-space intrinsics (LANDSCAPE space, like intrinsicsJPEG)
 @property (nonatomic, assign) matrix_float3x3 hiResIntrinsicsJPEG;
 
+/// Container format of hiResJpegData: "jpeg" (default when nil) or "heic".
+/// HEIC halves keyframe bytes at equal quality on A10+ hardware encoders.
+@property (nonatomic, copy, nullable) NSString *hiResFormat;
+
 #pragma mark - Exposure
 
 /// ARCamera exposure duration (seconds) — the motion-blur signal.
@@ -122,6 +126,23 @@ NS_ASSUME_NONNULL_BEGIN
 /// ARKit light estimate riders (0 when no estimate).
 @property (nonatomic, assign) float ambientIntensity;
 @property (nonatomic, assign) float ambientColorTemperature;
+/// Laplacian variance of the sampled luma plane (8-bit luma units squared).
+/// Higher = sharper; motion blur and defocus both crush it. Computed with
+/// the lighting stats (gated by hasLightStats).
+@property (nonatomic, assign) float sharpness;
+
+#pragma mark - Text legibility (on-device OCR sample, fork >= 2.61.70)
+
+/// YES when this frame was OCR-sampled (throttled; most frames are not).
+@property (nonatomic, assign) BOOL hasTextStats;
+/// Number of recognized text observations in the frame.
+@property (nonatomic, assign) int textBlockCount;
+/// Mean / max confidence of the top candidate per observation (0-1).
+@property (nonatomic, assign) float textMeanConfidence;
+@property (nonatomic, assign) float textMaxConfidence;
+/// Height of the tallest observation's bounding box, normalized 0-1 in the
+/// upright (portrait) image — the "big enough to read" signal.
+@property (nonatomic, assign) float textMaxHeight;
 
 #pragma mark - LiDAR Depth (Optional)
 

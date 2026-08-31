@@ -64,6 +64,22 @@ NS_ASSUME_NONNULL_BEGIN
 /// How many recent frames keep their hi-res JPEG (default: 4)
 @property (nonatomic, assign) int hiResRingDepth;
 
+/// Container format for the hi-res variant: @"jpeg" (default) or @"heic".
+/// HEIC halves bytes at equal quality (hardware encoder); silently falls
+/// back to JPEG when HEIC encoding is unavailable. The format actually
+/// used is reported per frame in getFrameData's `format` field.
+@property (nonatomic, copy, nullable) NSString *hiResFormat;
+
+#pragma mark - Text Legibility (throttled on-device OCR)
+
+/// Run Vision text recognition (fast path, no language correction) on a
+/// throttled subset of captured frames and attach legibility stats to
+/// frame events + ring entries (default: NO). iOS 13+; no-op below.
+@property (nonatomic, assign) BOOL textLegibilityEnabled;
+
+/// Minimum interval between OCR samples in milliseconds (default: 1000).
+@property (nonatomic, assign) int textLegibilityIntervalMs;
+
 /// When YES (default), each onFrameReady event carries the base64 JPEG in
 /// `imageData`. When NO, events are metadata-only (~300 bytes) and consumers
 /// fetch image bytes on demand via frameDataForId: -- only frames that are

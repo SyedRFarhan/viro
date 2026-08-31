@@ -142,6 +142,11 @@ struct VROWorldMeshConfig {
                                              // (frozen) when the mesh is disabled —
                                              // pairs with turning ARKit scene
                                              // reconstruction off to save power
+    bool coverageDebugNormals = false;       // diagnostic: paint fragments with
+                                             // _surface.normal * 0.5 + 0.5 instead of
+                                             // the scan skin. Mid-grey everywhere =
+                                             // zero normal at the fragment stage (the
+                                             // dead shading/facet-jitter mystery)
 };
 
 /**
