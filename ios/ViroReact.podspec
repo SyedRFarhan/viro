@@ -18,9 +18,25 @@ Pod::Spec.new do |s|
   # visionOS: CompositorServices drives the immersive render loop.
   s.visionos.frameworks = ['Metal', 'MetalKit', 'CompositorServices', 'ARKit']
 
-  # iOS: frameworks required by source files compiled from the pod
-  # (VRTObjectDetectorView uses AVFoundation + Accelerate; CoreVideo for CVPixelBuffer)
-  s.ios.frameworks = ['AVFoundation', 'Accelerate', 'CoreVideo']
+  # iOS: every framework the bridge references, declared explicitly. The
+  # prebuilt libViroReact.a carries NO autolink hints (checked with otool:
+  # no LC_LINKER_OPTION in its objects), so a consumer's link line gets
+  # only what this list says plus whatever its OTHER pods happen to pull
+  # in. ARKit was missing and resolved by accident for years — until an
+  # app with no other ARKit consumer (distra-life, EAS iPhoneOS26.2)
+  # failed on _OBJC_CLASS_$_ARAnchor from VRTARSceneNavigator.o.
+  # CoreImage/CoreLocation/Photos are the remaining classes nm -u reports;
+  # today they arrive via neighbours' autolink, which is the same accident
+  # waiting to happen again.
+  s.ios.frameworks = [
+    'ARKit',
+    'AVFoundation',
+    'Accelerate',
+    'CoreImage',
+    'CoreLocation',
+    'CoreVideo',
+    'Photos',
+  ]
 
   # Base source files. The top-level ios/*.{h,m,mm} pairs (VRT3DSceneNavigator,
   # VRTGeometry, VRTManagedAnimation, VRTUIImageWrapper, VRTVRSceneNavigator, ...)
