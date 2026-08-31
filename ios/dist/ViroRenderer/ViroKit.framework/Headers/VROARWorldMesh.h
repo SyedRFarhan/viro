@@ -121,6 +121,10 @@ struct VROWorldMeshConfig {
     float coverageBoundaryColorG = 0.95f;
     float coverageBoundaryColorB = 1.0f;
     float coverageBoundaryPulseSpeed = 2.6f; // frontier breathing rate (radians/sec; 0 = steady)
+    float coverageBoundaryFill = 0.0f;       // 0 = thin rim at open edges (v1 look);
+                                             // 1 = solid frontier patches (Polycam's blue fill)
+    float coverageEdgeDash = 0.0f;           // 0 = solid hairline edges; >0 = dashed
+                                             // wireframe, value = dash frequency (1/meters)
 };
 
 /**

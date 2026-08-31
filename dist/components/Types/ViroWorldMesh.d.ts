@@ -170,6 +170,19 @@ export type ViroWorldMeshConfig = {
      * @default 2.6
      */
     coverageBoundaryPulseSpeed?: number;
+    /**
+     * Frontier rendering shape: 0 = thin rim hugging open edges, 1 = solid
+     * patches over the whole frontier ring of triangles (Polycam's blue
+     * fill). Interpolates between the two.
+     * @default 0
+     */
+    coverageBoundaryFill?: number;
+    /**
+     * Edge line style: 0 = solid hairlines; >0 breaks them into a dashed
+     * wireframe, value = dash frequency in 1/meters (try 8-14).
+     * @default 0
+     */
+    coverageEdgeDash?: number;
 };
 /**
  * Statistics about the current world mesh state.

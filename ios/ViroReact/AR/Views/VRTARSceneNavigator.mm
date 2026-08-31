@@ -2805,6 +2805,12 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         if (worldMeshConfig[@"coverageBoundaryPulseSpeed"]) {
             _worldMeshConfigCpp.coverageBoundaryPulseSpeed = [worldMeshConfig[@"coverageBoundaryPulseSpeed"] floatValue];
         }
+        if (worldMeshConfig[@"coverageBoundaryFill"]) {
+            _worldMeshConfigCpp.coverageBoundaryFill = [worldMeshConfig[@"coverageBoundaryFill"] floatValue];
+        }
+        if (worldMeshConfig[@"coverageEdgeDash"]) {
+            _worldMeshConfigCpp.coverageEdgeDash = [worldMeshConfig[@"coverageEdgeDash"] floatValue];
+        }
     }
 
     // Apply to AR scene if ready
