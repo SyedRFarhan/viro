@@ -195,8 +195,9 @@ export type ViroWorldMeshConfig = {
    */
   coverageBoundaryFill?: number;
   /**
-   * Edge line style: 0 = solid hairlines; >0 breaks them into a dashed
-   * wireframe, value = dash frequency in 1/meters (try 8-14).
+   * Edge line style: 0 = solid lines; >0 breaks the wireframe into
+   * dashes, value = dashes per triangle edge (try 3-6). Edges render in
+   * flat-shading mode only (they ride per-face barycentrics).
    * @default 0
    */
   coverageEdgeDash?: number;
