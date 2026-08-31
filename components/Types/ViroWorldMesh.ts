@@ -234,6 +234,14 @@ export type ViroWorldMeshConfig = {
    */
   coverageFreezeOnDisable?: boolean;
   /**
+   * false = keep CAPTURING (anchors, snapshot, banking all continue) but
+   * hide the coverage skin and pause its geometry rebuilds — for moments
+   * the screen belongs to something else (RoomPlan scan bursts). Flipping
+   * back rebuilds whatever changed while hidden. (fork >= 2.61.70)
+   * @default true
+   */
+  coverageVisible?: boolean;
+  /**
    * Diagnostic: paint fragments with the raw fragment-stage normal
    * (normal * 0.5 + 0.5) instead of the scan skin. Mid-grey everywhere
    * means a zero normal is reaching the fragment shader — the signature

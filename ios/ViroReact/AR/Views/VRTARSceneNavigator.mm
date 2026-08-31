@@ -2866,6 +2866,9 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         if (worldMeshConfig[@"coverageFreezeOnDisable"]) {
             _worldMeshConfigCpp.coverageFreezeOnDisable = [worldMeshConfig[@"coverageFreezeOnDisable"] boolValue];
         }
+        if (worldMeshConfig[@"coverageVisible"]) {
+            _worldMeshConfigCpp.coverageVisible = [worldMeshConfig[@"coverageVisible"] boolValue];
+        }
     }
 
     // Apply to AR scene if ready

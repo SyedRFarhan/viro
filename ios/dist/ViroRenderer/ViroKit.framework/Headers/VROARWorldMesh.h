@@ -142,6 +142,12 @@ struct VROWorldMeshConfig {
                                              // (frozen) when the mesh is disabled —
                                              // pairs with turning ARKit scene
                                              // reconstruction off to save power
+    bool coverageVisible = true;             // false = keep CAPTURING (anchors,
+                                             // snapshot, banking all continue) but
+                                             // hide the coverage skin and skip its
+                                             // geometry rebuilds — for moments the
+                                             // screen belongs to something else
+                                             // (RoomPlan scan bursts)
     bool coverageDebugNormals = false;       // diagnostic: paint fragments with
                                              // _surface.normal * 0.5 + 0.5 instead of
                                              // the scan skin. Mid-grey everywhere =
@@ -517,6 +523,7 @@ private:
     void updateCoverageVisualChunks(const std::vector<VROARFrame::VROARMeshChunk>& chunks);
 
     /** Remove every coverage node and clear all incremental state. */
+    void applyCoverageVisibility();
     void teardownCoverage();
 
     /**
