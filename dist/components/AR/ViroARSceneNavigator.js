@@ -1197,6 +1197,17 @@ class ViroARSceneNavigatorClass extends React.Component {
         return await ViroARSceneNavigatorModule.getFrameData((0, react_native_1.findNodeHandle)(this), frameId);
     };
     /**
+     * Encode the current camera frame NOW (fork >= 2.61.72): bypasses the
+     * stream's rate limiter, so the frame is milliseconds old instead of up
+     * to one interval old. It joins the ring buffer and fires the stream
+     * event like any pumped frame. Result shape = getFrameData.
+     *
+     * @platform ios
+     */
+    _captureFrameNow = async () => {
+        return await ViroARSceneNavigatorModule.captureFrameNow((0, react_native_1.findNodeHandle)(this));
+    };
+    /**
      * getFrameData with options (fork >= 2.61.65): variant 'hires' returns
      * the high-resolution keyframe encode; includeDepth attaches the frame's
      * LiDAR depth map (AR-image space) with sampling metadata.
@@ -1374,6 +1385,7 @@ class ViroARSceneNavigatorClass extends React.Component {
         stopFrameStream: this._stopFrameStream,
         resolveDetections: this._resolveDetections,
         getFrameData: this._getFrameData,
+        captureFrameNow: this._captureFrameNow,
         getFrameDataWithOptions: this._getFrameDataWithOptions,
         getARCapabilities: this._getARCapabilities,
         setRenderFrameRate: this._setRenderFrameRate,
@@ -1469,6 +1481,7 @@ class ViroARSceneNavigatorClass extends React.Component {
         stopFrameStream: this._stopFrameStream,
         resolveDetections: this._resolveDetections,
         getFrameData: this._getFrameData,
+        captureFrameNow: this._captureFrameNow,
         getFrameDataWithOptions: this._getFrameDataWithOptions,
         getARCapabilities: this._getARCapabilities,
         setRenderFrameRate: this._setRenderFrameRate,

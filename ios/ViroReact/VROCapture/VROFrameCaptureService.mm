@@ -89,21 +89,6 @@ static CVPixelBufferRef VROCopyPixelBuffer(CVPixelBufferRef src) {
  * Encode a UIImage as HEIC via ImageIO (hardware encoder on A10+).
  * Returns nil when HEIC encoding is unavailable — caller falls back to JPEG.
  */
-static NSData *VROEncodeHEIC(UIImage *image, float quality) {
-    CGImageRef cgImage = image.CGImage;
-    if (!cgImage) return nil;
-    NSMutableData *data = [NSMutableData data];
-    CGImageDestinationRef dest = CGImageDestinationCreateWithData(
-        (__bridge CFMutableDataRef)data, (__bridge CFStringRef)@"public.heic", 1, NULL);
-    if (!dest) return nil;
-    NSDictionary *opts = @{
-        (__bridge NSString *)kCGImageDestinationLossyCompressionQuality: @(quality)
-    };
-    CGImageDestinationAddImage(dest, cgImage, (__bridge CFDictionaryRef)opts);
-    BOOL ok = CGImageDestinationFinalize(dest);
-    CFRelease(dest);
-    return (ok && data.length > 0) ? data : nil;
-}
 
 
 #pragma mark - VROFrameCaptureService Implementation
@@ -191,11 +176,31 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
 }
 
 - (void)onARFrame:(ARFrame *)frame session:(ARSession *)session {
+    [self captureFrame:frame session:session bypassRateLimit:NO completion:nil];
+}
+
+- (void)captureFrame:(ARFrame *)frame
+             session:(ARSession *)session
+          completion:(void (^)(NSDictionary * _Nullable))completion {
+    [self captureFrame:frame session:session bypassRateLimit:YES completion:completion];
+}
+
+- (void)captureFrame:(ARFrame *)frame
+             session:(ARSession *)session
+     bypassRateLimit:(BOOL)bypass
+          completion:(void (^ _Nullable)(NSDictionary * _Nullable))completion {
     if (!_enabled || !frame) {
+        if (completion) completion(nil);
         return;
     }
 
     double timestamp = frame.timestamp;
+    // Wall-clock shutter time. ARFrame.timestamp is on the uptime clock, so
+    // the offset to epoch taken NOW dates the exposure — not the encode, not
+    // the bridge. A frame-age measurement that starts anywhere later lies.
+    double capturedAtEpochMs =
+        [[NSDate date] timeIntervalSince1970] * 1000.0
+        - ([[NSProcessInfo processInfo] systemUptime] - timestamp) * 1000.0;
 
     // Session-instance change detection: nothing in the fork calls
     // handleSessionReset from delegate callbacks (Viro's renderer owns the
@@ -208,6 +213,10 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
     }
     _lastSessionPtr = sessionPtr;
 
+    // The pump is rate-limited and single-flight. An on-demand capture is
+    // neither: it queues behind whatever the serial processing queue holds
+    // and never touches the pump's busy flag.
+    if (!bypass) {
     // Rate limit check
     double minInterval = 1.0 / _targetFPS;
     double elapsed = timestamp - _lastCaptureTime;
@@ -232,6 +241,7 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
     }
 
     _lastCaptureTime = timestamp;
+    }
     if (_verboseLogging) {
         NSLog(@"[ViroFrameStream DEBUG] Capturing frame #%lu at timestamp %.3f", (unsigned long)_frameCounter, timestamp);
     }
@@ -244,7 +254,8 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
     CVPixelBufferRef pixelBuffer = frame.capturedImage;
     if (!pixelBuffer) {
         NSLog(@"[ViroFrameStream DEBUG] No pixel buffer available for frame %@", frameId);
-        _isProcessing = false;
+        if (!bypass) _isProcessing = false;
+        if (completion) completion(nil);
         return;
     }
     CVPixelBufferRetain(pixelBuffer);
@@ -405,30 +416,9 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
         featurePointsData = pointsData;
     }
 
-    // ── Throttled on-device OCR (text legibility) ──
-    // Runs on its own utility queue against a +1 retained camera buffer;
-    // results land on _processingQueue (sole owner of the _latestText*
-    // ivars) and are written back onto the sampled frame's ring entry.
-    if (_textLegibilityEnabled) {
-        double ocrIntervalSec = MAX(_textLegibilityIntervalMs, 100) / 1000.0;
-        bool ocrExpected = false;
-        if (timestamp - _lastOcrTime >= ocrIntervalSec &&
-            _ocrBusy.compare_exchange_strong(ocrExpected, true)) {
-            _lastOcrTime = timestamp;
-            CVPixelBufferRetain(pixelBuffer);
-            CVPixelBufferRef ocrBuffer = pixelBuffer;
-            NSString *ocrFrameId = frameId;
-            BOOL ocrVerbose = _verboseLogging;
-            dispatch_async(_ocrQueue, ^{
-                [self runTextLegibilityOnBuffer:ocrBuffer
-                                        frameId:ocrFrameId
-                                      timestamp:timestamp
-                                        verbose:ocrVerbose];
-            });
-        }
-    }
-
     // Capture config values for async block
+    BOOL textLegibilityEnabled = _textLegibilityEnabled;
+    int textLegibilityIntervalMs = _textLegibilityIntervalMs;
     int targetWidth = _targetWidth;
     int targetHeight = _targetHeight;
     float jpegQuality = _jpegQuality;
@@ -474,7 +464,8 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
                 NSLog(@"[ViroFrameStream DEBUG] JPEG encode FAILED for frame %@", frameId);
                 if (depthBuffer) CVPixelBufferRelease(depthBuffer);
                 if (confidenceBuffer) CVPixelBufferRelease(confidenceBuffer);
-                self->_isProcessing = false;
+                if (!bypass) self->_isProcessing = false;
+                if (completion) completion(nil);
                 return;
             }
 
@@ -566,6 +557,7 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
             VROFrameEntry *entry = [[VROFrameEntry alloc] init];
             entry.frameId = frameId;
             entry.timestamp = timestamp;
+            entry.capturedAtEpochMs = capturedAtEpochMs;
             entry.sessionId = sessionId;
             entry.cameraToWorld = cameraTransform;
 
@@ -617,6 +609,28 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
 
             [self->_ringBuffer addEntry:entry];
 
+            // ── Throttled on-device OCR (text legibility) ──
+            // Runs on the encoded JPEG — the pixels the model actually gets,
+            // at a ninth of the camera buffer's area — on its own utility
+            // queue. Nothing from ARKit's camera buffer pool is held past the
+            // encode any more; holding one across a Vision pass was how the
+            // pool ran dry. Throttle state lives on this serial queue.
+            if (textLegibilityEnabled) {
+                double ocrIntervalSec = MAX(textLegibilityIntervalMs, 100) / 1000.0;
+                bool ocrExpected = false;
+                if (timestamp - self->_lastOcrTime >= ocrIntervalSec &&
+                    self->_ocrBusy.compare_exchange_strong(ocrExpected, true)) {
+                    self->_lastOcrTime = timestamp;
+                    NSData *ocrJpeg = encodeResult.jpegData;
+                    dispatch_async(self->_ocrQueue, ^{
+                        [self runTextLegibilityOnJPEG:ocrJpeg
+                                              frameId:frameId
+                                            timestamp:timestamp
+                                              verbose:verbose];
+                    });
+                }
+            }
+
             // Shallow hi-res retention: recon banking always pulls the
             // LATEST frame, so only the newest few need to stay heavy.
             if (entry.hiResJpegData) {
@@ -636,6 +650,7 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
             NSMutableDictionary *event = [NSMutableDictionary dictionary];
             event[@"frameId"] = frameId;
             event[@"timestamp"] = @(timestamp);
+            event[@"capturedAtEpochMs"] = @(capturedAtEpochMs);
             event[@"sessionId"] = @(sessionId);
             if (includeImage) {
                 event[@"imageData"] = [encodeResult.jpegData base64EncodedStringWithOptions:0];
@@ -704,7 +719,7 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
 
             // 6. V2.3 FIX: Clear _isProcessing BEFORE dispatching to main thread
             // This ensures capture isn't blocked by JS event delivery latency
-            self->_isProcessing = false;
+            if (!bypass) self->_isProcessing = false;
 
             // Emit to JS (non-blocking - event queued to main thread)
             if (self.onFrameReady) {
@@ -718,6 +733,10 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
             } else if (verbose) {
                 NSLog(@"[ViroFrameStream DEBUG] Frame %@ ready but no onFrameReady callback set!", frameId);
             }
+
+            // On-demand callers get the bytes in the same breath — no second
+            // round trip through getFrameData for a frame we just made.
+            if (completion) completion([self frameDataForId:frameId]);
         }
     });
 }
@@ -791,9 +810,11 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
     float scaledWidth = scaledExtent.size.width;
     float scaledHeight = scaledExtent.size.height;
 
-    // Crop offsets in SCALED space (landscape pre-rotation)
-    float cropX = (scaledWidth - cropWidth) / 2.0f;
-    float cropY = (scaledHeight - cropHeight) / 2.0f;
+    // Crop offsets in SCALED space (landscape pre-rotation). Whole pixels,
+    // so the intrinsics' crop offset and the pixels that were actually
+    // cropped agree exactly (the CGImage path used to round on its own).
+    float cropX = floorf((scaledWidth - cropWidth) / 2.0f);
+    float cropY = floorf((scaledHeight - cropHeight) / 2.0f);
 
     // Crop rect in scaled image coordinates (landscape, pre-rotation)
     CGRect cropRect = CGRectMake(
@@ -803,36 +824,38 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
         cropHeight
     );
 
-    // Create CGImage from cropped region
-    CGImageRef cgImage = [_ciContext createCGImage:scaledImage fromRect:cropRect];
+    // One Core Image pass: crop → rotate to portrait → encode. The previous
+    // path read the crop back into a CGImage, redrew it through a UIGraphics
+    // context to rotate it, and encoded with UIImageJPEGRepresentation: two
+    // full CPU passes over every frame, every second, for the whole session.
+    // .Right is the same 90° clockwise turn the UIKit path applied (checked
+    // on a decoded JPEG: a landscape top-left mark lands top-right).
+    CIImage *cropped = [[scaledImage imageByCroppingToRect:cropRect]
+        imageByApplyingTransform:CGAffineTransformMakeTranslation(-cropRect.origin.x,
+                                                                  -cropRect.origin.y)];
+    CIImage *upright = [cropped imageByApplyingOrientation:kCGImagePropertyOrientationRight];
+    upright = [upright imageByApplyingTransform:
+        CGAffineTransformMakeTranslation(-upright.extent.origin.x, -upright.extent.origin.y)];
 
-    CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
-
-    if (!cgImage) {
-        NSLog(@"[ViroFrameStream DEBUG] encodeJPEGWithCrop: Failed to create CGImage");
-        return nil;
-    }
-
-    UIImage *uiImage = [UIImage imageWithCGImage:cgImage];
-    CGImageRelease(cgImage);
-
-    // Rotate 90° CCW for portrait orientation
-    // ARKit captures in landscape right; rotating CCW gives correct portrait view
-    UIImage *rotatedImage = [self rotateImage:uiImage byDegrees:90];
-    if (!rotatedImage) {
-        NSLog(@"[ViroFrameStream DEBUG] encodeJPEGWithCrop: Failed to rotate image");
-        return nil;
-    }
-
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    NSDictionary *encodeOptions = @{(id)kCGImageDestinationLossyCompressionQuality: @(quality)};
     NSData *encodedData = nil;
     BOOL isHeic = NO;
     if (useHeic) {
-        encodedData = VROEncodeHEIC(rotatedImage, quality);
+        encodedData = [_ciContext HEIFRepresentationOfImage:upright
+                                                     format:kCIFormatRGBA8
+                                                 colorSpace:colorSpace
+                                                    options:encodeOptions];
         isHeic = (encodedData != nil);
     }
     if (!encodedData) {
-        encodedData = UIImageJPEGRepresentation(rotatedImage, quality);
+        encodedData = [_ciContext JPEGRepresentationOfImage:upright
+                                                 colorSpace:colorSpace
+                                                    options:encodeOptions];
     }
+    CGColorSpaceRelease(colorSpace);
+    CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+
     if (!encodedData) {
         NSLog(@"[ViroFrameStream DEBUG] encodeWithCrop: Failed to encode image");
         return nil;
@@ -856,47 +879,6 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
     return result;
 }
 
-#pragma mark - Image Rotation
-
-/**
- * Rotate UIImage by specified degrees counter-clockwise.
- * For portrait correction, we rotate 90° CCW (which is 270° CW or -90° in UIKit terms).
- */
-- (UIImage *)rotateImage:(UIImage *)image byDegrees:(CGFloat)degrees {
-    if (!image) return nil;
-
-    // 90° CCW = -90° in standard rotation = 270° CW
-    // UIImage uses a coordinate system where positive rotation is CCW
-    CGFloat radians = degrees * M_PI / 180.0;
-
-    CGSize originalSize = image.size;
-    // For 90° rotation, swap width and height
-    CGSize rotatedSize = CGSizeMake(originalSize.height, originalSize.width);
-
-    UIGraphicsBeginImageContextWithOptions(rotatedSize, NO, image.scale);
-    CGContextRef context = UIGraphicsGetCurrentContext();
-
-    if (!context) {
-        UIGraphicsEndImageContext();
-        return nil;
-    }
-
-    // Move origin to center of rotated canvas
-    CGContextTranslateCTM(context, rotatedSize.width / 2, rotatedSize.height / 2);
-
-    // Rotate CCW (positive radians in UIKit coordinate system)
-    CGContextRotateCTM(context, radians);
-
-    // Draw image centered at origin
-    [image drawInRect:CGRectMake(-originalSize.width / 2, -originalSize.height / 2,
-                                  originalSize.width, originalSize.height)];
-
-    UIImage *rotatedImage = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-
-    return rotatedImage;
-}
-
 #pragma mark - Text Legibility (Vision OCR)
 
 /**
@@ -905,10 +887,10 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
  * (sole owner of the _latestText* ivars) and writes it back onto the
  * sampled frame's ring entry when that entry still exists.
  */
-- (void)runTextLegibilityOnBuffer:(CVPixelBufferRef)buffer
-                          frameId:(NSString *)frameId
-                        timestamp:(double)timestamp
-                          verbose:(BOOL)verbose {
+- (void)runTextLegibilityOnJPEG:(NSData *)jpeg
+                        frameId:(NSString *)frameId
+                      timestamp:(double)timestamp
+                        verbose:(BOOL)verbose {
     int blockCount = 0;
     float meanConf = 0, maxConf = 0, maxHeight = 0;
     BOOL ok = NO;
@@ -917,13 +899,11 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
             VNRecognizeTextRequest *request = [[VNRecognizeTextRequest alloc] init];
             request.recognitionLevel = VNRequestTextRecognitionLevelFast;
             request.usesLanguageCorrection = NO;
-            // The camera buffer is landscape (sensor-native); .Right presents
-            // it upright for a portrait-held device — the same 90° the JPEG
-            // rotation applies. Bounding boxes come back in UPRIGHT space.
+            // The stream JPEG is already upright portrait, so no orientation
+            // hint: bounding boxes come back in the same UPRIGHT space the
+            // detector's boxes use.
             VNImageRequestHandler *handler =
-                [[VNImageRequestHandler alloc] initWithCVPixelBuffer:buffer
-                                                         orientation:kCGImagePropertyOrientationRight
-                                                             options:@{}];
+                [[VNImageRequestHandler alloc] initWithData:jpeg options:@{}];
             NSError *error = nil;
             if ([handler performRequests:@[request] error:&error]) {
                 ok = YES;
@@ -943,7 +923,6 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
             }
         }
     }
-    CVPixelBufferRelease(buffer);
     self->_ocrBusy = false;
     if (!ok) return;
     if (verbose) {
@@ -983,6 +962,7 @@ static NSData *VROEncodeHEIC(UIImage *image, float quality) {
     return @{
         @"frameId": entry.frameId,
         @"timestamp": @(entry.timestamp),
+        @"capturedAtEpochMs": @(entry.capturedAtEpochMs),
         @"sessionId": @(entry.sessionId),
         @"imageData": [entry.jpegData base64EncodedStringWithOptions:0],
         @"width": @((int)entry.jpegSize.width),
@@ -1012,6 +992,7 @@ static NSArray *VROFlattenIntrinsicsRowMajor(matrix_float3x3 m) {
     NSMutableDictionary *result = [NSMutableDictionary dictionary];
     result[@"frameId"] = entry.frameId;
     result[@"timestamp"] = @(entry.timestamp);
+    result[@"capturedAtEpochMs"] = @(entry.capturedAtEpochMs);
     result[@"sessionId"] = @(entry.sessionId);
     result[@"exposureDuration"] = @(entry.exposureDuration);
     if (entry.hasLightStats) {

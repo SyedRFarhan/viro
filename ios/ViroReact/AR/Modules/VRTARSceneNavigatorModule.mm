@@ -32,6 +32,8 @@
 #import <React/RCTUIManagerUtils.h>
 #import "VRTUtils.h"
 #import <CoreLocation/CoreLocation.h>
+#import <ViroKit/VROARSessioniOS.h>
+#import <ViroKit/VROMonocularDepthEstimator.h>
 
 @implementation VRTARSceneNavigatorModule
 @synthesize bridge = _bridge;
@@ -2069,10 +2071,35 @@ RCT_EXPORT_METHOD(setRenderFrameRate:(nonnull NSNumber *)reactTag
     }];
 }
 
+// The live navigator for a tag, resolved WITHOUT the UIManager: the frame
+// ring is @synchronized and base64 is thread-safe, so frame reads and
+// on-demand captures need no main-thread turn. Nil when the tag is not the
+// live navigator or the view is unmounted — callers fall back to addUIBlock.
+static VRTARSceneNavigator *VRTLiveNavigatorForTag(NSNumber *reactTag) {
+    VRTARSceneNavigator *nav = [VRTARSceneNavigator activeNavigator];
+    if (!nav || !reactTag || !nav.reactTag || ![nav.reactTag isEqualToNumber:reactTag]) {
+        return nil;
+    }
+    if (!nav.rootVROView) {
+        return nil;
+    }
+    return nav;
+}
+
 RCT_EXPORT_METHOD(getFrameData:(nonnull NSNumber *)reactTag
                        frameId:(NSString *)frameId
                       resolver:(RCTPromiseResolveBlock)resolve
                       rejecter:(RCTPromiseRejectBlock)reject) {
+    // Fast path: answer from this queue. addUIBlock below waits for the main
+    // thread's next UIManager flush, which under AR render load is a wait for
+    // nothing this call needs.
+    VRTARSceneNavigator *live = VRTLiveNavigatorForTag(reactTag);
+    if (live) {
+        [live getFrameData:frameId completionHandler:^(NSDictionary *result) {
+            resolve(result);
+        }];
+        return;
+    }
     [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
                                         NSDictionary<NSNumber *, UIView *> *viewRegistry) {
         @try {
@@ -2101,6 +2128,38 @@ RCT_EXPORT_METHOD(getFrameData:(nonnull NSNumber *)reactTag
     }];
 }
 
+// Encode the CURRENT camera frame now (fork >= 2.61.72). Bypasses the
+// stream's rate limiter so the detector's trigger frame is milliseconds old
+// instead of up to one interval old. The frame joins the ring and fires the
+// stream event like any other, so resolveDetections works on it unchanged.
+RCT_EXPORT_METHOD(captureFrameNow:(nonnull NSNumber *)reactTag
+                         resolver:(RCTPromiseResolveBlock)resolve
+                         rejecter:(RCTPromiseRejectBlock)reject) {
+    VRTARSceneNavigator *live = VRTLiveNavigatorForTag(reactTag);
+    if (live) {
+        [live captureFrameNow:^(NSDictionary *result) {
+            resolve(result);
+        }];
+        return;
+    }
+    [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager,
+                                        NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        VRTView *view = (VRTView *)viewRegistry[reactTag];
+        if (![view isKindOfClass:[VRTARSceneNavigator class]]) {
+            reject(@"invalid_view", @"Invalid view returned from registry, expecting VRTARSceneNavigator", nil);
+            return;
+        }
+        VRTARSceneNavigator *component = (VRTARSceneNavigator *)view;
+        if (!component.rootVROView) {
+            resolve(@{ @"frameId": @"", @"error": @"AR view has been unmounted" });
+            return;
+        }
+        [component captureFrameNow:^(NSDictionary *result) {
+            resolve(result);
+        }];
+    }];
+}
+
 // Static device capabilities — no view needed. Lets JS gate LiDAR-only
 // features (coverage skin, capture-mesh banking, depth) up front instead
 // of discovering empty results at runtime.
@@ -2114,13 +2173,20 @@ RCT_EXPORT_METHOD(getARCapabilities:(RCTPromiseResolveBlock)resolve
             supportsSceneReconstruction:ARSceneReconstructionMesh];
     }
 #endif
+    // A monocular depth model ships in the bundle AND this device can run it.
+    // The mono rung of resolveDetections (monoDepthResolveEnabled) is real
+    // only when this is true; JS grades resolve as "mono" from it.
+    BOOL monoDepthModel = NO;
     if (@available(iOS 14.0, *)) {
         sceneDepth = [ARWorldTrackingConfiguration
             supportsFrameSemantics:ARFrameSemanticSceneDepth];
+        monoDepthModel = VROARSessioniOS::isMonocularDepthModelBundled() &&
+                         VROMonocularDepthEstimator::isSupported();
     }
     resolve(@{
         @"sceneReconstruction": @(sceneReconstruction),
         @"sceneDepth": @(sceneDepth),
+        @"monoDepthModel": @(monoDepthModel),
     });
 }
 

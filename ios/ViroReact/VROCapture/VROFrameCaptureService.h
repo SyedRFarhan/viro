@@ -108,6 +108,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// Handles rate limiting and non-blocking capture
 - (void)onARFrame:(ARFrame *)frame session:(ARSession *)session;
 
+/// Encode THIS frame now, bypassing the rate limiter and the busy gate. The
+/// frame joins the ring and fires onFrameReady like a pumped one; completion
+/// (on the processing queue) gets the frameDataForId: dictionary, imageData
+/// included, or nil when the encode failed. For the detector's trigger frame:
+/// milliseconds old instead of up to one stream interval.
+- (void)captureFrame:(ARFrame *)frame
+             session:(ARSession *)session
+          completion:(void (^)(NSDictionary * _Nullable result))completion;
+
 #pragma mark - Frame Retrieval
 
 /// Retrieve frame entry by ID for detection resolution

@@ -29,6 +29,7 @@
 #import <ViroKit/ViroKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <ViroKit/VROARSessioniOS.h>
+#import <ViroKit/VROMonocularDepthEstimator.h>
 #import "VRTARSceneNavigator.h"
 #import "RVStudioWatermarkState.h"
 #import <React/RCTAssert.h>
@@ -63,6 +64,10 @@ static NSString * const kVROARFrameNotification = @"VROARDetectorFrame";
 static NSString * const kRVWatermarkURL =
     @"https://www.reactvision.xyz/studio/?utm_source=scenenavigator-banner";
 
+// One live AR navigator at a time in practice; weak so a dead view is nil,
+// not a dangling pointer. Read from any queue (see +activeNavigator).
+static __weak VRTARSceneNavigator *sActiveNavigator = nil;
+
 @implementation VRTARSceneNavigator {
     id <VROView> _vroView;
     NSInteger _currentStackPosition;
@@ -80,6 +85,9 @@ static NSString * const kRVWatermarkURL =
     // World mesh configuration
     BOOL _pendingWorldMeshEnabled;
     BOOL _needsWorldMeshApply;
+
+    // On-demand mono depth: preload deferred until the session exists
+    BOOL _needsMonoDepthResolveApply;
     VROWorldMeshConfig _worldMeshConfigCpp;
 
     // World map persistence - imperative API with concurrency guard
@@ -112,6 +120,7 @@ static NSString * const kRVWatermarkURL =
 - (instancetype)initWithBridge:(RCTBridge *)bridge {
     self = [super initWithBridge:bridge];
     if (self) {
+        sActiveNavigator = self;
         // Load materials; must be done each time we have a new context (e.g. after
         // the EGL context is created by the VROViewAR
         VRTMaterialManager *materialManager = [bridge materialManager];
@@ -166,6 +175,8 @@ static NSString * const kRVWatermarkURL =
     _videoQuality = videoQuality;
     if ([videoQuality caseInsensitiveCompare:@"Low"] == NSOrderedSame) {
         _vroVideoQuality = VROVideoQuality::Low;
+    } else if ([videoQuality caseInsensitiveCompare:@"Medium"] == NSOrderedSame) {
+        _vroVideoQuality = VROVideoQuality::Medium;
     } else {
         _vroVideoQuality = VROVideoQuality::High;
     }
@@ -676,6 +687,64 @@ static NSString * const kRVWatermarkURL =
     if (_needsWorldMeshApply) {
         [self applyWorldMeshEnabled];
     }
+    if (_needsMonoDepthResolveApply) {
+        [self applyMonoDepthResolvePreload];
+    }
+}
+
+#pragma mark - On-demand mono depth (detection resolution)
+
+- (void)setMonoDepthResolveEnabled:(BOOL)monoDepthResolveEnabled {
+    _monoDepthResolveEnabled = monoDepthResolveEnabled;
+    if (!monoDepthResolveEnabled) {
+        // The rung simply stops being offered; a resident model is cheap to
+        // keep and the session owns its lifetime.
+        _needsMonoDepthResolveApply = NO;
+        return;
+    }
+    if (![self applyMonoDepthResolvePreload]) {
+        _needsMonoDepthResolveApply = YES;
+        RCTLogInfo(@"[ViroAR] Mono depth resolve queued until the AR session exists");
+    }
+}
+
+- (BOOL)applyMonoDepthResolvePreload {
+    if (!_vroView) return NO;
+    VROViewAR *viewAR = (VROViewAR *)_vroView;
+    std::shared_ptr<VROARSession> session = [viewAR getARSession];
+    if (!session) return NO;
+    // static_pointer_cast: ViroKit may be built without RTTI (see _detectorTick).
+    std::shared_ptr<VROARSessioniOS> sessioniOS = std::static_pointer_cast<VROARSessioniOS>(session);
+    sessioniOS->preloadMonocularDepthEstimator();
+    _needsMonoDepthResolveApply = NO;
+    RCTLogInfo(@"[ViroAR] Mono depth resolve: estimator preload requested");
+    return YES;
+}
+
+/// The provider handed to the resolver, or nil when the rung is off or the
+/// model is not (yet) loaded — the first seconds after session start resolve
+/// without it, and the result's method says so.
+- (VROMonoDepthProvider)monoDepthProviderIfAvailable {
+    if (!_monoDepthResolveEnabled || !_vroView) return nil;
+    if (@available(iOS 14.0, *)) {
+        VROViewAR *viewAR = (VROViewAR *)_vroView;
+        std::shared_ptr<VROARSession> session = [viewAR getARSession];
+        if (!session) return nil;
+        std::shared_ptr<VROARSessioniOS> sessioniOS = std::static_pointer_cast<VROARSessioniOS>(session);
+        std::shared_ptr<VROMonocularDepthEstimator> estimator = sessioniOS->getMonocularDepthEstimator();
+        if (!estimator || !estimator->isAvailable()) return nil;
+        return ^NSData * _Nullable (CIImage *image, int *outWidth, int *outHeight) {
+            std::vector<float> depth;
+            int width = 0, height = 0;
+            if (!estimator->estimateDepthSync(image, kCGImagePropertyOrientationUp, depth, width, height)) {
+                return nil;
+            }
+            if (outWidth) *outWidth = width;
+            if (outHeight) *outHeight = height;
+            return [NSData dataWithBytes:depth.data() length:depth.size() * sizeof(float)];
+        };
+    }
+    return nil;
 }
 
 - (void)willMoveToSuperview:(UIView *)newSuperview {
@@ -816,8 +885,13 @@ static NSString * const kRVWatermarkURL =
 }
 
 - (void)dealloc {
+    if (sActiveNavigator == self) sActiveNavigator = nil;
     // Final safety net for cleanup
     [self cleanupViroResources];
+}
+
++ (nullable instancetype)activeNavigator {
+    return sActiveNavigator;
 }
 
 #pragma mark - Fabric Compatibility
@@ -3130,12 +3204,19 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         return;
     }
 
+    // On-demand mono depth: captured here, on the caller's thread, so the
+    // background block never touches the view.
+    VROMonoDepthProvider monoDepth = [self monoDepthProviderIfAvailable];
+    NSDictionary *resolveOptions = @{ @"monoDepthCrop": @(_monoDepthCropEnabled) };
+
     // Resolve detections on background thread
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSArray<VRODetectionResult *> *results =
             [VRODetectionResolver resolvePoints:points
                                      frameEntry:entry
-                                      arSession:session];
+                                      arSession:session
+                              monoDepthProvider:monoDepth
+                                        options:resolveOptions];
 
         // Convert results to dictionary format
         NSMutableArray *resultsArray = [NSMutableArray arrayWithCapacity:results.count];
@@ -3150,6 +3231,16 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
                 dict[@"method"] = r.method ?: @"unknown";
             } else if (r.error) {
                 dict[@"error"] = r.error;
+            }
+            // The capture-pose ray rides every result (REP-952).
+            if (r.hasRay) {
+                dict[@"ray"] = @{
+                    @"origin": @[@(r.rayOrigin.x), @(r.rayOrigin.y), @(r.rayOrigin.z)],
+                    @"direction": @[@(r.rayDirection.x), @(r.rayDirection.y), @(r.rayDirection.z)],
+                };
+            }
+            if (r.gated > 0) {
+                dict[@"gated"] = @(r.gated);
             }
 
             [resultsArray addObject:dict];
@@ -3212,6 +3303,25 @@ static VROMatrix4f rvParseMatrixCsv(NSString *csv) {
         return;
     }
     completionHandler(data);
+}
+
+- (void)captureFrameNow:(void (^)(NSDictionary * _Nonnull result))completionHandler {
+    if (!completionHandler) {
+        return;
+    }
+    if (!_frameCaptureService || !_frameCaptureService.enabled) {
+        completionHandler(@{ @"frameId": @"", @"error": @"Frame stream not running" });
+        return;
+    }
+    ARSession *session = [self getNativeARSession];
+    ARFrame *frame = session.currentFrame;
+    if (!frame) {
+        completionHandler(@{ @"frameId": @"", @"error": @"No current ARFrame" });
+        return;
+    }
+    [_frameCaptureService captureFrame:frame session:session completion:^(NSDictionary *result) {
+        completionHandler(result ?: @{ @"frameId": @"", @"error": @"Frame capture failed" });
+    }];
 }
 
 #pragma mark - VRORenderDelegate Frame Streaming Hook

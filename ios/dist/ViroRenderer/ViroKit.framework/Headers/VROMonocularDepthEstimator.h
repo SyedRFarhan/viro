@@ -36,6 +36,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <CoreML/CoreML.h>
 #import <Vision/Vision.h>
+#import <CoreImage/CoreImage.h>
 #include "VROTexture.h"
 #include "VROMatrix4f.h"
 
@@ -278,6 +279,28 @@ public:
                               int &outWidth, int &outHeight) const;
 
     /**
+     * Run ONE inference on a supplied image and return metric depth (meters,
+     * row-major float32 at model resolution) without touching the live depth
+     * buffers, the GPU texture or the temporal filter.
+     *
+     * On-demand use: resolving a 2D detection against the very frame it was
+     * seen in. The per-frame loop's latest map is up to one interval old and
+     * belongs to a different camera pose, so sampling it at the detection's
+     * pixel reads the wrong surface; running the model on the captured frame
+     * itself makes the rate irrelevant.
+     *
+     * Serialized with the per-frame loop on the depth queue so the two never
+     * contend for the Neural Engine: blocks for at most one in-flight live
+     * inference plus its own (~100-400 ms on A-series). Call from a
+     * background thread. The image is fed as-is with ScaleFill, so depth
+     * pixel (x, y) maps to image UV (x / (w-1), y / (h-1)) in the orientation
+     * given. Honors the calibration scale factor. Returns false when no model
+     * is loaded or inference fails.
+     */
+    bool estimateDepthSync(CIImage *image, CGImagePropertyOrientation orientation,
+                           std::vector<float> &outDepth, int &outWidth, int &outHeight);
+
+    /**
      * Sample the synthesized per-pixel confidence at depth-texture UV coordinates.
      * Returns a value in [0, 1]: 1 = highly stable, 0 = discontinuity or invalid.
      * Returns -1 if no confidence data is available (temporal filtering disabled or
@@ -392,6 +415,14 @@ private:
      * Update FPS and latency statistics.
      */
     void updateDiagnostics(double inferenceTimeMs);
+
+    /**
+     * Unpack a model output array into packed row-major metric depth, honoring
+     * the model's strides and the calibration scale. Shared by the on-demand
+     * path; the per-frame path keeps its own loop (it also gathers stats).
+     */
+    bool extractDepthArray(MLMultiArray *depthArray, std::vector<float> &outDepth,
+                           int &outWidth, int &outHeight) const;
 };
 
 #endif // __IPHONE_OS_VERSION_MAX_ALLOWED >= 140000

@@ -762,6 +762,9 @@ export type ViroFrameDataResult = {
     /** Base64 JPEG. Absent when the frame is no longer available. */
     imageData?: string;
     timestamp?: number;
+    /** Wall-clock shutter time, ms since epoch (fork >= 2.61.72). Frame age
+        measured from here includes the encode and the bridge. */
+    capturedAtEpochMs?: number;
     sessionId?: number;
     width?: number;
     height?: number;
@@ -862,6 +865,8 @@ export type ViroFrameEvent = {
     jpegToARTransform: number[];
     /** Current AR tracking state */
     trackingState: ViroFrameTrackingState;
+    /** Wall-clock shutter time, ms since epoch (fork >= 2.61.72). */
+    capturedAtEpochMs?: number;
     /** ARCamera exposure duration (seconds) — the motion-blur proxy. */
     exposureDuration?: number;
     /** Mean / p05 / p95 luma, 0-1 over the format's nominal range. */
@@ -894,7 +899,7 @@ export type ViroFrameEvent = {
  * Resolution method used for 2D→3D detection mapping.
  * Listed in order of preference/accuracy.
  */
-export type ViroDetectionMethod = "lidar" | "raycast_geometry" | "raycast_infinite" | "raycast_estimated" | "pointcloud";
+export type ViroDetectionMethod = "lidar" | "raycast_geometry" | "mono" | "raycast_infinite" | "raycast_estimated" | "pointcloud";
 /**
  * Result of resolving a single 2D detection point to 3D.
  */
@@ -914,6 +919,32 @@ export type ViroDetectionResult = {
     method?: ViroDetectionMethod;
     /** Error message if resolution failed (ok === false) */
     error?: string;
+    /**
+     * The world-space ray through this pixel at capture pose (iOS, fork >=
+     * 2.61.72). Present on every result: an unresolved point can still be
+     * triangulated against a later sighting, and a resolved position should
+     * lie on this ray.
+     */
+    ray?: {
+        origin: [number, number, number];
+        direction: [number, number, number];
+    };
+    /**
+     * How many guessed rungs (infinite/estimated plane, point cloud) were
+     * refused because they disagreed with the monocular depth at this pixel
+     * (iOS, `monoDepthResolveEnabled`). Absent when zero.
+     */
+    gated?: number;
+};
+/**
+ * A point to resolve: normalized 0-1 UV in the frame stream's JPEG space.
+ * `box` (same space, [xmin, ymin, xmax, ymax]) is optional and lets the
+ * monocular path run on a crop around the detection (`monoDepthCropEnabled`).
+ */
+export type ViroResolvePoint = {
+    x: number;
+    y: number;
+    box?: [number, number, number, number];
 };
 /**
  * Result of resolving detections using capture-time data.

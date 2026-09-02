@@ -193,7 +193,13 @@ type Props = ViewProps & {
    */
   worldAlignment?: "Gravity" | "GravityAndHeading" | "Camera";
 
-  videoQuality?: "High" | "Low";
+  /**
+   * Camera format. "High" = the tallest format the device offers (4K on
+   * recent phones); "Medium" = the tallest at or under 1440 rows at the
+   * lowest frame rate offered (iOS; what a non-LiDAR phone can sustain
+   * thermally); "Low" = the smallest format.
+   */
+  videoQuality?: "High" | "Medium" | "Low";
   numberOfTrackedImages?: number;
   viroAppProps?: any; // TODO: what is the type of this?
   /**
@@ -301,7 +307,7 @@ type Props = ViewProps & {
    * Requires:
    * - iOS 14.0+
    * - Neural Engine (A12 Bionic or newer)
-   * - DepthPro.mlmodelc bundled in ViroKit
+   * - DepthAnythingV2_metric_indoor.mlmodelc bundled in ViroKit (metric, meters)
    *
    * @default false
    * @platform ios
@@ -367,6 +373,34 @@ type Props = ViewProps & {
    * This includes progress updates during hosting/resolving operations.
    */
   onCloudAnchorStateChange?: (event: ViroCloudAnchorStateChangeEvent) => void;
+
+  /**
+   * [iOS Only] On-demand monocular depth for `resolveDetections`.
+   *
+   * When true the session preloads the bundled depth model (without
+   * per-frame estimation) and the resolver gains a `"mono"` rung below real
+   * plane geometry: the model runs ONCE on the captured frame's own JPEG the
+   * first time a point of that frame needs it, so the estimate belongs to
+   * the frame the detection was seen in rather than to a map from some
+   * earlier pose. Meant for devices without LiDAR; on LiDAR devices the
+   * `"lidar"` rung answers first. Pair with `getARCapabilities().monoDepthModel`.
+   *
+   * @default false
+   * @platform ios
+   */
+  monoDepthResolveEnabled?: boolean;
+
+  /**
+   * [iOS Only] With `monoDepthResolveEnabled`: run the depth model on a
+   * square crop around each detection's box instead of the squashed full
+   * frame. Points passed to `resolveDetections` may carry
+   * `box: [xmin, ymin, xmax, ymax]` in the same UV space as `x`/`y`; points
+   * without a box use the full-frame map. A few crops per frame at most.
+   *
+   * @default false
+   * @platform ios
+   */
+  monoDepthCropEnabled?: boolean;
 
   /**
    * Enable world mesh for physics collision with real-world surfaces.
@@ -1978,7 +2012,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
    */
   _resolveDetections = async (
     frameId: string,
-    points: Array<{ x: number; y: number }>
+    points: Array<{ x: number; y: number; box?: [number, number, number, number] }>
   ): Promise<ViroDetectionResolutionResult> => {
     return await ViroARSceneNavigatorModule.resolveDetections(
       findNodeHandle(this),
@@ -2018,6 +2052,20 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
   };
 
   /**
+   * Encode the current camera frame NOW (fork >= 2.61.72): bypasses the
+   * stream's rate limiter, so the frame is milliseconds old instead of up
+   * to one interval old. It joins the ring buffer and fires the stream
+   * event like any pumped frame. Result shape = getFrameData.
+   *
+   * @platform ios
+   */
+  _captureFrameNow = async (): Promise<ViroFrameDataResult> => {
+    return await ViroARSceneNavigatorModule.captureFrameNow(
+      findNodeHandle(this)
+    );
+  };
+
+  /**
    * getFrameData with options (fork >= 2.61.65): variant 'hires' returns
    * the high-resolution keyframe encode; includeDepth attaches the frame's
    * LiDAR depth map (AR-image space) with sampling metadata.
@@ -2041,6 +2089,8 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
   _getARCapabilities = async (): Promise<{
     sceneReconstruction: boolean;
     sceneDepth: boolean;
+    /** A monocular depth model ships in the bundle and this device can run it (iOS). */
+    monoDepthModel: boolean;
   }> => {
     return await ViroARSceneNavigatorModule.getARCapabilities();
   };
@@ -2225,6 +2275,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     stopFrameStream: this._stopFrameStream,
     resolveDetections: this._resolveDetections,
     getFrameData: this._getFrameData,
+    captureFrameNow: this._captureFrameNow,
     getFrameDataWithOptions: this._getFrameDataWithOptions,
     getARCapabilities: this._getARCapabilities,
     setRenderFrameRate: this._setRenderFrameRate,
@@ -2320,6 +2371,7 @@ class ViroARSceneNavigatorClass extends React.Component<Props, State> {
     stopFrameStream: this._stopFrameStream,
     resolveDetections: this._resolveDetections,
     getFrameData: this._getFrameData,
+    captureFrameNow: this._captureFrameNow,
     getFrameDataWithOptions: this._getFrameDataWithOptions,
     getARCapabilities: this._getARCapabilities,
     setRenderFrameRate: this._setRenderFrameRate,

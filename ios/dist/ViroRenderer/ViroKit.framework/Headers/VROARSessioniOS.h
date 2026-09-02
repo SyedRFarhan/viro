@@ -142,6 +142,23 @@ public:
     std::shared_ptr<VROMonocularDepthEstimator> getMonocularDepthEstimator() const;
 
     /*
+     Load the monocular depth estimator WITHOUT enabling per-frame estimation.
+     For on-demand depth (VROMonocularDepthEstimator::estimateDepthSync) on
+     devices without LiDAR: the model loads once, asynchronously, and stays
+     resident even if per-frame depth is later disabled. No-op when a model
+     is already loaded or loading.
+     */
+    void preloadMonocularDepthEstimator();
+
+    /*
+     True when a monocular depth model ships in the ViroKit (or app) bundle.
+     A capability fact, not a session state: safe to call before any session
+     exists. Pair with VROMonocularDepthEstimator::isSupported() for the
+     device half of the answer.
+     */
+    static bool isMonocularDepthModelBundled();
+
+    /*
      When true, monocular depth estimation will be used even on devices with LiDAR.
      This allows using the neural network-based depth on all devices for consistency,
      testing, or to get depth estimates beyond LiDAR's ~5m range.
@@ -430,6 +447,7 @@ private:
     bool _preferMonocularDepth;  // When true, use monocular even on LiDAR devices
     bool _frontCameraEnabled;    // When true and a config provider is registered, use front-camera AR
     bool _monocularDepthLoading;
+    bool _monocularDepthPreloadRequested;  // keep the estimator resident for on-demand depth
     float _monocularDepthScale;  // Multiplied into depth values (1.0 = no change)
     int   _monocularDepthTargetFPS;  // 0 = use estimator default
     std::shared_ptr<VRODriver> _driver;
@@ -441,6 +459,8 @@ private:
 
     void updateTrackingType(VROTrackingType trackingType);
     void initializeMonocularDepthEstimator(NSString *modelPath);
+    void loadMonocularDepthEstimatorAsync();
+    static NSString *bundledMonocularDepthModelPath();
 
 };
 

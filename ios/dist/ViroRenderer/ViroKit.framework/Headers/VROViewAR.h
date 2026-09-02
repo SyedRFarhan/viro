@@ -153,7 +153,8 @@ enum class VROCameraPosition;
  When enabled, the system will use a neural network to estimate depth from
  the camera image. This provides depth-based occlusion on older devices.
 
- Note: The depth model must be bundled with the app as DepthPro.mlmodelc.
+ Note: A depth model must ship in the ViroKit (or app) bundle under one of the
+ loader's candidate names — DepthAnythingV2_metric_indoor.mlmodelc first.
 
  @param enabled Whether to enable monocular depth estimation
  */

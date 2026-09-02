@@ -86,6 +86,13 @@ enum class VROWorldAlignment {
  */
 enum class VROVideoQuality {
     Low,
+    /*
+     The tallest camera format no taller than 1440 rows, at the lowest frame
+     rate offered for it. What a non-LiDAR phone can sustain: 4K feeds
+     tracking, rendering and the frame stream four times the pixels the
+     product uses, and heat is the budget those phones run out of first.
+     */
+    Medium,
     High
 };
 

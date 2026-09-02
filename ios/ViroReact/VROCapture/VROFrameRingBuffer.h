@@ -28,6 +28,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// ARFrame timestamp
 @property (nonatomic, assign) double timestamp;
+/// Wall-clock shutter time, ms since epoch: ARFrame.timestamp mapped through
+/// the uptime→epoch offset at intake. What a frame-age measurement starts from.
+@property (nonatomic, assign) double capturedAtEpochMs;
 
 /// Session ID (increments on AR session reset/relocalization)
 @property (nonatomic, assign) NSInteger sessionId;
@@ -157,6 +160,23 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Depth buffer dimensions
 @property (nonatomic, assign) CGSize depthBufferSize;
+
+#pragma mark - Monocular Depth (Optional, on demand; fork >= 2.61.72)
+
+/// Metric depth (meters, packed row-major float32) estimated ON DEMAND from
+/// this frame's own JPEG the first time a detection needs it, then cached so
+/// every point of the same frame shares one inference. Aligned to the
+/// upright JPEG: pixel (x, y) is JPEG UV (x/(w-1), y/(h-1)) — the same space
+/// JS reports detections in. NULL until computed or when unavailable.
+@property (nonatomic, strong, nullable) NSData *monoDepthData;
+@property (nonatomic, assign) int monoDepthWidth;
+@property (nonatomic, assign) int monoDepthHeight;
+/// YES once an estimate was attempted for this frame (success or not), so a
+/// frame that could not be estimated is not retried on every point.
+@property (nonatomic, assign) BOOL monoDepthAttempted;
+/// Per-detection crop maps (REP-954), keyed by the box string; NSNull marks
+/// a failed attempt. Owned by the resolver; a few per frame at most.
+@property (nonatomic, strong, nullable) NSMutableDictionary *monoCropMaps;
 
 #pragma mark - Feature Points (Optional, for fallback)
 

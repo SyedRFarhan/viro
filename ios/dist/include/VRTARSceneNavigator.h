@@ -61,6 +61,18 @@
 @property (nonatomic, copy) NSString *cloudAnchorProvider;
 @property (nonatomic, copy) NSString *geospatialAnchorProvider;
 
+// On-demand monocular depth for detection resolution (fork >= 2.61.72).
+// When YES the session preloads the bundled depth model (without per-frame
+// estimation) and resolveDetections gains a "mono" rung below real plane
+// geometry: the model runs once on the captured frame's own JPEG the first
+// time a point needs it. Meant for devices without LiDAR; on LiDAR devices
+// the lidar rung answers first and this is never reached.
+@property (nonatomic, assign) BOOL monoDepthResolveEnabled;
+// With monoDepthResolveEnabled: run the depth model on a square crop around
+// each detection's box (points carry "box") rather than the whole frame.
+// Default NO — adopt after the tape test says the crop does not hurt.
+@property (nonatomic, assign) BOOL monoDepthCropEnabled;
+
 // World mesh properties
 @property (nonatomic, assign) BOOL worldMeshEnabled;
 @property (nonatomic, copy, nullable) NSDictionary *worldMeshConfig;
@@ -494,6 +506,15 @@ typedef void (^GeospatialAnchorCompletionHandler)(BOOL success,
 
 - (void)getFrameData:(NSString *)frameId
    completionHandler:(void (^)(NSDictionary * _Nonnull result))completionHandler;
+
+// Encode the CURRENT camera frame now (bypasses the stream's rate limiter).
+// Same result shape as getFrameData:, imageData included, or {frameId, error}.
+- (void)captureFrameNow:(void (^)(NSDictionary * _Nonnull result))completionHandler;
+
+// The navigator most recently created and not yet deallocated. Lets module
+// methods whose work is thread-safe (ring reads, on-demand capture) answer
+// without a UIManager round trip through the main thread.
++ (nullable instancetype)activeNavigator;
 
 // Resolve 2D detection points to 3D world coordinates using capture-time data
 // Points array: [{x: 0-1, y: 0-1}, ...]
