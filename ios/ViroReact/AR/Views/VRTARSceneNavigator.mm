@@ -69,6 +69,9 @@ static NSString * const kRVWatermarkURL =
 static __weak VRTARSceneNavigator *sActiveNavigator = nil;
 
 @implementation VRTARSceneNavigator {
+    UIPinchGestureRecognizer *_pinchZoomRecognizer;
+    float _pinchStartZoom;
+    CFTimeInterval _lastZoomEventTime;
     id <VROView> _vroView;
     NSInteger _currentStackPosition;
     RCTBridge *_bridge;
@@ -121,6 +124,14 @@ static __weak VRTARSceneNavigator *sActiveNavigator = nil;
     self = [super initWithBridge:bridge];
     if (self) {
         sActiveNavigator = self;
+        // Pinch-to-zoom lives on the navigator (VROViewAR's superview): UIKit
+        // hands every touch on the AR view to this recognizer too. Off until
+        // JS opts in with pinchZoomEnabled.
+        _pinchZoomRecognizer = [[UIPinchGestureRecognizer alloc] initWithTarget:self
+                                                                         action:@selector(_handlePinchZoom:)];
+        _pinchZoomRecognizer.delegate = self;
+        _pinchZoomRecognizer.enabled = NO;
+        [self addGestureRecognizer:_pinchZoomRecognizer];
         // Load materials; must be done each time we have a new context (e.g. after
         // the EGL context is created by the VROViewAR
         VRTMaterialManager *materialManager = [bridge materialManager];
@@ -211,6 +222,66 @@ static __weak VRTARSceneNavigator *sActiveNavigator = nil;
 }
 
 #pragma mark - Render Zoom (Projection-Based)
+
+#pragma mark - Pinch-to-zoom
+
+- (void)setPinchZoomEnabled:(BOOL)pinchZoomEnabled {
+    _pinchZoomEnabled = pinchZoomEnabled;
+    _pinchZoomRecognizer.enabled = pinchZoomEnabled;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+    shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    // Viro's own pinch (scene-node onPinch) and ours read the same fingers.
+    return gestureRecognizer == _pinchZoomRecognizer;
+}
+
+/// Apply without the per-call logging of setRenderZoom: — this runs at
+/// gesture-frame rate. Returns the zoom the session actually holds (it
+/// clamps to [1, maxRenderZoom] itself).
+- (float)_applyRenderZoom:(float)zoomFactor {
+    if (!_vroView) return 1.0f;
+    std::shared_ptr<VROARSession> arSession = [(VROViewAR *)_vroView getARSession];
+    if (!arSession) return 1.0f;
+    arSession->setRenderZoom(zoomFactor);
+    return arSession->getRenderZoom();
+}
+
+- (void)_emitRenderZoom:(float)zoom final:(BOOL)final {
+    if (!self.onRenderZoomChanged) return;
+    self.onRenderZoomChanged(@{
+        @"zoom": @(zoom),
+        @"maxZoom": @([self getMaxRenderZoom]),
+        @"final": @(final),
+    });
+}
+
+- (void)_handlePinchZoom:(UIPinchGestureRecognizer *)recognizer {
+    switch (recognizer.state) {
+        case UIGestureRecognizerStateBegan:
+            _pinchStartZoom = [self getRenderZoom];
+            _lastZoomEventTime = 0;
+            break;
+        case UIGestureRecognizerStateChanged: {
+            // Scale is relative to the fingers' starting spread, so the zoom
+            // tracks the hand from wherever it was — no jump on touch-down.
+            float applied = [self _applyRenderZoom:_pinchStartZoom * (float)recognizer.scale];
+            CFTimeInterval now = CACurrentMediaTime();
+            if (now - _lastZoomEventTime >= 0.05) {
+                _lastZoomEventTime = now;
+                [self _emitRenderZoom:applied final:NO];
+            }
+            break;
+        }
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+            [self _emitRenderZoom:[self getRenderZoom] final:YES];
+            break;
+        default:
+            break;
+    }
+}
 
 - (void)setRenderZoom:(float)zoomFactor {
     NSLog(@"[ViroZoom] setRenderZoom called with zoomFactor: %.2f", zoomFactor);

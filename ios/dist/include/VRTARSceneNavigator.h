@@ -33,7 +33,7 @@
 @class VRTScene;
 @class VROFrameCaptureService;
 
-@interface VRTARSceneNavigator : VRTView<VRORenderDelegate, RCTInvalidating>
+@interface VRTARSceneNavigator : VRTView<VRORenderDelegate, RCTInvalidating, UIGestureRecognizerDelegate>
 
 @property (nonatomic, assign) NSInteger currentSceneIndex;
 @property (nonatomic, readwrite, strong) NSMutableArray<VRTScene *> *currentViews;
@@ -81,6 +81,15 @@
 // World map persistence - now uses imperative ref-based API (properties removed)
 // Callback fired when world mapping status changes (for UI feedback)
 @property (nonatomic, copy, nullable) RCTDirectEventBlock onWorldMappingStatusChanged;
+
+// Pinch-to-zoom (fork >= 2.61.73). A UIPinchGestureRecognizer on the
+// navigator applies the render zoom on the UI thread every gesture frame —
+// no bridge round trip in the loop — and reports through
+// onRenderZoomChanged ({zoom, maxZoom, final}), throttled while moving and
+// always once on release. Coexists with Viro's own pinch recognizer
+// (simultaneous recognition), which keeps feeding scene nodes as before.
+@property (nonatomic, assign) BOOL pinchZoomEnabled;
+@property (nonatomic, copy, nullable) RCTDirectEventBlock onRenderZoomChanged;
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge;
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex;

@@ -65,6 +65,8 @@ RCT_EXPORT_VIEW_PROPERTY(onWorldMeshUpdated, RCTDirectEventBlock)
 // World map persistence is now fully imperative via ref API (props removed)
 RCT_EXPORT_VIEW_PROPERTY(onWorldMappingStatusChanged, RCTDirectEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(onFrameUpdate, RCTDirectEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(pinchZoomEnabled, BOOL)
+RCT_EXPORT_VIEW_PROPERTY(onRenderZoomChanged, RCTDirectEventBlock)
 
 - (VRTARSceneNavigator *)view
 {

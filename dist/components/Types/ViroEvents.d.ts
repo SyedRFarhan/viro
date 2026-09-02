@@ -757,6 +757,13 @@ export type ViroFrameDataOptions = {
  * `imageData` is absent when the frame was evicted from the native ring
  * buffer (see `error`).
  */
+/** Render zoom moved by a native pinch (fork >= 2.61.73). Throttled while the
+    fingers move; one more with `final: true` on release. */
+export type ViroRenderZoomChangedEvent = {
+    zoom: number;
+    maxZoom: number;
+    final: boolean;
+};
 export type ViroFrameDataResult = {
     frameId: string;
     /** Base64 JPEG. Absent when the frame is no longer available. */

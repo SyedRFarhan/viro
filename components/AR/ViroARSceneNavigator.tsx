@@ -54,6 +54,7 @@ import {
   ViroMaxRenderZoomResult,
   ViroFrameStreamConfig,
   ViroFrameEvent,
+  ViroRenderZoomChangedEvent,
   ViroDetectionResolutionResult,
   ViroFrameDataOptions,
   ViroFrameDataResult,
@@ -456,6 +457,19 @@ type Props = ViewProps & {
    * Note: Frame streaming must be started with startFrameStream() first.
    */
   onFrameUpdate?: (event: ViroFrameEvent) => void;
+
+  /**
+   * [iOS Only] Pinch-to-zoom on the AR view (fork >= 2.61.73). The render
+   * zoom (projection + camera texture, captured in screenshots and video)
+   * follows the fingers natively every gesture frame — no bridge in the
+   * loop. Reports through onRenderZoomChanged. Default false.
+   */
+  pinchZoomEnabled?: boolean;
+  /**
+   * [iOS Only] Render zoom changed by a pinch: throttled while moving, one
+   * more with `final: true` on release. Read `event.nativeEvent`.
+   */
+  onRenderZoomChanged?: (event: { nativeEvent: ViroRenderZoomChangedEvent }) => void;
 };
 
 type State = {

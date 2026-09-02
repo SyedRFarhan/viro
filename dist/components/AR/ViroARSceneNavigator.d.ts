@@ -11,7 +11,7 @@
  */
 import * as React from "react";
 import { ViewProps } from "react-native";
-import { ViroProvider, ViroCloudAnchorStateChangeEvent, ViroFrameEvent } from "../Types/ViroEvents";
+import { ViroProvider, ViroCloudAnchorStateChangeEvent, ViroFrameEvent, ViroRenderZoomChangedEvent } from "../Types/ViroEvents";
 import { ViroWorldMeshConfig, ViroWorldMeshStats } from "../Types/ViroWorldMesh";
 import { ViroARSceneNavigatorHandle, ViroWorldMappingStatusChangedEvent } from "../Types/ViroWorldMap";
 /**
@@ -360,4 +360,18 @@ export declare const ViroARSceneNavigator: React.ForwardRefExoticComponent<ViewP
      * Note: Frame streaming must be started with startFrameStream() first.
      */
     onFrameUpdate?: (event: ViroFrameEvent) => void;
+    /**
+     * [iOS Only] Pinch-to-zoom on the AR view (fork >= 2.61.73). The render
+     * zoom (projection + camera texture, captured in screenshots and video)
+     * follows the fingers natively every gesture frame — no bridge in the
+     * loop. Reports through onRenderZoomChanged. Default false.
+     */
+    pinchZoomEnabled?: boolean;
+    /**
+     * [iOS Only] Render zoom changed by a pinch: throttled while moving, one
+     * more with `final: true` on release. Read `event.nativeEvent`.
+     */
+    onRenderZoomChanged?: (event: {
+        nativeEvent: ViroRenderZoomChangedEvent;
+    }) => void;
 } & React.RefAttributes<ViroARSceneNavigatorHandle>>;
